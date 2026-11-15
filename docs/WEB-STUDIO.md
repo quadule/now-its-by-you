@@ -84,8 +84,16 @@ version.", in Help's *What's kept*, and in the Tools sheet's "Made on this devic
   site sees (which files were fetched, which `/v/<id>` was opened). A file the visitor brings is read and kept on the
   device, never uploaded; its address is `/#version=<id>`, a fragment, so even its id never reaches the host.
 - The day is the visitor's own (their browser's date).
-- The stems aren't made on the device: the page says so in a sentence (a whole song and then every part alone is
-  twice the time and more memory than a recording); a recording opened with Python on a computer makes them.
+- The stems are made on the device a part at a time. `/api/export` answers them with the whole song's spec, of kind
+  `stems`, and the renderer makes them in a render worker of its own (studio_render.stems_zipped, renderer.js
+  `stems`). Each part's FLAC is handed to the page as soon as it is made and let go in the worker, so the worker holds
+  one part's samples at a time; the page keeps each as a Blob and zips them, stored, with the MIDI file and the note.
+  Every file is the server's own (Studio._stems) to the byte. The band is made before the singers, so the slow parts
+  are made last; one gain is shared by all, so a part made before a louder one is made again, quieter (on H, the
+  band's parts before the drum). The recording isn't made first: the zip is named as the server names it before its
+  recording (`<song>.<day>.<key's first six>.stems.zip`), or after the recording if the page has made it. H's stems
+  (19 parts, ?new, Chromium on this desktop): 215 s, the worker's heap at most 1.2 GiB (the voice), against 2.0-2.3
+  GiB for the whole song.
 
 ### The page
 
@@ -227,7 +235,8 @@ and a whole song's 1.3-2.3 GiB is the risk.
 ### Tests
 
 - tests/test_studio_device.py: every JSON route answered as a native studio answers it; `/api/start` saying the
-  device and what it can't do; the server's statuses for bad edits, a bad machine, a body too large, the stems; a
+  device and what it can't do; the server's statuses for bad edits, a bad machine, a body too large; the stems'
+  spec, and every file packed a part at a time as the server packs it (studio_render.stems_zipped); a
   render spec the server's but for the release's Python; a long whole song warned of and still specified; the MIDI
   file and piano score handed over; a real packet read as data, restored, opened at `#version=` and at `/v/<id>`; the
   static page, its policies, its files and the Worker's headers.
@@ -249,7 +258,8 @@ and a whole song's 1.3-2.3 GiB is the risk.
 4. **The reader shares the studio's origin.** The file is never run, but if a libsndfile bug let a file take over
    Pyodide, this origin's storage would be within reach; a sandboxed iframe on a separate origin would close that.
    Worth it if the Worker ever serves files it didn't check.
-5. **The stems** on the device (above).
+5. **The stems' recording.** On the device they are named after a recording only if the page has made it; the
+   server makes the recording first. Making it first would double the time and bring back the whole song's memory.
 6. **Safari and Firefox** are untried. If a browser applied the page's policy to the workers instead of their own
    script's, Pyodide couldn't compile, and the page would say "it went wrong in this browser".
 

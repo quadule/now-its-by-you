@@ -16,6 +16,7 @@ progress(fraction, words), as the server's job reports it (Studio's Job.report a
 from __future__ import annotations
 
 import contextlib
+import gc
 import hashlib
 import io
 import json
@@ -206,13 +207,97 @@ def stems(spec: dict, folder: Path, out: str | Path) -> list[str]:
     return list(parts)
 
 
+def stems_zipped(spec: dict, folder: Path, emit, progress=None, recording: tuple[str, str] | None = None) -> dict:
+    """The stems, as Studio._stems packs them (every part alone and dry, padded to bar 1 of the MIDI file, one gain
+    for all, 24-bit FLAC with the song's artwork; the MIDI file and the note beside them), made one part at a time so
+    only one part's samples are held at once: each part's file is handed to emit(index, name, data, crc32) as soon as
+    it is made, then let go; the page zips them. The gain that keeps every part from clipping is known only once all
+    are made, so a part made at a gain the parts after it lowered is made again at the last one: the band is made
+    first and the singers (the slowest) last, so it is the quick parts that are made again (H's band before its
+    drum). recording: the file name and id of the recording of this version, if the page has it.
+
+    -> {"name": the zip's folder, "parts": the order, "gain", "midi": (name, data, crc), "readme": (name, text, crc)}"""
+    import zlib
+
+    import numpy as np
+    import soundfile as sf
+
+    from songbird import artwork, explain, midi, synth
+    from songbird.cli import choir_of
+    from songbird.studio import stages, stage_words, stems_note
+
+    _STEM_CACHE.clear()
+    job = _job(spec["key"], "export", progress)
+    job.stage = stage_words("score")
+    _, genome, params, lyrics = load(spec, folder)
+    score = _score(genome, params, lyrics, spec)
+    job.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
+    data, lead_in = midi.from_score(genome, params, score, title=genome.title, lyrics=lyrics)
+    singer = explain.singer_of(params)
+    ancestors = choir_of(spec.get("parent"), singer)[1]
+
+    def makers() -> dict:  # each maker makes its part once (a player's stem is handed over to its twins' level)
+        return dict(synth.stem_jobs(score, seed=params.seed, voice=singer, ancestors=ancestors)[0])
+
+    jobs, singers = synth.stem_jobs(score, seed=params.seed, voice=singer, ancestors=ancestors)
+    names = [name for name, _ in jobs]
+    order = sorted(names, key=lambda p: (p != "voice", not p.startswith("choir"), names.index(p)))
+    # the band before the singers: the slowest made last, so a louder part after them seldom has them made again
+    making = [p for p in names if p not in singers] + [p for p in order if p in singers]
+    makes = dict(jobs)
+    stem = recording[0][: -len(".flac")] if recording else spec["stem"]
+    pad = int(round(-lead_in * synth.SR))
+    peak, made_at = 0.0, {}
+
+    def gain_now() -> float:
+        return min(1.0, 0.989 / peak) if peak > 0 else 1.0
+
+    def make(i: int, part: str) -> None:
+        nonlocal peak
+        y = makes[part]()
+        if y.size:
+            peak = max(peak, float(np.max(np.abs(y))))
+        gain = gain_now()
+        out = np.zeros((pad + len(y), y.shape[1]), y.dtype)  # padded where it's made: one copy more, not two
+        np.multiply(y, gain, out=out[pad:])
+        del y
+        buffer = io.BytesIO()
+        sf.write(buffer, out, synth.SR, format="FLAC", subtype="PCM_24")
+        del out
+        flac = artwork.embed(buffer.getvalue(), genome.title)
+        del buffer
+        emit(i, f"{stem}/{i:02d}-{part}.flac", flac, zlib.crc32(flac))
+        del flac
+        made_at[part] = gain
+        gc.collect()
+
+    for part in making:
+        job.report(part)
+        make(order.index(part) + 1, part)
+    again = [part for part in making if made_at[part] != gain_now()]
+    if again:
+        makes = makers()
+    for part in again:  # a louder part came after it: made again at the gain every part shares
+        job.stage = f"{stage_words(part)} again, quieter"
+        if progress is not None:
+            progress(job.progress, job.stage)
+        make(order.index(part) + 1, part)
+    job.report("master")
+    gain = gain_now()
+    note = stems_note(genome.title, params, -lead_in, gain, order,
+                      recording=tuple(recording) if recording else None).encode("utf-8")
+    return {"name": stem, "parts": order, "gain": gain, "again": again,
+            "midi": [f"{stem}/{stem}.mid", data, zlib.crc32(data)],
+            "readme": [f"{stem}/README.txt", note, zlib.crc32(note)]}
+
+
 def check(spec: dict, program: str | None = None) -> None:
     """Refused, saying why, unless this program can make this spec: its shape, and the program it names (a
     recording carries the program's digest, so the program here must be the server's, file for file)."""
     if spec.get("v") != VERSION:
         raise Refused(f"a render spec of shape {spec.get('v')!r}; this renderer makes shape {VERSION}")
-    if spec.get("kind") not in ("section", "whole"):
-        raise Refused("a render spec makes a section or the whole song")
+    if spec.get("kind") not in ("section", "whole", "stems"):
+        raise Refused("a render spec makes a section, the whole song or its stems")
     if program is None:
         from songbird import pack
 
@@ -225,4 +310,15 @@ def run(spec_text: str, folder: str | Path, progress=None, program: str | None =
     spec = json.loads(spec_text)
     check(spec, program)
     folder = Path(folder)
+    if spec["kind"] == "stems":
+        raise Refused("the stems are made by run_stems")
     return section(spec, folder, progress) if spec["kind"] == "section" else whole(spec, folder, progress)
+
+
+def run_stems(spec_text: str, folder: str | Path, emit, progress=None, program: str | None = None,
+              recording: list | None = None) -> dict:
+    spec = json.loads(spec_text)
+    check(spec, program)
+    if spec["kind"] != "stems":
+        raise Refused("this spec doesn't make the stems")
+    return stems_zipped(spec, Path(folder), emit, progress, tuple(recording) if recording else None)

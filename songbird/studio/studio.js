@@ -1367,13 +1367,6 @@ function applyDevice(s) {
   setOn("helpShows", "textContent", s.published ? "This studio opens on the song as it was published, and lets you:"
     : "This studio shows today's version of the song, and lets you:");
   if (window.SongbirdDevice?.share) setOn("shareTool", "hidden", false);  // a link to your version, from Export
-  // the parts alone can't be made in a browser: said on the button's own line, not after it is pressed
-  const stems = $("exportStems");
-  if (stems) {
-    stems.disabled = true;
-    const about = stems.parentElement?.querySelector("p");
-    if (about) about.textContent = "Each part alone: not in the browser yet. Export the song, then run its file with Python on a computer.";
-  }
   setOn("helpWhere", "hidden", true);  // the page's foot says it
   // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it
   // serves: docs/WEB-STUDIO.md, "On the device"

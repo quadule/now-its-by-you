@@ -46,8 +46,6 @@ from songbird.studio import Busy, NotFound, Studio
 
 NOT_YET = "Singing here isn't available yet."
 DEVICE_CONSENT = 4  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
-NO_STEMS = ("The parts can't be made in the browser yet. Record it, then open the recording with Python on a "
-            "computer (python3 the-file.flac studio) to make them.")
 THINKING = 300.0  # seconds the program may take to read a version brought here: a server's 40 is for its own CPU, and
 # a slow phone shouldn't be refused for being slow
 KEY = b"songbird-device"  # a version's id here: not secret (there is no one to hide it from on one's own device)
@@ -150,9 +148,21 @@ class DeviceStudio(Studio):
         return {"error": self.sing_available().get("why") or NOT_YET}
 
     def export(self, edits: dict, what: str, by=None) -> dict:
-        if what == "stems":
-            raise ValueError(NO_STEMS)
-        return super().export(edits, what, by)
+        """As the studio's own, but the stems: the page makes them in a render worker of its own, one part at a time
+        (studio_render.stems_zipped), from the whole song's spec with "stems" for its kind, and zips them. They are
+        named as the studio names them before their recording is made (export_name); the page names them after the
+        recording instead if it has made it."""
+        if what != "stems":
+            return super().export(edits, what, by)
+        v = self.version(edits)
+        answer = self.render_spec(edits)
+        spec = json.loads(answer["spec"])
+        spec |= {"kind": "stems", "stem": self.export_name(v, "")}
+        out = {"state": "device", "kind": "export", "label": "the stems", "key": answer["key"],
+               "spec": json.dumps(spec), "name": self.export_name(v, ".stems.zip")}
+        if answer.get("warn"):
+            out["warn"] = answer["warn"]
+        return out
 
     def listen(self, *args, **kwargs) -> dict:
         raise NotFound("Songs are made by the page here, not asked for.")

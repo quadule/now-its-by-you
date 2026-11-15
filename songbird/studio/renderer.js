@@ -9,6 +9,9 @@
 //   const task = r.preview({ edits, who, section }, onProgress)    a section (a number) or the whole song (null)
 //   const task = r.record({ edits }, onProgress)                   the whole rendition, as one file
 //   r.cancel(task)                                                 stop waiting; a job still queued is dropped
+//   const task = r.stems(answer, onProgress)   on the device: the stems, from /api/export's answer ({spec, name,
+//                key}), made in a worker of its own one part at a time and zipped here: task.done -> { state: "done",
+//                url (a Blob's), name, parts, gain, seconds, heap } or { state: "failed", error }
 //   task.done    -> Promise of the last job: { state: "done", url, key, label, result, where } or { state: "failed", error }
 //                (a whole song's result has bar_seconds: each bar line of the score's ruler, in seconds of its audio)
 //   task.job     the job as last heard; onProgress(job) hears each: { state: "queued" | "running", ahead, eta, stage,
@@ -39,7 +42,7 @@
   const IDLE = 180000;  // ms a section worker waits unused before it's let go
   // ms a worker may go without a word before it's given up on (a hidden tab's worker runs several times slower, so
   // these watch for a stall, not the whole time), and the most a render may take in all
-  const TIMEOUT = { ready: 180000, section: 300000, whole: 600000, total: 2400000 };
+  const TIMEOUT = { ready: 180000, section: 300000, whole: 600000, stems: 600000, total: 2400000 };
   const KEEP = { section: 16, whole: 3 };  // songs made here, kept to play again at once
   const MiB = 2 ** 20;
 
@@ -154,11 +157,14 @@
       return { stalled, poke, stop: () => unschedule(timer) };
     }
 
-    async function make(spec, size, hear, task) {
+    // size: "section", "whole" or "stems" (a worker of its own for either of the last two, let go after); asked: the
+    // message that makes it ({ cmd: "render", spec } unless given); a stems part is heard as it comes (m.kind "part")
+    async function make(spec, size, hear, task, asked = null) {
       if (task?.cancelled) throw Object.assign(new Error("cancelled"), { cancelled: true });
       globalThis.SongbirdDevice?.renderStarts?.();  // singing's own worker lets its memory go first (device.js)
+      const alone = size !== "section";
       let entry;
-      if (size === "whole") {
+      if (alone) {
         close(kept);
         entry = open();
       } else {
@@ -180,12 +186,12 @@
         entry.uses += 1;
         const made = new Promise((resolve, reject) => {
           entry.listener = (m) => {
-            if (m.kind === "progress") { making.poke(); hear(m); }
+            if (m.kind === "progress" || m.kind === "part") { making.poke(); hear(m); }
             else if (m.kind === "done") resolve(m);
             else if (m.kind === "error") reject(Object.assign(new Error(m.message), { memory: !!m.memory }));
           };
         });
-        entry.w.postMessage({ cmd: "render", spec });
+        entry.w.postMessage({ cmd: "render", spec, ...(asked || {}) });
         const out = await Promise.race([made, making.stalled, stopped]);
         // wasm heaps never shrink: an unusually large section mustn't keep its heap for the next few previews.
         if (out.heap > maxHeap) close(entry);
@@ -198,14 +204,14 @@
         loading.stop();
         making?.stop();
         current = null;
-        if (size === "whole") close(entry);
+        if (alone) close(entry);
         else if (!entry.dead) entry.timer = schedule(() => close(entry), idle);
       }
     }
 
     return {
-      render(spec, size, hear, task) {
-        const run = chain.then(() => make(spec, size, hear, task));
+      render(spec, size, hear, task, asked = null) {
+        const run = chain.then(() => make(spec, size, hear, task, asked));
         chain = run.catch(() => {});
         return run;
       },
@@ -220,6 +226,40 @@
       busy: () => current !== null,
       close() { close(kept); },
     };
+  }
+
+  // ---------------------------------------------------------------- the stems' zip
+  // Stored, not compressed (FLAC doesn't shrink), as Studio._stems writes it: each file's CRC-32 is the worker's
+  // (zlib's), so the files are only laid end to end here. The parts are Blobs as they come, which the browser may keep
+  // on disk; the zip is a Blob of them, so they aren't copied into one buffer.
+
+  function zipped(files, when = new Date()) {  // files: [{ name, crc, size, data: Blob | ArrayBuffer | Uint8Array }]
+    const time = (when.getHours() << 11) | (when.getMinutes() << 5) | (when.getSeconds() >> 1);
+    const day = ((Math.max(when.getFullYear(), 1980) - 1980) << 9) | ((when.getMonth() + 1) << 5) | when.getDate();
+    const utf8 = new TextEncoder();
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    for (const f of files) {
+      const name = utf8.encode(f.name);
+      const head = new DataView(new ArrayBuffer(30));
+      const fields = [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, day, 2],
+        [14, f.crc >>> 0, 4], [18, f.size, 4], [22, f.size, 4], [26, name.length, 2], [28, 0, 2]];
+      for (const [at, v, n] of fields) n === 4 ? head.setUint32(at, v, true) : head.setUint16(at, v, true);
+      const entry = new DataView(new ArrayBuffer(46));
+      const more = [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, day, 2],
+        [16, f.crc >>> 0, 4], [20, f.size, 4], [24, f.size, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2],
+        [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]];
+      for (const [at, v, n] of more) n === 4 ? entry.setUint32(at, v, true) : entry.setUint16(at, v, true);
+      parts.push(head.buffer, name, f.data);
+      central.push(entry.buffer, name);
+      offset += 30 + name.length + f.size;
+    }
+    const size = central.reduce((n, b) => n + b.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    for (const [at, v, n] of [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2],
+      [12, size, 4], [16, offset, 4], [20, 0, 2]]) n === 4 ? end.setUint32(at, v, true) : end.setUint16(at, v, true);
+    return new Blob([...parts, ...central, end.buffer], { type: "application/zip" });
   }
 
   // ---------------------------------------------------------------- the renderer the page uses
@@ -322,6 +362,12 @@
     const blob = options.blob || ((bytes) => URL.createObjectURL(new Blob([bytes], { type: "audio/flac" })));
     const device = options.device ?? onDevice();  // no server: every song is made here
 
+    function browser() {
+      if (!shared.browser) shared.browser = workers({ spawn, bundle: shared.bundle, storage,
+        maxHeap: constrained ? 512 : 768, stemCacheBytes: (constrained ? 32 : 128) * MiB, ...(options.workers || {}) });
+      return shared.browser;
+    }
+
     function follow(task, path, body, onProgress) {
       return (async () => {
         let job = await ask(path, body);
@@ -361,8 +407,7 @@
         return hit;
       }
       if (!answer.spec) throw new Error("the studio didn't say what to make");
-      if (!shared.browser) shared.browser = workers({ spawn, bundle: shared.bundle, storage,
-        maxHeap: constrained ? 512 : 768, stemCacheBytes: (constrained ? 32 : 128) * MiB, ...(options.workers || {}) });
+      browser();
       const label = answer.label || (size === "whole" ? "The whole song" : "Song section");
       // on the device, a whole song estimated past a browser's memory is made all the same, with a word of warning
       const warn = device && answer.warn ? ` (${answer.warn})` : "";
@@ -425,6 +470,63 @@
       return task;
     }
 
+    // The stems, on the device: each part made alone in a worker of its own and moved here as it is made (only one
+    // part's samples in the worker at once), kept as a Blob, then zipped with the MIDI file and the note. Named after
+    // this version's recording if the page has made it, as a server names them.
+    function stems(answer, onProgress) {
+      const task = { kind: "stems", size: "stems", job: null, cancelled: false, where: "browser" };
+      const failed = (error) => (task.job = { state: "failed", error, where: "browser", size: "stems" });
+      task.done = (async () => {
+        if (!spawn || !env.worker || !env.wasm) {
+          return failed("this browser can't run the singer (it needs WebAssembly and workers). Another browser, or a computer, may.");
+        }
+        if (!answer?.spec) return failed("the studio didn't say what to make");
+        const began = Date.now();
+        try {
+          if (!shared.bundle) await discover(() => ask("/render/bundle.json"));
+          if (!shared.bundle) return failed("the singer's files couldn't be fetched. Reload the page to try again.");
+          try { storage?.setItem(MAKING, String(began)); } catch (e) { /* only a convenience */ }
+          const made = shared.cache.get(answer.key)?.result?.recorded;
+          const recording = made?.name && made?.id ? [made.name, made.id] : null;
+          const warn = answer.warn ? ` (${answer.warn})` : "";
+          const say = (job) => { task.job = { ...job, stage: `${job.stage}${warn}` }; if (!task.cancelled) onProgress?.(task.job); };
+          say({ state: "running", progress: 0, stage: "getting the singer ready", where: "browser" });
+          const files = new Map();  // index -> the part's file (a later one replaces it: made again, quieter)
+          let heap = 0;
+          const heaps = [];  // the worker's heap (MiB) as each part was handed over
+          const out = await browser().render(answer.spec, "stems", (m) => {
+            if (m.kind === "part") {
+              files.set(m.index, { name: m.name, crc: m.crc, size: m.bytes.byteLength, data: new Blob([m.bytes]) });
+              heap = Math.max(heap, m.heap || 0);
+              heaps.push([m.name.split("/").pop(), Math.round(m.heap || 0)]);
+            } else if (m.kind === "loading") {
+              const fetching = m.first && m.bytes ? ` (${Math.min(99, Math.round(100 * (m.received || 0) / m.bytes))}%)` : "";
+              say({ state: "running", progress: 0, stage: `getting the singer ready${fetching}`, where: "browser" });
+            } else if (m.kind === "ready") {
+              say({ state: "running", progress: 0.01, stage: "playing every part alone", where: "browser" });
+            } else if (m.kind === "progress") {
+              say({ state: "running", progress: m.progress, stage: m.stage, where: "browser" });
+            }
+          }, task, { cmd: "stems", recording });
+          const all = [...files.keys()].sort((a, b) => a - b).map((i) => files.get(i));
+          for (const f of [out.midi, out.readme]) all.push({ name: f.name, crc: f.crc, size: f.bytes.byteLength, data: f.bytes });
+          const zip = zipped(all);
+          heap = Math.max(heap, out.heap || 0);
+          note({ kind: "stems", size: "stems", key: answer.key, where: "browser", seconds: out.seconds, at: began });
+          return (task.job = { state: "done", progress: 1, where: "browser", key: answer.key, url: URL.createObjectURL(zip),
+            name: `${out.name}.stems.zip`, parts: out.parts, gain: out.gain, again: out.again, seconds: out.seconds,
+            heap, heaps, bytes: zip.size });
+        } catch (e) {
+          if (task.cancelled || e.cancelled) return failed("cancelled");
+          note({ kind: "stems", size: "stems", where: "browser", failed: String(e.message || e), at: began });
+          return failed(plainly(e));
+        } finally {
+          try { storage?.removeItem(MAKING); } catch (e) { /* only a convenience */ }
+        }
+      })();
+      return task;
+    }
+
     function run(kind, path, body, size, onProgress) {
       const task = { kind, size, job: null, cancelled: false, where: null };
       const server = async (instead = false) => {
@@ -481,12 +583,13 @@
       preview: ({ edits, who = "you", section = null }, onProgress) =>
         run("preview", "/api/listen", { edits, who, section }, section === null ? "whole" : "section", onProgress),
       record: ({ edits }, onProgress) => run("record", "/api/record", { edits, who: "you", section: null }, "whole", onProgress),
+      stems,
       cancel(task) {
         if (!task || task.cancelled) return;
         task.cancelled = true;
         // in this browser: a whole song being made is stopped (a section finishes, and is kept to play at once)
         if (task.where === "browser") {
-          if (task.size === "whole") shared.browser?.kill("cancelled", task);
+          if (task.size !== "section") shared.browser?.kill("cancelled", task);
           return;
         }
         // on the server: a job still waiting its turn is dropped; one being made finishes into the cache
@@ -538,7 +641,7 @@
     show();
   }
 
-  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared, plainly, playing, MAKING,
+  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared, plainly, playing, MAKING, zipped,
     get made() { return shared.made; },
     debug: { kill: () => shared.browser?.kill() || false, busy: () => !!shared.browser?.busy() },
     reset() {  // a fresh page, for the tests

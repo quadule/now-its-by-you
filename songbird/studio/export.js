@@ -1,6 +1,8 @@
 // Files for a musician's own tools: the version on the page as MIDI (every part, the words as lyrics, the
 // chords, the tempo, key and sections), or every part rendered alone (stems) with the MIDI, zipped.
-// songbird/studio.py (Studio.export) makes them; nothing leaves this computer. Plain JavaScript, no libraries.
+// songbird/studio.py (Studio.export) makes them; nothing leaves this computer. On the device (no server) the studio
+// answers the stems with what to make, and the renderer makes them in this browser, a part at a time, and zips them
+// (renderer.js stems). Plain JavaScript, no libraries.
 "use strict";
 
 (() => {
@@ -43,6 +45,7 @@
     try {
       say(what === "midi" ? "Writing the MIDI file…" : "Playing every part alone: about as long as making the whole song…");
       let job = await ask("/api/export", { edits, what });
+      if (job.state === "device") job = await onDevice(job);
       const url = job.download || job.url;
       while (job.state === "queued" || job.state === "running") {
         const ahead = job.state === "queued" && job.ahead ? ` (${job.ahead} ahead of it)` : "";
@@ -62,6 +65,20 @@
       busy[what] = false;
       if (button) button.disabled = false;
     }
+  }
+
+  // the stems made in this browser: the renderer's task, its progress said as a server's job's is
+  let renderer = null;
+  async function onDevice(answer) {
+    if (!window.SongbirdRenderer) throw new Error("this page can't make them here");
+    renderer = renderer || window.SongbirdRenderer.create(ask);
+    const task = renderer.stems(answer, (job) => {
+      say(`Making the stems: ${job.stage || "starting"}… ${Math.round((job.progress || 0) * 100)}%`);
+    });
+    const job = await task.done;
+    if (job.state === "failed") throw new Error(job.error || "it failed");
+    window.SongbirdExport.made = job;  // what it took (its time, the worker's heap as each part came), for whoever asks
+    return job;
   }
 
   function reveal() {

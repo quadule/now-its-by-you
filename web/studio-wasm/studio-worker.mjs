@@ -214,6 +214,47 @@ gc.collect()
     flac: flac.buffer }, [flac.buffer]);
 }
 
+// The stems (py/studio_render.py stems_zipped): every part made alone, one at a time, each part's file moved to the
+// page as soon as it is made and let go here, so only one part's samples are held at once; the page zips them.
+//   → { cmd: "stems", spec, recording?: [file name, id] }
+//   ← { kind: "progress" } ... { kind: "part", index, name, crc, bytes (ArrayBuffer) } ... (a part may come again,
+//     made at a lower gain: it replaces the one before)  { kind: "done", made: "stems", parts, gain, again, name,
+//     midi: { name, crc, bytes }, readme: { name, crc, bytes }, seconds, heap }
+function stems(m) {
+  const t0 = performance.now();
+  let told = 0;
+  const progress = (fraction, stage) => {
+    const now = performance.now();
+    if (now - told > 100) { told = now; postMessage({ kind: 'progress', progress: fraction, stage }); }
+  };
+  const emit = (index, name, data, crc) => {
+    const bytes = data.toJs();  // a copy, out of Pyodide's memory
+    data.destroy();
+    postMessage({ kind: 'part', index, name, crc: crc >>> 0, bytes: bytes.buffer, heap: heapMiB() }, [bytes.buffer]);
+  };
+  py.globals.set('SPEC', m.spec);
+  py.globals.set('PROGRESS', progress);
+  py.globals.set('EMIT', emit);
+  py.globals.set('RECORDING', m.recording ? JSON.stringify(m.recording) : null);
+  py.runPython(`
+import gc, json, shutil
+shutil.rmtree("/tmp/render", ignore_errors=True)
+OUT = studio_render.run_stems(SPEC, "/tmp/render", EMIT, PROGRESS, PROGRAM,
+                              json.loads(RECORDING) if RECORDING else None)
+del SPEC, RECORDING
+gc.collect()
+`);
+  const out = py.globals.get('OUT').toJs({ dict_converter: Object.fromEntries });
+  py.runPython('shutil.rmtree("/tmp/render", ignore_errors=True); del OUT; gc.collect()');
+  py.globals.delete('PROGRESS');
+  py.globals.delete('EMIT');
+  const file = ([name, data, crc]) => ({ name, crc: crc >>> 0, bytes: new Uint8Array(data).buffer });
+  const midi = file(out.midi);
+  const readme = file(out.readme);
+  postMessage({ kind: 'done', made: 'stems', name: out.name, parts: out.parts, gain: out.gain, again: out.again,
+    midi, readme, seconds: (performance.now() - t0) / 1000, heap: heapMiB() }, [midi.bytes, readme.bytes]);
+}
+
 function failed(err) {
   const message = String((err && err.message) || err);
   // the last lines of a Python traceback say what went wrong
@@ -434,6 +475,7 @@ let pumping = false;
 async function handle(m) {
   if (m.cmd === 'init') return init(m);
   if (m.cmd === 'render') return render(m.spec);
+  if (m.cmd === 'stems') return stems(m);
   if (m.cmd === 'studio') return studio(m).catch((err) => failed(err));
   if (m.cmd === 'request') return request(m);
   if (m.cmd === 'read') return read(m);

@@ -97,8 +97,6 @@ def test_refusals_are_the_server_s_statuses(device):
     # renders are the page's, here: never queued in the studio
     assert ask(device, "/api/listen", {"edits": {}})["status"] == 404
     assert ask(device, "/api/record", {"edits": {}})["status"] == 404
-    stems = ask(device, "/api/export", {"edits": {}, "what": "stems"})
-    assert stems["status"] == 400 and "can't be made in the browser yet" in stems["json"]["error"]
     assert ask(device, "/api/open/ready", {"size": 10**9})["json"] == {"ready": True}
     assert ask(device, "/api/sing", {})["json"] == {"error": "Singing here isn't available yet."}
     assert ask(device, "/api/sing/take", None, headers={"x-sing-meta": "2"})["status"] == 400
@@ -319,3 +317,76 @@ def test_the_static_page_and_its_headers():
             assert url.startswith(("/", "#", "https:")), (name, url)
     assert 'href="/piano/piano.css"' in files["piano/index.html"].decode()
     assert 'href="/"' in files["piano/index.html"].decode()  # back to the studio
+
+
+def test_the_stems_are_what_to_make_and_made_a_part_at_a_time_as_the_server_packs_them(device, server, monkeypatch,
+                                                                                         tmp_path):
+    """/api/export's stems on the device: the whole song's spec, of kind "stems", for the page's render worker, which
+    makes each part alone and hands it over before the next (studio_render.stems_zipped). Every file in the zip is the
+    server's own (Studio._stems) to the byte, the gain that keeps the loudest from clipping shared by all: the band
+    first (the singers are slowest), so the guitar, made at full level, is made again (by a maker of its own: each
+    makes its part once) once the voice after it turns everything down."""
+    import io
+    import zipfile
+
+    import numpy as np
+
+    from songbird import synth
+
+    R = _load("studio_render", PY / "studio_render.py")
+    made = []
+
+    def fake_jobs(score, sr=synth.SR, seed=0, voice=None, ancestors=None):
+        n = int(score.duration * 1000)
+
+        def part(name, level):
+            used = []
+
+            def make():
+                assert not used, f"{name} made twice by one maker"
+                used.append(name)
+                made.append(name)
+                return np.full((n, 2), level) * np.linspace(0.1, 1.0, n)[:, None]
+            return make
+        return [("guitar", part("guitar", 0.5)), ("voice", part("voice", 2.0))], ("voice",)
+
+    monkeypatch.setattr(synth, "SR", 1000)
+    monkeypatch.setattr(synth, "stem_jobs", fake_jobs)
+    edits = {"tempo": 140}
+    answer = ask(device, "/api/export", {"edits": edits, "what": "stems"})["json"]
+    assert answer["state"] == "device" and answer["name"].endswith(".stems.zip")
+    spec = json.loads(answer["spec"])
+    assert spec["kind"] == "stems" and spec["key"] == answer["key"] and answer["name"] == spec["stem"] + ".stems.zip"
+
+    v = server.version(edits)
+    key = server.key(v, None)
+    assert key == answer["key"]
+
+    def fake_whole(job, v, key):
+        (server.cache / key).mkdir(parents=True, exist_ok=True)
+        (server.cache / key / "rendition.json").write_text(json.dumps({"id": "5beef0" + "a" * 58}))
+        (server.cache / f"{key}.flac").write_bytes(b"fLaC")
+        return {"id": "5beef0" + "a" * 58}
+
+    monkeypatch.setattr(server, "_whole", fake_whole)
+    server._stems(S.Job(id="x", key=key, kind="preview", label="", work=None), v, key)
+    theirs = zipfile.ZipFile(server.cache / f"{key}.zip")
+    stem = theirs.namelist()[0].split("/")[0]
+
+    made.clear()
+    files, said = {}, []
+    out = R.run_stems(answer["spec"], tmp_path, lambda i, name, data, crc: files.__setitem__(i, (name, data, crc)),
+                      lambda fraction, stage: said.append(stage), device.studio.program_digest,
+                      [f"{stem}.flac", "5beef0" + "a" * 58])
+    assert out["parts"] == ["voice", "guitar"] and out["again"] == ["guitar"] and out["name"] == stem
+    assert made == ["guitar", "voice", "guitar"]
+    assert abs(out["gain"] - 0.989 / 2.0) < 1e-12 and any("again" in s for s in said)
+    mine = {name: (data, crc) for name, data, crc in files.values()}
+    for name, data, crc in (out["midi"], out["readme"]):
+        mine[name] = (data, crc)
+    assert sorted(mine) == sorted(theirs.namelist())
+    for name in theirs.namelist():
+        assert mine[name][0] == theirs.read(name), name
+        assert mine[name][1] == theirs.getinfo(name).CRC
+    with pytest.raises(R.Refused):
+        R.run(answer["spec"], tmp_path, None, device.studio.program_digest)
