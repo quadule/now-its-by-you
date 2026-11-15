@@ -145,6 +145,9 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .transport .right { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; flex: 0 0 auto; }
 .pop { position: absolute; top: calc(100% + 4px); z-index: 20; background: var(--card); border: 1px solid var(--ink-3); border-radius: var(--radius); padding: 10px 12px; display: grid; gap: 8px; min-width: 220px; max-width: min(420px, calc(100vw - 24px)); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
 #howPop { left: 24px; } #keyPop { right: 24px; }
+/* the Export menu: everything that takes the song out, under its button; an export's progress and its file here too */
+#exportPop { right: 24px; width: min(460px, calc(100vw - 24px)); max-width: none; max-height: calc(100vh - 140px); overflow: auto; gap: 0; padding: 4px 14px 8px; }
+#exportPop > .tool:first-child { border-top: 0; }
 .pop .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .pop label.field { display: grid; gap: 3px; font-size: 12px; color: var(--ink-2); }
 .phone-only { display: none; }
@@ -465,11 +468,11 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .door:first-child { border-top: 0; }
 .door:hover .v { text-decoration: underline; text-underline-offset: 3px; }
 .door .k { font-size: 12px; color: var(--ink-2); }
-.door .v { font: 15px/1.3 var(--serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.door .v { font: 15px/1.3 var(--serif); text-wrap: pretty; overflow-wrap: anywhere; }  /* whole, wrapped: "the lilting strum, the whistle leading" */
 .door.you .v { color: var(--hand); }
 .lineitem { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--rule); }
 .lineitem .k { font-size: 12px; color: var(--ink-2); }
-.lineitem .v { font: 15px/1.3 var(--serif); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lineitem .v { font: 15px/1.3 var(--serif); color: var(--ink); text-wrap: pretty; overflow-wrap: anywhere; }  /* whole, wrapped, as .door .v */
 .field { display: grid; gap: 3px; margin: 8px 0; }
 .field > .label { font-size: 12px; color: var(--ink-2); display: flex; justify-content: space-between; gap: 8px; }
 .field .ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
@@ -644,6 +647,7 @@ dialog.help .keys td { padding: 3px 0; }
   .position .now .sub { display: block; white-space: normal; font-size: 12px; line-height: 1.3; }
   #howPop { left: 8px; right: 8px; }
   #keyPop { right: 8px; left: 8px; }
+  #exportPop { right: 8px; left: 8px; width: auto; }
   .phone-only { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .tabs { display: none; }
   /* the views' bar: over the inspector's sheet, which runs down under it to the screen's edge, so nothing of the

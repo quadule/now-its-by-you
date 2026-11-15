@@ -1282,7 +1282,7 @@ async function sing() {
 }
 
 function revealRecording(scroll = false) {
-  if (score()?.reveal) return score().reveal("record", scroll);  // the score's Tools sheet, its Take it out side
+  if (score()?.reveal) return score().reveal();  // the score's Export menu
   const panel = $("recordPanel");
   const details = panel.closest("details.finish-panel") || panel.closest("details");
   if (details) details.open = true;
@@ -1293,7 +1293,7 @@ async function record() {
   const saved = $("saved");
   if (state.recording) return;
   state.recording = true;
-  for (const id of ["record", "recordNow"]) setOn(id, "disabled", true);
+  setOn("record", "disabled", true);
   saved.replaceChildren(h("p", {}, "Exporting…"));
   revealRecording(true);
   const edits = copyEdits();
@@ -1317,7 +1317,7 @@ async function record() {
   } finally {
     revealRecording();
     state.recording = false;
-    for (const id of ["record", "recordNow"]) setOn(id, "disabled", false);
+    setOn("record", "disabled", false);
     score()?.recording?.(null);
   }
 }
@@ -1366,7 +1366,7 @@ function applyDevice(s) {
   setOn("whereNote", "textContent", "Your changes stay on this device unless you share a version. The site counts visits (Cloudflare Web Analytics, no cookies).");
   setOn("helpShows", "textContent", s.published ? "This studio opens on the song as it was published, and lets you:"
     : "This studio shows today's version of the song, and lets you:");
-  if (window.SongbirdDevice?.share) setOn("shareTool", "hidden", false);  // a link to your version, from Tools
+  if (window.SongbirdDevice?.share) setOn("shareTool", "hidden", false);  // a link to your version, from Export
   // the parts alone can't be made in a browser: said on the button's own line, not after it is pressed
   const stems = $("exportStems");
   if (stems) {
@@ -1659,7 +1659,6 @@ $("roll")?.addEventListener("click", () => {
   toast("A new performance. Press \u25B6 to hear it.");
 });
 $("record")?.addEventListener("click", record);
-$("recordNow")?.addEventListener("click", record);
 $("shareNow")?.addEventListener("click", shareExport);
 $("toFinish")?.addEventListener("click", () => {
   // what singing and recording are, and the button that does it: opened, not started, from the top

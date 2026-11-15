@@ -277,11 +277,11 @@
       : [v.offset ? v.date : "Today", by].filter(Boolean).join(" · ");
     if (S.pop === "keyPop") keyPop();
   }
-  const opener = (id) => ({ howPop: narrow() ? "positionNow" : "howMore", keyPop: "keyBtn" })[id];
+  const opener = (id) => ({ howPop: narrow() ? "positionNow" : "howMore", keyPop: "keyBtn", exportPop: "recordNow" })[id];
   function togglePop(id) {
     const open = S.pop !== id;
-    for (const p of ["howPop", "keyPop"]) $(p).hidden = true;
-    for (const b of ["howMore", "keyBtn", "positionNow"]) $(b).setAttribute("aria-expanded", "false");
+    for (const p of ["howPop", "keyPop", "exportPop"]) $(p).hidden = true;
+    for (const b of ["howMore", "keyBtn", "positionNow", "recordNow"]) $(b).setAttribute("aria-expanded", "false");
     S.pop = open ? id : null;
     if (!open) return;
     if (id === "keyPop") keyPop();
@@ -1305,19 +1305,18 @@
   }
 
   // ------------------------------------------------------------------ sheets: Tools, the Time drawer
-  function openTools(on, side) {
+  function openTools(on) {
     const sheet = $("finishPanel");
     if (on === undefined) on = sheet.hidden;
     sheet.hidden = !on;
     $("scrim").hidden = !on && $("drawer").hidden;
     $("toolsBtn").setAttribute("aria-expanded", String(on));
     if (on) {
-      if (side === "record") $("recordPanel").scrollIntoView({ block: "nearest" });
-      else $("toolsTitle").focus();
+      $("toolsTitle").focus();
       sayTarget();
     } else $("toolsBtn").focus({ preventScroll: true });
   }
-  function reveal(what, scroll) { if ($("finishPanel").hidden) openTools(true, what); else if (scroll) $("recordPanel").scrollIntoView({ block: "nearest" }); }
+  function reveal() { if (S.pop !== "exportPop") togglePop("exportPop"); }  // an export on its way, or ready: the Export menu says so
   function sayTarget() {  // what "Play a part in" plays over: the selection
     const s = S.open || S.sel?.id || S.sel?.section;
     const label = s ? sectionAt(s)?.label : null;
@@ -1421,6 +1420,7 @@
     $("tempoReset").addEventListener("click", () => releaseEdit("tempo", "Reset the tempo"));
     $("keyBtn").addEventListener("click", () => togglePop("keyPop"));
     $("toolsBtn").addEventListener("click", () => openTools());
+    $("recordNow").addEventListener("click", () => togglePop("exportPop"));
     $("timeBtn").addEventListener("click", () => openTime());
     $("scrim").addEventListener("click", () => { openTools(false); openTime(false); });
     for (const b of document.querySelectorAll("[data-close]")) b.addEventListener("click", () => (b.closest("#drawer") ? openTime(false) : openTools(false)));
@@ -1435,7 +1435,7 @@
     drop.addEventListener("drop", (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.remove("over"); $("dropVeil").hidden = true; window.SongbirdPerform?.bringBack(e.dataTransfer.files[0]); });
     document.addEventListener("keydown", key);
     document.addEventListener("click", (e) => {  // a popover closes when something else is pressed
-      if (S.pop && !e.target.closest(".pop, #howMore, #keyBtn, #positionNow")) togglePop(S.pop);
+      if (S.pop && !e.target.closest(".pop, #howMore, #keyBtn, #positionNow, #recordNow")) togglePop(S.pop);
     });
     const audio = $("audio");
     for (const ev of ["play", "pause", "ended"]) audio.addEventListener(ev, () => { paintPlay(); if (ev !== "play") setTimeout(idle, 1200); });

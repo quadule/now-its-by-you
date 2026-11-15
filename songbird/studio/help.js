@@ -23,8 +23,8 @@
       { target: "transport", text: "Change something in the bar at the top: the tempo and the key. Undo takes anything back." },
       { target: "page", view: "page", text: "Select a section by its name (or its region in Arrange): the column beside it says what it is, why the program chose it, and how to change it." },
       { target: "recordNow", text: DEVICE
-        ? "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version from it. Tools has the MIDI, the piano page, and ways to bring things in."
-        : "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version. Tools has the MIDI, the parts, the piano page, and ways to bring things in." },
+        ? "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version from it. Export also has a link to share, the MIDI and the piano page; Tools brings things in."
+        : "When you're done, export it. The file plays in any music player and contains the program, so anyone can make the next version. Export also has the MIDI, the parts and the piano page; Tools brings things in." },
     ];
   };
   let STEPS = steps();

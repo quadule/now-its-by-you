@@ -216,13 +216,13 @@ test('Record opens the finish panel before scrolling and reopens it when the fin
   panel.ancestor = details;
   const recording = run('record()');
   assert.equal(panel.scrolledWithAncestorOpen, true);
-  assert.equal(nodes.get('recordNow').disabled, true);
+  assert.equal(nodes.get('record').disabled, true);
   details.open = false;
   run('setEdit("tempo", 100)');
   pending[0]({ state: 'done', url: '/recorded.flac', result: { recorded: { flac: 'song.flac', duration: 60, yours: 0, next: 'songbird next' } } });
   await recording;
   assert.equal(details.open, true);
-  assert.equal(nodes.get('recordNow').disabled, false);
+  assert.equal(nodes.get('record').disabled, false);
   assert.equal(run('state.recording'), false);
   // the export, ready: its Play is the one button in it here (no Download: this studio saved the file; no Share)
   const pressable = (node) => (node?.listeners?.click ? [node] : (node?.children || []).flatMap(pressable));
