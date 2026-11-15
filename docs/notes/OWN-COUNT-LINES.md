@@ -62,8 +62,8 @@ that line a copy of the phrase whose `notes` are the person's, and whose
 `own` names the key, so everything that reads the tune from `form_phrases`
 (realize, the band keeping clear of the tune, the lead playing it, the hymn's
 organ, the MIDI file, the page) reads the same notes. `form_phrases` finds the
-lyric keys from the rendition's held words (`params.words`, as `handed_down`
-does).
+lyric keys from the words its caller sang, or else the rendition's held words
+(`params.words`, as `handed_down` reads them).
 
 On a line with its own count:
 
@@ -84,9 +84,8 @@ On a line with its own count:
   has one: nothing is dropped from the record, nothing sings out of step.
 - The `line.` edit on such a program is refused ("there's no such choice"), and
   the rest of the edits keep.
-- `own` lines go out in a MIDI file as notes with their lyric, like any line;
-  a file with another count coming in is still refused for tune lines, and
-  taken as an own line only where the line's words are written (later).
+- `own` lines go out in a MIDI file as notes with their lyric, like any line,
+  and come back as a line of its own (below).
 
 A `lyrics.` edit for the same line (words to the tune's count) takes the line
 back to its tune line's notes: the own entry goes.
@@ -104,25 +103,32 @@ with its words, its notes are marked yours, the "everywhere / only here" switch
 is hidden (it is sung with its verse's words alone), and the note card's
 release is **Use the tune's line**.
 
-## Known gaps in the prototype
+## Elsewhere in the song
 
-- **Rounds** (`canon`): a round's fit is judged on the song's tune; a line of
-  its own in a section sung as a round isn't refused or re-judged.
-- **A section played, not sung** (`arrange.<section>:<n>.sung` false) still
-  plays the person's notes on the lead there.
-- **Words the band doesn't know**: the band and a style's chord timing read
-  `form_phrases` with the rendition's held words. A render with `--lyrics-seed`,
-  or one that sings the seed's words over held bank words, sings a line of its
-  own where the band may not keep clear of it. realize and the page pass their
-  own words and are always right.
-- **The jazz trio's changes** are keyed by the tune line and ignore the notes.
-- **A MIDI file brought back** with another count is refused, as before.
-- No JS unit test for the inspector's buttons yet (tested by hand in the
-  studio).
+- **A round** (`canon.plans`) is judged on the section's lines of their own, so
+  the voices sing what was measured: a line that rubs against the next one
+  takes fewer voices, or none. Every voice sings the line's syllables.
+- **A section a person had played** (`arrange.<section>:<n>.sung` false)
+  sings no words, so its lead plays the tune line's notes there.
+- **Which words sing where.** realize, the page, the band (which lays out from
+  realize's lines) and the MIDI file's chords (`idioms.chord_times`,
+  `midi.from_score`: `lyrics`) all take the words the score sang. A round's
+  judgment and the record's explanations read the words the rendition holds,
+  which are the ones sung except in a render with `--lyrics-seed`.
+- **A hymn** sets its chords to the line's own notes.
+- **The jazz trio** keeps the song's chords under a line of its own, as under a
+  place's own tune: its changes are fitted to the song's tune.
+- **A MIDI file brought back** (`notesin`): a line the file sings with another
+  count of syllables, as its lyrics show, comes back as a line of its own, its
+  words read from the lyrics (each on its syllable's first note, as the export
+  writes them) and a note without one slurred onto the one before. A line of
+  its own comes back the same way, keeping its words where the file has no
+  lyrics on it. A note added with no lyric is the tune line's, refused with the
+  count as before.
 
 ## Not in this draft
 
 - the everywhere edit (every verse's line 3 with eight syllables): it would need
   every bank verse rewritten for it;
-- a MIDI or keyboard take that changes the count;
+- a take played on the keyboard that changes the count (a take has no words);
 - carrying gestures across a count change.
