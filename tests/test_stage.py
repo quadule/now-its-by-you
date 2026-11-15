@@ -154,7 +154,7 @@ def test_every_render_lays_its_score_out_alike():
     from songbird import cli, studio
 
     browser = (ROOT / "web" / "studio-wasm" / "py" / "studio_render.py").read_text()
-    for source in (inspect.getsource(cli.render_one), inspect.getsource(studio.Studio._score), browser):
+    for source in (inspect.getsource(cli.render_one), inspect.getsource(studio.Studio._score_and_heard), browser):
         assert "stage.laid(" in source and "variation.lay(realize(" not in source
 
 
