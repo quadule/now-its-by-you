@@ -18,12 +18,15 @@
 // hashes 20-60 MB (the free plan allows 10 ms of CPU a request); without it, the Worker hashes as it stores.
 //
 // In R2 (VERSIONS, private): versions/<id>.flac, the files; opened/<id>, when one was last opened (written at most
-// once in REFRESH_DAYS); limits/<hour>/<address mark>-<random>, one mark per attempt this hour, and
-// limits/<hour>/kept-<random>, one per version kept, for the hourly limits (an address is kept only as 64 bits of an
-// HMAC under keys/address, and only until the hour is over); incoming/<random>, a file on its way in, checked there
-// before it goes to its place. Every hour (the cron) a version not opened for KEEP_DAYS is
-// deleted (at most REFRESH_DAYS later), and so are past hours' marks and anything left incoming. Nothing personal
-// is logged.
+// once in REFRESH_DAYS); keys/address, the key an address is counted under; incoming/<random>, a file on its way
+// in, checked there before it goes to its place. Every hour (the cron) a version not opened for KEEP_DAYS is
+// deleted (at most REFRESH_DAYS later), and so is anything left incoming (and any marks under limits/).
+//
+// The hourly limits are counted by one Durable Object (SHARES, the Shares class below), which admits a share or
+// refuses it in one step, so shares arriving together can't all pass the same count: this hour's tries from each
+// address (an address only as 64 bits of an HMAC under keys/address, forgotten when the hour is over) and the
+// versions kept from everywhere (a place taken before the file is read, given back if it isn't kept). Nothing
+// personal is logged.
 
 import { MAX_BYTES, MIN_BYTES, Refused, checkVersion } from "./packet.js";
 import { PAGE, SECURITY } from "./policy.js";
@@ -132,20 +135,67 @@ async function share(request, env, url, ip, now) {
 
   // this hour's shares, before a byte of the file is read: every attempt from here counts (so a flood of bad files
   // is held back too), but only versions kept count against everyone's ceiling (so junk can't shut sharing for all)
-  const hour = hourOf(now), me = await addressMark(env, addressOf(ip), hour), at = `limits/${hour}/`;
-  const marks = (await env.VERSIONS.list({ prefix: at, limit: 1000 })).objects.map(o => o.key.slice(at.length));
-  if (marks.filter(k => k.startsWith(`${me}-`)).length >= setting(env, "UPLOADS_AN_HOUR", UPLOADS_AN_HOUR)) {
+  if (!env.SHARES) return fail(503, "Sharing isn't set up on this site.");
+  const hour = hourOf(now), me = await addressMark(env, addressOf(ip), hour);
+  const shares = env.SHARES.get(env.SHARES.idFromName("shares"));
+  const ask = async (what, body) => (await (await shares.fetch(`https://shares/${what}`, { method: "POST", body: JSON.stringify(body) })).json()).said;
+  const admitted = await ask("admit", { hour, me, mine: setting(env, "UPLOADS_AN_HOUR", UPLOADS_AN_HOUR), all: setting(env, "ALL_AN_HOUR", ALL_AN_HOUR) });
+  if (admitted === "mine") {
     return fail(429, "You've shared as many versions as can be shared from one place in an hour: try again next hour.", { "Retry-After": "3600" });
   }
-  if (marks.filter(k => k.startsWith("kept-")).length >= setting(env, "ALL_AN_HOUR", ALL_AN_HOUR)) {
-    return fail(429, "Many versions are being shared just now: try again in an hour.", { "Retry-After": "3600" });
-  }
-  await env.VERSIONS.put(`${at}${me}-${crypto.randomUUID().slice(0, 8)}`, "");
+  if (admitted === "all") return fail(429, "Many versions are being shared just now: try again in an hour.", { "Retry-After": "3600" });
+  if (admitted !== "ok") throw new Error("the count didn't answer");
 
-  const kept = await keep(env, request, size, claimed, hour);
+  let kept;
+  try {
+    kept = await keep(env, request, size, claimed, hour);
+  } finally {
+    if (!kept || kept.error) await ask("release", { hour }).catch(e => console.error("songbird-studio: release", e && e.name));
+  }
   if (kept.error) return fail(kept.status || 400, kept.error);
-  await env.VERSIONS.put(`${at}kept-${crypto.randomUUID().slice(0, 8)}`, "");
   return json({ id: kept.id, url: `/v/${kept.id}` }, 201);
+}
+
+/* ---------- the hour's count ---------- */
+
+export class Shares {
+  // The one place the hour's shares are counted (a Durable Object: one instance, one request at a time, its storage
+  // its own). "admit" {hour, me, mine, all}: "mine" when this address has tried `mine` times this hour, "all" when
+  // `all` places are taken, else "ok", the try counted and a place taken. "release" {hour}: a place given back (a
+  // file refused, or broken off). A new hour starts the count again.
+  constructor(state) {
+    this.storage = state.storage;
+    this.turn = Promise.resolve();
+  }
+
+  async fetch(request) {
+    const body = await request.json(), what = new URL(request.url).pathname.slice(1);
+    const run = this.turn.then(() => (what === "admit" ? this.admit(body) : what === "release" ? this.release(body) : "unknown"));
+    this.turn = run.catch(() => {});
+    return new Response(JSON.stringify({ said: await run }), { headers: { "Content-Type": "application/json" } });
+  }
+
+  async counted(hour) {
+    if ((await this.storage.get("hour")) !== hour) {
+      await this.storage.deleteAll();
+      await this.storage.put("hour", hour);
+    }
+  }
+
+  async admit({ hour, me, mine, all }) {
+    await this.counted(hour);
+    const tried = (await this.storage.get(`by:${me}`)) || 0, taken = (await this.storage.get("all")) || 0;
+    if (tried >= mine) return "mine";
+    if (taken >= all) return "all";
+    await this.storage.put({ [`by:${me}`]: tried + 1, all: taken + 1 });
+    return "ok";
+  }
+
+  async release({ hour }) {
+    if ((await this.storage.get("hour")) !== hour) return "ok"; // that hour's count is over
+    await this.storage.put("all", Math.max(0, ((await this.storage.get("all")) || 0) - 1));
+    return "ok";
+  }
 }
 
 const ARRIVED = "The file didn't arrive whole: send it again.";

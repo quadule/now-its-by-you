@@ -43,7 +43,17 @@ REFRESH_DAYS = "7"
 UPLOADS_AN_HOUR = "10"
 ALL_AN_HOUR = "60"
 
-# Every hour: versions not opened for KEEP_DAYS deleted, and past hours' counts forgotten.
+# The hour's shares, counted in one place (src/worker.js, Shares), so shares arriving together can't all pass the
+# same count. SQLite-backed, as the free plan allows.
+[[durable_objects.bindings]]
+name = "SHARES"
+class_name = "Shares"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Shares"]
+
+# Every hour: versions not opened for KEEP_DAYS deleted, and anything left incoming.
 [triggers]
 crons = ["17 * * * *"]
 
