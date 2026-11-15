@@ -1,5 +1,5 @@
 {
-  "id": "2751cf097e9da8c427d9d8886c1acdac9d677ad0d285e998bf6514c7b39263a1",
+  "id": "eb8fb05eb2bbbe2c5f4f7efca392bd4f77dc6ced7921bc4d0c117178ee560b07",
   "title": "Now It's by You",
   "generation": 0,
   "parent_id": null,
@@ -6042,7 +6042,7 @@
     "plate": 1.0
   },
   "loudness_lufs": -14.0,
-  "loudness_range_lu": 5.53,
+  "loudness_range_lu": 5.64,
   "true_peak_dbtp": -1.05,
   "peak_dbfs": -1.05,
   "duration": 151.227,
@@ -6051,7 +6051,7 @@
   "gate": null,
   "path": "record",
   "llm": null,
-  "program_sha256": "2f79e4721ab1526508e9345c2191cf4ad20513f8012e55519c06934dcf8ca450",
+  "program_sha256": "6e0cbacfa57e3baac2370e1f9b094db8316d0e8728f38b2301e8188e98dcdc42",
   "python": "3.12",
   "name": null
 }

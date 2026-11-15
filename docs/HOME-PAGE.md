@@ -47,7 +47,7 @@ which part); on a phone, a row to swipe, each picture whole. Take them again whe
 
 **The source code.** `SOURCE` in tools/sing_site.py is https://github.com/quadule/now-its-by-you, and
 `SOURCE_PUBLIC` is on: the home page and /about link the repository in their foot, and the history each edition's
-commit and tag (`first-version` on 10dc1e0, `awards-draft` on 9c83fa5, pushed with the repository).
+commit and tag (`first-version` on 10dc1e0, `awards-draft` on 1dd9218, pushed with the repository).
 
 **Cloudflare Web Analytics.** The zone injects Cloudflare's Web Analytics beacon into each page a browser asks for (a
 `<script type="module">` from `static.cloudflareinsights.com`, with its integrity hash). The Worker's page policy

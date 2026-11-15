@@ -5,17 +5,17 @@
       "title": "Awards performance draft",
       "date": "2026-11-14",
       "note": "The song in B major for the AI Song Contest 2026 awards in Bangkok, its band and its voice moving from machine to human together.",
-      "audio": "2751cf097e9da8c427d9d8886c1acdac9d677ad0d285e998bf6514c7b39263a1",
+      "audio": "eb8fb05eb2bbbe2c5f4f7efca392bd4f77dc6ced7921bc4d0c117178ee560b07",
       "file": {
         "path": "renders/release/now-its-by-you-awards-draft.flac",
-        "sha256": "88336eefd2e1f5dd481496e8426369843c7258a483cc85c54b6b05db2f9d670f",
-        "bytes": 16850711
+        "sha256": "8c753a6053d04337e3d4a4ad7fea50a99c963748634dcc97c0d19cbd423d5f3d",
+        "bytes": 16889671
       },
       "render": {},
-      "program": "2f79e4721ab1526508e9345c2191cf4ad20513f8012e55519c06934dcf8ca450",
+      "program": "6e0cbacfa57e3baac2370e1f9b094db8316d0e8728f38b2301e8188e98dcdc42",
       "python": "3.12",
       "source": {
-        "commit": "9c83fa5c6ec804e9d43c868524c6b37af3cc8d9b",
+        "commit": "1dd921808ab424afcd015cbc506834b1910cd8ef",
         "tag": "awards-draft"
       },
       "command": "uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --pack --out renders/release/now-its-by-you-awards-draft.flac",
