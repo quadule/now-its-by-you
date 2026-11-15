@@ -181,53 +181,53 @@
         {
           "id": "canon",
           "by": "fable (A's question, B's answer)",
-          "lines": ["It's no-bo-dy's mak-ing, it's old and it's new;", "by ev-ery-one, no one, and now it's by you."]
+          "lines": ["It's no-bo-dy's mak-ing, it's old and it's *new*;", "by ev-ery-one, no one, and now it's by *you*."]
         },
         {
           "id": "true",
           "by": "artist",
-          "lines": ["It's no-bo-dy's mak-ing, it might not be true;", "but now that you know it, go make it from you."]
+          "lines": ["It's no-bo-dy's mak-ing, it *might* not be true;", "but now that you *know* it, go make it from you."]
         },
         {
           "id": "take",
           "by": "artist and fable",
           "lines": [
-            "It's yours for the tak-ing, so take it, and do",
-            "what-ev-er you like, but leave some of you too."
+            "It's *yours* for the tak-ing, so take it, and do",
+            "what-ev-er you like, but leave *some* of you too."
           ]
         },
         {
           "id": "blue",
           "by": "fable",
           "lines": [
-            "It's no-bo-dy's mak-ing, it's out of the blue",
-            "and goes back to no-where un-less it's through you."
+            "It's no-bo-dy's mak-ing, it's out of the *blue*",
+            "and goes back to *no-where* un-less it's through you."
           ]
         },
         {
           "id": "due",
           "by": "fable",
-          "lines": ["It's no-bo-dy's mak-ing, and no-bo-dy's due", "a pen-ny for sing-ing; so sing it right through."]
+          "lines": ["It's no-bo-dy's mak-ing, and no-bo-dy's *due*", "a *pen-ny* for sing-ing; so sing it right through."]
         },
         {
           "id": "sang",
           "by": "fable",
-          "lines": ["It's no-bo-dy's mak-ing, and that much is true;", "but some-bo-dy sang it, and now it's by you."]
+          "lines": ["It's no-bo-dy's mak-ing, and that much is *true*;", "but some-bo-dy *sang* it, and now it's by you."]
         },
         {
           "id": "wind",
           "by": "artist and claude, via gemini",
           "lines": [
-            "It's no-bo-dy's mak-ing, it pass-es on through;",
-            "a breath on the wa-ter, and now it's by you."
+            "It's no-bo-dy's mak-ing, it *pass-es* on through;",
+            "a *breath* on the wa-ter, and now it's by you."
           ]
         },
         {
           "id": "plant",
           "by": "claude, after the artist's early daisy draft; the artist's pick of two",
           "lines": [
-            "It's no-bo-dy's plant-ing; un-asked for, it grew",
-            "through cracks in the pave-ment, and now it's by you."
+            "It's no-bo-dy's *plant-ing*; un-asked for, it grew",
+            "through *cracks* in the pave-ment, and now it's by you."
           ]
         }
       ]
@@ -242,10 +242,10 @@
         "pairs_with": ["learned"],
         "by": "fable (B's wire verse, A's last line)",
         "lines": [
-          "They saved it as num-bers and sent it by wire,",
-          "a flick-er of light, and as quick as a fire.",
-          "Each cop-y was per-fect in ev-ery last part,",
-          "but not one ma-chine ev-er knew it by heart."
+          "They saved it as *num-bers* and sent it by wire,",
+          "a *flick-er* of light, and as quick as a fire.",
+          "Each cop-y was *per-fect* in ev-ery last part,",
+          "but not one ma-chine ev-er knew it by *heart*."
         ]
       },
       {
@@ -259,10 +259,10 @@
           "many": ["mil-lion", "bil-lion", "thou-sand"]
         },
         "lines": [
-          "The whole world was watch-ing it all in a day,",
-          "a {many} bright fac-es all lit the same way;",
-          "they laughed and they wept, and they scrolled right a-long,",
-          "but no-bo-dy hummed it; it was-n't a song."
+          "The whole world was watch-ing it all in a *day*,",
+          "a {many} bright fac-es all lit the *same* way;",
+          "they laughed and they wept, and they *scrolled* right a-long,",
+          "but no-bo-dy hummed it; it was-n't a *song*."
         ]
       },
       {
@@ -282,10 +282,10 @@
           }
         },
         "lines": [
-          "A qui-et {who.noun} kept it a-lone in {who.his} head,",
-          "so close and so safe that it nev-er was said.",
-          "It went where {who.he} went, and it slept where {who.he} slept;",
-          "they bur-ied it with {who.him}, the se-cret {who.he} kept."
+          "A qui-et {who.noun} *kept* it a-lone in {who.his} head,",
+          "so close and so *safe* that it nev-er was said.",
+          "It *went* where {who.he} went, and it *slept* where {who.he} slept;",
+          "they *bur-ied* it with {who.him}, the se-cret {who.he} kept."
         ]
       },
       {
@@ -304,10 +304,10 @@
           "years": ["hun-dred-odd", "thou-sand-odd", "six-ty-odd", "nine-ty-odd"]
         },
         "lines": [
-          "A {who.noun} wrote it down by a can-dle one night,",
-          "in ink on a page, and {who.he} fold-ed it tight.",
-          "It lay in a drawer for a {years} years;",
-          "it speaks in a voice that now no-bo-dy hears."
+          "A {who.noun} *wrote* it down by a can-dle one night,",
+          "in ink on a page, and {who.he} *fold-ed* it tight.",
+          "It *lay* in a drawer for a {years} years;",
+          "it *speaks* in a voice that now no-bo-dy hears."
         ]
       },
       {
@@ -322,10 +322,10 @@
           "wares": ["or-an-ges", "news-pa-pers", "vi-o-lets"]
         },
         "lines": [
-          "A {who} was hum-ming it down by the quay;",
-          "a girl sell-ing {wares} caught it for free.",
-          "She had-n't his lan-guage, she had-n't his name;",
-          "a mouth is e-nough, and she sang it the same."
+          "A {who} was *hum-ming* it down by the quay;",
+          "a girl sell-ing {wares} *caught* it for free.",
+          "She had-n't his *lan-guage*, she had-n't his name;",
+          "a mouth is e-nough, and she sang it the *same*."
         ]
       },
       {
@@ -337,10 +337,10 @@
         "pairs_with": ["lullaby"],
         "by": "artist (first line) and fable",
         "lines": [
-          "They sang it as kids while they sat by the fire,",
-          "the words half-in-vent-ed, the tune half-a-sleep;",
-          "they're gray now, and scat-tered, and most of the choir",
-          "are grand-par-ents, sing-ing their grand-kids to sleep."
+          "They sang it as *kids* while they sat by the fire,",
+          "the words half-in-vent-ed, the *tune* half-a-sleep;",
+          "they're *gray* now, and scat-tered, and most of the choir",
+          "are grand-par-ents, sing-ing their *grand-kids* to sleep."
         ]
       },
       {
@@ -356,10 +356,10 @@
           "carry": ["car-ried it home", "took it back home"]
         },
         "lines": [
-          "A {bird} out-side of a win-dow in {month}",
-          "picked up the first line and in-vent-ed the rest.",
-          "It sang it at dawn to a bird on the wing,",
-          "who {carry} to the young in her nest."
+          "A {bird} out-side of a *win-dow* in {month}",
+          "picked up the *first* line and in-vent-ed the rest.",
+          "It sang it at *dawn* to a bird on the wing,",
+          "who {carry} to the *young* in her nest."
         ]
       },
       {
@@ -376,10 +376,10 @@
           }
         },
         "lines": [
-          "A {who.noun} in a cell tapped it out on the wall",
-          "to some-one {who.he} nev-er once saw, down the hall.",
-          "The some-one tapped back, and for years, ev-ery day,",
-          "it went through the stone; it was all they could say."
+          "A {who.noun} in a cell *tapped* it out on the wall",
+          "to some-one {who.he} *nev-er* once saw, down the hall.",
+          "The some-one tapped *back*, and for years, ev-ery day,",
+          "it went through the *stone*; it was all they could say."
         ]
       },
       {
@@ -394,10 +394,10 @@
           "age": ["for-ty", "fif-ty", "six-ty", "thir-ty"]
         },
         "lines": [
-          "A wom-an was sing-ing it low to a child",
-          "who slept be-fore ev-er the sec-ond verse came;",
-          "the child nev-er learned it. At {age}, she smiled",
-          "at stran-gers who hummed it, not know-ing its name."
+          "A wom-an was sing-ing it *low* to a child",
+          "who *slept* be-fore ev-er the sec-ond verse came;",
+          "the child nev-er *learned* it. At {age}, she smiled",
+          "at *stran-gers* who hummed it, not know-ing its name."
         ]
       },
       {
@@ -412,10 +412,10 @@
           "day": ["Tues-day", "Mon-day", "Fri-day", "Sun-day"]
         },
         "lines": [
-          "They cut it in wax on a {day} in town;",
-          "the nee-dle went round and the rec-ord wore down.",
-          "It kept the one slip where the sing-er went wrong,",
-          "and ev-ery-one since sings the slip in the song."
+          "They *cut* it in wax on a {day} in town;",
+          "the nee-dle went round and the rec-ord wore *down*.",
+          "It kept the one *slip* where the sing-er went wrong,",
+          "and *ev-ery-one* since sings the slip in the song."
         ]
       },
       {
@@ -428,10 +428,10 @@
         "by": "fable",
         "note": "a noun split across the line break; ration it",
         "lines": [
-          "Two ar-mies in mud with a field in be-tween",
-          "were both of them sing-ing it, nei-ther one knew,",
-          "in two dif-ferent tongues. In the dark, a ma-chine",
-          "gun stopped, for the length of a verse, and then two."
+          "Two *ar-mies* in mud with a field in be-tween",
+          "were *both* of them sing-ing it, nei-ther one knew,",
+          "in two dif-ferent *tongues*. In the dark, a ma-chine",
+          "gun *stopped*, for the length of a verse, and then two."
         ]
       },
       {
@@ -445,10 +445,10 @@
           "planet": ["Nep-tune", "Sat-urn", "Plu-to"]
         },
         "lines": [
-          "They put it a-board with the gold and the maps",
-          "and shot it past {planet} to no one, per-haps.",
-          "Out there it's a groove in a disc, noth-ing more;",
-          "it's pa-tient; it's wait-ed for sing-ers be-fore."
+          "They put it a-board with the *gold* and the maps",
+          "and shot it past {planet} to *no* one, per-haps.",
+          "Out there it's a *groove* in a disc, noth-ing more;",
+          "it's *pa-tient*; it's wait-ed for sing-ers be-fore."
         ]
       },
       {
@@ -463,10 +463,10 @@
           "instrument": ["fid-dle", "whis-tle", "squeeze-box", "ban-jo"]
         },
         "lines": [
-          "A {who} with a {instrument} would play it for coins,",
-          "the trains ran a-bove it, the traf-fic ran by;",
-          "and no-bo-dy stopped, but a thou-sand went home,",
-          "the tune in their pock-ets, not know-ing quite why."
+          "A {who} with a {instrument} would *play* it for coins,",
+          "the trains ran a-bove it, the *traf-fic* ran by;",
+          "and no-bo-dy stopped, but a *thou-sand* went home,",
+          "the tune in their *pock-ets*, not know-ing quite why."
         ]
       },
       {
@@ -481,10 +481,10 @@
           "count": ["sev-en", "twen-ty", "thir-ty"]
         },
         "lines": [
-          "It's sung in a lan-guage that no-bo-dy speaks",
-          "by {count} old wom-en who don't know a word;",
-          "they learned it as sound from their moth-ers, and sound",
-          "is all that a song ev-er needs to be heard."
+          "It's sung in a *lan-guage* that no-bo-dy speaks",
+          "by {count} old wom-en who don't know a *word*;",
+          "they learned it as *sound* from their moth-ers, and sound",
+          "is *all* that a song ev-er needs to be heard."
         ]
       },
       {
@@ -499,10 +499,10 @@
           "many": ["mil-lion", "bil-lion", "thou-sand"]
         },
         "lines": [
-          "It played on the phone while a {many} held on",
-          "for some-bo-dy, an-y-one, hop-ing to speak;",
-          "they hat-ed it, hummed it, hung up, and were gone;",
-          "they're sing-ing it still in the show-er each week."
+          "It played on the *phone* while a {many} held on",
+          "for some-bo-dy, *an-y-one*, hop-ing to speak;",
+          "they *hat-ed* it, hummed it, hung up, and were gone;",
+          "they're sing-ing it still in the *show-er* each week."
         ]
       },
       {
@@ -517,10 +517,10 @@
           "when": ["eve-ning", "morn-ing"]
         },
         "lines": [
-          "A {tower} was ring-ing it out o-ver town",
-          "each {when}, till some-one had tak-en it down.",
-          "The bells went for can-non, the {tower} for stone;",
-          "the tune's in the streets now, and rings on its own."
+          "A {tower} was *ring-ing* it out o-ver town",
+          "each {when}, till some-one had *tak-en* it down.",
+          "The *bells* went for can-non, the {tower} for stone;",
+          "the tune's in the *streets* now, and rings on its own."
         ]
       },
       {
@@ -538,10 +538,10 @@
           }
         },
         "lines": [
-          "A wom-an was hum-ming it, shell-ing the peas;",
-          "the tune drift-ed out on the af-ter-noon breeze",
-          "to some-bo-dy pass-ing who could-n't have said",
-          "its name, but it went all the way to {who.his} bed."
+          "A wom-an was hum-ming it, *shell-ing* the peas;",
+          "the tune *drift-ed* out on the af-ter-noon breeze",
+          "to some-bo-dy *pass-ing* who could-n't have said",
+          "its name, but it went all the *way* to {who.his} bed."
         ]
       },
       {
@@ -555,10 +555,10 @@
           "place": ["box in a shed", "drawer by the bed", "trunk by the bed"]
         },
         "lines": [
-          "It sat on a tape in a {place},",
-          "a name on the la-bel of some-bo-dy dead.",
-          "The tape was near ru-ined, the hiss was like rain,",
-          "but still, some years on, it was heard once a-gain."
+          "It sat on a *tape* in a {place},",
+          "a *name* on the la-bel of some-bo-dy dead.",
+          "The tape was near *ru-ined*, the hiss was like rain,",
+          "but *still*, some years on, it was heard once a-gain."
         ]
       },
       {
@@ -573,10 +573,10 @@
           "yard": ["field", "yard"]
         },
         "lines": [
-          "The {kids} in the {yard} turned it in-to a game;",
-          "they skipped to it, count-ing; the rope al-ways came",
-          "down ear-ly, and no one had heard how it ends.",
-          "They made up an end-ing and taught it to friends."
+          "The {kids} in the {yard} turned it in-to a *game*;",
+          "they *skipped* to it, count-ing; the rope al-ways came",
+          "down *ear-ly*, and no one had heard how it ends.",
+          "They *made* up an end-ing and taught it to friends."
         ]
       },
       {
@@ -587,10 +587,10 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "The men in the mine used to sing it be-low;",
-          "as long as they're sing-ing, the oth-ers all know.",
-          "The pit's long been closed, and the vil-lage is small;",
-          "the choir ev-ery Sun-day still gives it its all."
+          "The men in the *mine* used{habit} to sing it be-low;",
+          "as *long* as they're sing-ing, the oth-ers all know.",
+          "The pit's long been *closed*, and the vil-lage is small;",
+          "the choir ev-ery Sun-day *still* gives it its all."
         ]
       },
       {
@@ -601,10 +601,10 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "They sang it at wed-dings, they sang it at wakes;",
-          "it's mer-ry or mourn-ful, which-ev-er it takes.",
-          "It's been to more church-es than an-y-one knows;",
-          "it mar-ries, it bur-ies, and then off it goes."
+          "They sang it at *wed-dings*, they sang it at wakes;",
+          "it's *mer-ry* or mourn-ful, which-ev-er it takes.",
+          "It's been to more *church-es* than an-y-one knows;",
+          "it *mar-ries*, it bur-ies, and then off it goes."
         ]
       },
       {
@@ -615,10 +615,10 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "A ship in the night picked it up on the air",
-          "from some-bo-dy's wire-less, and who could say where;",
-          "it crack-led and fad-ed and went with the dawn;",
-          "the cook whis-tled on, though the sig-nal was gone."
+          "A ship in the night picked it up on the *air*",
+          "from some-bo-dy's *wire-less*, and who could say where;",
+          "it *crack-led* and fad-ed and went with the dawn;",
+          "the *cook* whis-tled on, though the sig-nal was gone."
         ]
       },
       {
@@ -637,10 +637,10 @@
           }
         },
         "lines": [
-          "A {who.noun} who was deaf felt it come through the floor",
-          "when-ev-er {who.his} moth-er was sing-ing next door;",
-          "{who.he} nev-er once heard it, but {who.he} knew the beat;",
-          "{who.his} chil-dren all learned it by watch-ing {who.his} feet."
+          "A {who.noun} who was deaf *felt* it come through the floor",
+          "when-ev-er {who.his} *moth-er* was sing-ing next door;",
+          "{who.he} nev-er once *heard* it, but {who.he} knew the beat;",
+          "{who.his} chil-dren all learned it by *watch-ing* {who.his} feet."
         ]
       },
       {
@@ -653,10 +653,10 @@
         "by": "fable",
         "note": "the project's self-portrait; answers the wire verse",
         "lines": [
-          "They fed a ma-chine ev-ery way it was sung",
-          "by an-y-one, ev-er, on tape or on wire;",
-          "it learned ev-ery note, and it learned ev-ery tongue,",
-          "and sings it in all of their voic-es: a choir."
+          "They *fed* a ma-chine ev-ery way it was sung",
+          "by *an-y-one*, ev-er, on tape or on wire;",
+          "it learned ev-ery *note*, and it learned ev-ery tongue,",
+          "and sings it in *all* of their voic-es: a choir."
         ]
       },
       {
@@ -671,10 +671,10 @@
           "whose": ["man's", "wife's", "child's"]
         },
         "lines": [
-          "They carved the first line of it in-to a stone",
-          "a-bove a {whose} grave, in a church-yard, a-lone;",
-          "the name's worn to noth-ing, the line's still cut clear,",
-          "and an-y-one read-ing it has it by ear."
+          "They *carved* the first line of it in-to a stone",
+          "a-bove a {whose} *grave*, in a church-yard, a-lone;",
+          "the name's worn to *noth-ing*, the line's still cut clear,",
+          "and an-y-one read-ing it has it by *ear*."
         ]
       },
       {
@@ -685,10 +685,10 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "They pinned it on brass in a box with a key",
-          "that played it for chil-dren who climbed on a knee;",
-          "the comb's lost a tooth, and it's miss-ing a pin;",
-          "it plays it with gaps, and the chil-dren fill in."
+          "They pinned it on *brass* in a box with a key",
+          "that played it for *chil-dren* who climbed on a knee;",
+          "the comb's lost a *tooth*, and it's miss-ing a pin;",
+          "it plays it with *gaps*, and the chil-dren fill in."
         ]
       },
       {
@@ -702,10 +702,10 @@
           "who": ["milk-man", "post-man", "bak-er"]
         },
         "lines": [
-          "A {who} would whis-tle it, street af-ter street,",
-          "at five in the morn-ing, in rain and in sleet;",
-          "and no one was up, and it fell on no ear;",
-          "they all woke up hum-ming it, year af-ter year."
+          "A {who} would *whis-tle* it, street af-ter street,",
+          "at *five* in the morn-ing, in rain and in sleet;",
+          "and *no* one was up, and it fell on no ear;",
+          "they all woke up *hum-ming* it, year af-ter year."
         ]
       },
       {
@@ -716,10 +716,10 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "They danced to it, Sat-ur-days, up at the hall;",
-          "the band had it wrong, and that suit-ed them all.",
-          "The hall's been pulled down, and the band is long dead;",
-          "the cou-ples who met there still hum it in bed."
+          "They *danced* to it, Sat-ur-days, up at the hall;",
+          "the band had it *wrong*, and that suit-ed them all.",
+          "The hall's been pulled *down*, and the band is long dead;",
+          "the *cou-ples* who met there still hum it in bed."
         ]
       },
       {
@@ -733,10 +733,10 @@
           "game": ["foot-ball", "ball-game"]
         },
         "lines": [
-          "The crowd at the {game} would sing it to jeer",
-          "with words that their moth-ers were sor-ry to hear;",
-          "the tune did-n't mind, it had heard worse be-fore;",
-          "it went home with both sides, what-ev-er the score."
+          "The crowd at the {game} would sing it to *jeer*",
+          "with words that their *moth-ers* were sor-ry to hear;",
+          "the tune did-n't *mind*, it had heard worse be-fore;",
+          "it went home with *both* sides, what-ev-er the score."
         ]
       },
       {
@@ -747,10 +747,10 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "They sang it on deck as the har-bor grew small,",
-          "and sang it be-low through the sick-ness and squall;",
-          "they land-ed with noth-ing, and no one to meet;",
-          "by spring it was sung on the whole of the street."
+          "They sang it on deck as the *har-bor* grew small,",
+          "and sang it be-low through the *sick-ness* and squall;",
+          "they land-ed with *noth-ing*, and no one to meet;",
+          "by *spring* it was sung on the whole of the street."
         ]
       },
       {
@@ -762,10 +762,10 @@
         "pairs_with": ["hold"],
         "by": "fable",
         "lines": [
-          "They put it in phones as the sound of a ring;",
-          "it went off in pock-ets, and no one would sing;",
-          "and now when they hear it, they reach for their phone,",
-          "and half of them think that the tune is their own."
+          "They put it in *phones* as the sound of a ring;",
+          "it went off in pock-ets, and *no* one would sing;",
+          "and now when they hear it, they *reach* for their phone,",
+          "and half of them think that the tune is their *own*."
         ]
       },
       {
@@ -780,10 +780,10 @@
           "who": ["kid", "lad", "girl"]
         },
         "lines": [
-          "A {who} with a can sprayed the words on a wall",
-          "in red, by the rail-way, a-bout ten feet tall;",
-          "they paint-ed it out; but the eight fif-teen train",
-          "had al-read-y passed it, and passed it a-gain."
+          "A {who} with a can *sprayed* the words on a wall",
+          "in *red*, by the rail-way, a-bout ten feet tall;",
+          "they *paint-ed* it out; but the eight fif-teen train",
+          "had *al-read-y* passed it, and passed it a-gain."
         ]
       },
       {
@@ -799,10 +799,10 @@
           "sung": ["her", "him"]
         },
         "lines": [
-          "A {who} put a piece of it un-der a beat,",
-          "two sec-onds of some-bo-dy's voice, on re-peat;",
-          "and no-bo-dy asked who the some-bo-dy was,",
-          "and no-bo-dy paid {sung}, and no-bo-dy does."
+          "A {who} put a *piece* of it un-der a beat,",
+          "two *sec-onds* of some-bo-dy's voice, on re-peat;",
+          "and no-bo-dy asked who the *some-bo-dy* was,",
+          "and no-bo-dy *paid* {sung}, and no-bo-dy does."
         ]
       },
       {
@@ -817,10 +817,10 @@
           "flock": ["sheep", "goats"]
         },
         "lines": [
-          "A {who} would sing it to {flock} on a hill;",
-          "the {flock} nev-er learned it, and nev-er stood still;",
-          "the wind took it down to the farms in the vale,",
-          "and that's how it came to be sung o-ver ale."
+          "A {who} would sing it to {flock} on a *hill*;",
+          "the {flock} nev-er *learned* it, and nev-er stood still;",
+          "the wind{air} took it *down* to the farms in the vale,",
+          "and that's how it came to be sung o-ver *ale*."
         ]
       },
       {
@@ -839,10 +839,10 @@
           "day": ["Tues-day", "Mon-day", "Fri-day", "Sun-day"]
         },
         "lines": [
-          "A nurse used to hum it at night on the ward,",
-          "and most of them slept, and the rest of them snored;",
-          "but one lay a-wake, and {who.he} learned ev-ery note;",
-          "it went home on {day} in-side of {who.his} coat."
+          "A nurse used{habit} to *hum* it at night on the ward,",
+          "and most of them *slept*, and the rest of them snored;",
+          "but *one* lay a-wake, and {who.he} learned ev-ery note;",
+          "it went *home* on {day} in-side of {who.his} coat."
         ]
       },
       {
@@ -857,10 +857,10 @@
           "kin": ["daugh-ter", "hus-band"]
         },
         "lines": [
-          "An old wom-an lost all the names and the years,",
-          "and who was her {kin}, and why there were tears;",
-          "but some-bo-dy hummed the first line, and she smiled,",
-          "and sang all the rest as she did as a child."
+          "An old wom-an *lost* all the names and the years,",
+          "and who was her {kin}, and *why* there were tears{crying};",
+          "but some-bo-dy *hummed* the first line, and she smiled,",
+          "and sang *all* the rest as she did as a child."
         ]
       },
       {
@@ -875,10 +875,10 @@
           "who": ["sail-or's", "sol-dier's"]
         },
         "lines": [
-          "A par-rot had learned it, a line and a half,",
-          "and sang it all day, and it made peo-ple laugh;",
-          "the {who} long dead, but it sings in his voice",
-          "the line and a half, and it has-n't a choice."
+          "A *par-rot* had learned it, a line and a half,",
+          "and sang it all day, and it made peo-ple *laugh*;",
+          "the {who} long *dead*, but it sings in his voice",
+          "the line and a half, and it has-n't a *choice*."
         ]
       },
       {
@@ -889,10 +889,10 @@
         "rarity": "common",
         "by": "fable",
         "lines": [
-          "A com-pa-ny bought it to sell peo-ple soap,",
-          "and played it so of-ten that no one could cope;",
-          "the soap is long gone, and the firm's been dis-solved;",
-          "the tune did-n't no-tice; it was-n't in-volved."
+          "A com-pa-ny *bought* it to sell peo-ple soap,",
+          "and played it so *of-ten* that no one could cope;",
+          "the soap is long *gone*, and the firm's been dis-solved;",
+          "the tune did-n't *no-tice*; it was-n't in-volved."
         ]
       },
       {
@@ -904,10 +904,10 @@
         "enjambed": true,
         "by": "claude",
         "lines": [
-          "A crowd in a bar took their turns at the mic,",
-          "and each of them sang it a lit-tle un-like",
-          "the sing-er be-fore them, and none of them knew",
-          "they'd changed it for good, and they'd passed it on through."
+          "A crowd in a *bar* took their turns at the mic,",
+          "and *each* of them sang it a lit-tle un-like",
+          "the sing-er be-fore them, and *none* of them knew",
+          "they'd *changed* it for good, and they'd passed it on through."
         ]
       },
       {
@@ -918,10 +918,10 @@
         "rarity": "common",
         "by": "claude",
         "lines": [
-          "A stran-ger once hummed it to find out its name;",
-          "the phone lis-tened close, and the an-swer that came",
-          "was no-bo-dy's song, with a thou-sand to thank,",
-          "and un-der \"who wrote it\", the line was left blank."
+          "A stran-ger once *hummed* it to find out its name;",
+          "the *phone* lis-tened close, and the an-swer that came",
+          "was *no-bo-dy's* song, with a thou-sand to thank,",
+          "and un-der \"who wrote it\", the line was left *blank*."
         ]
       },
       {
@@ -932,10 +932,10 @@
         "rarity": "common",
         "by": "claude",
         "lines": [
-          "They sang it for years with a line they'd mis-heard,",
-          "and taught it their chil-dren that way, word for word;",
-          "and that is the way that it's sung in their town:",
-          "the wrong word is right now, and hand-ed on down."
+          "They sang it for years with a line they'd *mis-heard*,",
+          "and *taught* it their chil-dren that way, word for word;",
+          "and that is the way that it's sung in their *town*:",
+          "the *wrong* word is right now, and hand-ed on down."
         ]
       },
       {
@@ -946,10 +946,10 @@
         "rarity": "common",
         "by": "claude",
         "lines": [
-          "A choir learned it once from a page on a stand,",
-          "in some-bo-dy's hand-writ-ing, some-bo-dy's hand;",
-          "the page had no name at the top or the end;",
-          "they sang it, and fold-ed it, sent to a friend."
+          "A choir learned it once from a *page* on a stand,",
+          "in some-bo-dy's *hand-writ-ing*, some-bo-dy's hand;",
+          "the page had no *name* at the top or the end;",
+          "they sang it, and fold-ed it, *sent* to a friend."
         ]
       },
       {
@@ -960,10 +960,10 @@
         "rarity": "common",
         "by": "fable and artist (J's tune in the bone), via gemini",
         "lines": [
-          "An old man was hum-ming it, rock-ing his chair;",
-          "he'd lost all the words, but the ring was still there.",
-          "The words were all weath-ered, worn thin by the cold;",
-          "the tune was in bone, and it nev-er grows old."
+          "An old man was *hum-ming* it, rock-ing his chair;",
+          "he'd lost all the *words*, but the ring was still there.",
+          "The words were all *weath-ered*, worn thin by the cold;",
+          "the tune was in *bone*, and it nev-er grows old."
         ]
       },
       {
@@ -974,10 +974,10 @@
         "rarity": "common",
         "by": "fable and artist, via gemini",
         "lines": [
-          "They whis-tled it un-der the fence in the rain,",
-          "and no-bo-dy saw, and it went with the train;",
-          "the pa-pers were halt-ed, the bar-ri-ers high;",
-          "but noth-ing could stop what was sung to the sky."
+          "They *whis-tled* it un-der the fence in the rain,",
+          "and *no-bo-dy* saw, and it went with the train;",
+          "the pa-pers were *halt-ed*, the bar-ri-ers high;",
+          "but *noth-ing* could stop what was sung to the sky."
         ]
       },
       {
@@ -1004,10 +1004,10 @@
           }
         },
         "lines": [
-          "A {who.noun} sang it once to a box on the shelf,",
-          "and back came a voice that was near-ly {who.self}:",
-          "it sang in {who.his} voice, but it was-n't a-lone;",
-          "{who.his} moth-er was in it, and oth-ers un-known."
+          "A {who.noun} sang it once to a *box* on the shelf,",
+          "and back came a *voice* that was near-ly {who.self}:",
+          "it sang in {who.his} voice, but it was-n't *a-lone*;",
+          "{who.his} *moth-er* was in it, and oth-ers un-known."
         ]
       },
       {
@@ -1025,10 +1025,10 @@
           ]
         },
         "lines": [
-          "Two men went to court o-ver whose it should be,",
-          "and each swore he'd made it, a-lone, by the sea;",
-          "it took them {years} years, and it cost them the lot;",
-          "the rul-ing's long lost, and the tune's not for-got."
+          "Two men went to *court* o-ver whose it should be,",
+          "and each swore he'd *made* it, a-lone, by the sea;",
+          "it took them {years} years, and it *cost* them the lot;",
+          "the rul-ing's long *lost*, and the tune's not for-got."
         ]
       },
       {
@@ -1046,10 +1046,10 @@
           ]
         },
         "lines": [
-          "A fa-ther would sing it with kids in the back",
-          "on long drives at night, with the win-dows gone black;",
-          "they're {age}, and sing it, and call it his own;",
-          "he'd had it him-self from a man he'd not known."
+          "A *fa-ther* would sing it with kids in the back",
+          "on long drives at *night*, with the win-dows gone black;",
+          "they're {age}, and *sing* it, and call it his own;",
+          "he'd *had* it him-self from a man he'd not known."
         ]
       },
       {
@@ -1066,10 +1066,10 @@
           ]
         },
         "lines": [
-          "A dead man still sings the first line when you call,",
-          "the mes-sage he'd left, and they've left it, that's all.",
-          "His {kin} still rings on the nights she's a-lone;",
-          "she waits for the line, and rings off at the tone."
+          "A *dead* man still sings the first line when you call,",
+          "the *mes-sage* he'd left, and they've left it, that's all.",
+          "His {kin} still *rings* on the nights she's a-lone;",
+          "she *waits* for the line, and rings off at the tone."
         ]
       },
       {
@@ -1090,10 +1090,10 @@
           ]
         },
         "lines": [
-          "A man had a stroke, and it left him no words;",
-          "he'd {nod} at the win-dow, the door, or the birds.",
-          "His {wife} sang a line, and he'd fin-ish the song,",
-          "each word in its place, and not one of them wrong."
+          "A man had a stroke, and it left him no *words*;",
+          "he'd {nod} at the *win-dow*, the door, or the birds.",
+          "His {wife} *sang* a line, and he'd fin-ish the song,",
+          "each word in its *place*, and not one of them wrong."
         ]
       },
       {
@@ -1110,10 +1110,10 @@
           ]
         },
         "lines": [
-          "A min-is-ter heard it drift out of an inn,",
-          "and gave it new words, a-bout heav-en and sin;",
-          "they sing it on Sun-days, and think it's a hymn;",
-          "the inn sings it {day}, and no one tells him."
+          "A *min-is-ter* heard it drift out of an inn,",
+          "and gave it new *words*, a-bout heav-en and sin;",
+          "they sing it on Sun-days, and *think* it's a hymn;",
+          "the *inn* sings it {day}, and no one tells him."
         ]
       },
       {
@@ -1129,10 +1129,10 @@
           "cut": ["mow-er", "reap-er"]
         },
         "lines": [
-          "It came up un-sown in the cracks of the stone;",
-          "no {garden} asked it, and still it had grown.",
-          "The chil-dren would string it and wear it a-way;",
-          "the {cut} came o-ver, and low-er it lay."
+          "It came up *un-sown* in the cracks of the stone;",
+          "no {garden} asked it, and *still* it had grown.",
+          "The chil-dren would *string* it and wear it a-way;",
+          "the {cut} came o-ver, and *low-er* it lay."
         ]
       }
     ],
@@ -1147,10 +1147,10 @@
           "where": ["dark", "cold"]
         },
         "lines": [
-          "Car-ry it o-ver the {place} and wire,",
-          "hand it a-long like a {ember} from the fire;",
-          "it's no-bo-dy's mak-ing and ev-ery-one's own,",
-          "it dies in the {where} if you leave it a-lone."
+          "*Car-ry* it o-ver the {place} and wire,",
+          "*hand* it a-long like a {ember} from the fire;",
+          "it's no-bo-dy's mak-ing and ev-ery-one's *own*,",
+          "it *dies* in the {where} if you leave it a-lone."
         ]
       },
       {
@@ -1158,10 +1158,10 @@
         "scheme": "ABAB",
         "by": "fable",
         "lines": [
-          "Give it a-way like a coat that's too small;",
-          "some-bo-dy's shiv-er-ing, some-bo-dy's near.",
-          "So sing it out loud in a room or a hall,",
-          "and sing it to some-one, or no one will hear."
+          "*Give* it a-way like a coat that's too small;",
+          "some-bo-dy's *shiv-er-ing*, some-bo-dy's near.",
+          "So sing it out *loud* in a room or a hall,",
+          "and sing it to *some-one*, or no one will hear."
         ]
       },
       {
@@ -1169,10 +1169,10 @@
         "scheme": "ABAB",
         "by": "claude",
         "lines": [
-          "No-bo-dy owns it, and no-bo-dy's owed;",
-          "no-bo-dy holds it for long in their hands.",
-          "It trav-els by mouth and it trav-els by road,",
-          "and set-tles in strang-ers in far-a-way lands."
+          "No-bo-dy *owns* it, and no-bo-dy's owed;",
+          "no-bo-dy *holds* it for long in their hands.",
+          "It trav-els by *mouth* and it trav-els by road,",
+          "and set-tles in *strang-ers* in far-a-way lands."
         ]
       },
       {
@@ -1180,10 +1180,10 @@
         "scheme": "ABAB",
         "by": "claude, its ending chosen by the artist",
         "lines": [
-          "Bor-row it, wear it, and give it a-way;",
-          "change what you like, and then hand it a-long.",
-          "A stran-ger will sing it back some oth-er day,",
-          "a lit-tle bit changed, and you'll know it's your song."
+          "*Bor-row* it, wear it, and give it a-way;",
+          "*change* what you like, and then hand it a-long.",
+          "A *stran-ger* will sing it back some oth-er day,",
+          "a lit-tle bit changed, and you'll know it's *your* song."
         ]
       },
       {
@@ -1191,10 +1191,10 @@
         "scheme": "AABB",
         "by": "claude",
         "lines": [
-          "Sing it too slow-ly or sing it too fast,",
-          "sing it a lit-tle un-like it was last;",
-          "it does-n't mind wan-der-ing, does-n't mind wear,",
-          "it on-ly goes qui-et when no-bo-dy's there."
+          "Sing it too *slow-ly* or sing it too fast,",
+          "sing it a lit-tle *un-like* it was last;",
+          "it does-n't mind *wan-der-ing*, does-n't mind wear,",
+          "it on-ly goes *qui-et* when no-bo-dy's there."
         ]
       }
     ],

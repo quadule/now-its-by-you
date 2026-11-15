@@ -1,5 +1,5 @@
 {
-  "id": "a3615d5eed57c0d9a57317cbc4fc96c562157e8522f6c3182fa7c510f15c7f53",
+  "id": "2751cf097e9da8c427d9d8886c1acdac9d677ad0d285e998bf6514c7b39263a1",
   "title": "Now It's by You",
   "generation": 0,
   "parent_id": null,
@@ -693,6 +693,12 @@
               null
             ]
           ]
+        }
+      },
+      "lines": {
+        "verse:screen": {
+          "2": "they laughed and they wept, and they *scrolled* on and on,",
+          "3": "but no-bo-dy *sang* it, and then it was gone."
         }
       }
     }
@@ -6036,7 +6042,7 @@
     "plate": 1.0
   },
   "loudness_lufs": -14.0,
-  "loudness_range_lu": 5.54,
+  "loudness_range_lu": 5.53,
   "true_peak_dbtp": -1.05,
   "peak_dbfs": -1.05,
   "duration": 151.227,
@@ -6045,7 +6051,7 @@
   "gate": null,
   "path": "record",
   "llm": null,
-  "program_sha256": "479320b30bacbebf83199c0c304c30c05be21ae33393636cd99cbf201ddbbfea",
+  "program_sha256": "2f79e4721ab1526508e9345c2191cf4ad20513f8012e55519c06934dcf8ca450",
   "python": "3.12",
   "name": null
 }

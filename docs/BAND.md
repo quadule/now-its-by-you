@@ -299,8 +299,8 @@ arranged in range and replays exactly.
 
 ## Limits
 
-- Nobody has listened. The models are right by the measures above, but the
-  measures are not the ear: the whistle in particular is physically inspired
+- The artist judges the band by ear. The models are right by the measures
+  above, but the measures are not the ear: the whistle in particular is physically inspired
   rather than a jet-bore waveguide, and the drone is additive.
 - The fiddle speaks slowest on the G string (about 115 ms), where it rarely
   plays in this arrangement. Keeping every line above the tune has a price: in

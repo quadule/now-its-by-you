@@ -637,6 +637,12 @@
             ]
           ]
         }
+      },
+      "lines": {
+        "verse:screen": {
+          "2": "they laughed and they wept, and they *scrolled* on and on,",
+          "3": "but no-bo-dy *sang* it, and then it was gone."
+        }
       }
     }
   },

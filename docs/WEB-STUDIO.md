@@ -430,14 +430,15 @@ small API for sharing versions. "Deploying it", below, has the commands.
 - **The Worker** runs first only for `/api/*` and `/v/*`:
   - `POST /api/versions`: share a version (below). `201 {"id": "<32 hex>", "url": "/v/<id>"}`.
   - `GET /api/versions/<id>`: the file, `audio/flac`, `public, max-age=31536000, immutable`, its id as the ETag,
-    whole or a range, `Content-Disposition: attachment` and its own policy, `default-src 'none'; sandbox`.
+    whole or a range, `Content-Disposition: attachment` and its own policy, `default-src 'none'; sandbox`. Every
+    fetch is an open, which keeps the version (a HEAD and a 304 too; a 304 only while it is still there). The page
+    sends an uncached HEAD when it opens a version the browser already keeps, so its link stays alive for others.
   - `GET /v/<id>`: the studio's page (index.html, with the page's headers and `no-cache`); the page reads the id
     from its address, fetches the file and opens it on the device.
   - anything else under `/api/`: 404, `{"error": "There's nothing here."}`. Every error is `{"error": "<a
     sentence>"}` with a 4xx status (500 if something broke here).
 - **R2** (`songbird-versions`, private, bound as `VERSIONS`): `versions/<id>.flac`; `opened/<id>`, when one was last
-  opened; `limits/<hour>/<mark>-<random>` and `limits/<hour>/kept-<random>`, this hour's tries and versions kept;
-  `incoming/…`, a file being checked; `keys/address`, the key the address marks are made with. The bucket is never
+  opened; `incoming/…`, a file being checked; `keys/address`, the key addresses are counted under. The bucket is never
   public: files are only served through `/api/versions/<id>`. The Worker is only at studio.itsby.you
   (`workers_dev = false`).
 - **No robots.txt, no noindex**: the public studio may be found (the artist's choice). prepare.mjs warns if the
@@ -454,11 +455,12 @@ Every guard comes before a byte of the body is read:
    its /64;
 3. `Content-Length` said, at least 4 KB and at most **64 MB** (as the studio's reader, `received.UPLOAD`; a
    rendition is about 15 to 25 MB, its packet about 6);
-4. this hour's shares, counted by marks in R2: at most 10 tries from one address (a refused file counts too), and at
-   most 60 versions kept from everywhere (only kept ones, so junk from many addresses can't close sharing for
-   everyone). An address is marked only as 64 bits of an HMAC of the hour and the address, under a random key the
-   Worker makes on first use (`keys/address`), so a mark can't be worked back to an address. Marks go with the hour.
-   Concurrent shares can all pass the hour's count before any is marked; the per-minute limit is the brake.
+4. this hour's shares, counted in one place, a Durable Object (`Shares`, bound as `SHARES`), which admits or refuses
+   each share in one step, so shares arriving together can't all pass the same count: at most 10 tries from one
+   address (a refused file counts too), and at most 60 versions kept from everywhere (a place is taken before the
+   file is read and given back if it isn't kept, so junk from many addresses can't close sharing for everyone). An
+   address is counted only as 64 bits of an HMAC of the hour and the address, under a random key the Worker makes on
+   first use (`keys/address`), so a count can't be worked back to an address. The counts go with the hour.
 
 Then the file is stored and checked as data, never run:
 
@@ -518,8 +520,8 @@ Once:
        npx wrangler login                                  # if this computer isn't signed in yet
        npx wrangler r2 bucket create songbird-versions
 
-   Optionally, a backstop if the cron ever stops: `npx wrangler r2 bucket lifecycle add songbird-versions limits
-   limits/ --expire-days 1` and the same for `incoming incoming/`. (Not for `versions/`: R2's rules count from the
+   Optionally, a backstop if the cron ever stops: `npx wrangler r2 bucket lifecycle add songbird-versions incoming
+   incoming/ --expire-days 1`. (Not for `versions/`: R2's rules count from the
    upload, and would delete versions people still open.)
 
 3. **Deploy** (it runs prepare.mjs first, which refuses a site it can't serve; the custom domain makes its own DNS
@@ -584,7 +586,8 @@ R2 needs a payment method on file even within its free tier.
 only the head, the end and manifest.json are read; each way a file isn't a rendition refused with its sentence),
 worker.test.mjs (shared with and without the digest, the same id and nothing left incoming; a wrong digest refused;
 nothing unchecked ever under a version's name, even with R2 failing mid-check; size asked before the body is read;
-another site's page refused; the minute's and the hour's limits, with only digests kept; ranges, HEAD, 304, 405,
+another site's page refused; the minute's and the hour's limits, with only digests kept, and shares arriving
+together counted one at a time; ranges, HEAD, 304 (an open, and only for a version still there), 405,
 404s and the guessing limit; `/v/<id>` with the page's policy; retention through opens, its weekly note and the
 cron; a broken bucket a plain 500), prepare.test.mjs (hashed folders, `_headers` with no header set twice,
 site.json checked against the rules, a 26 MiB file and a missing index.html refused).

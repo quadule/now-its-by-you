@@ -580,3 +580,17 @@ def test_a_version_can_have_a_title_of_its_own_within_bounds(rendition, tmp_path
     assert (m["name"], m["title"]) == ("The Long Way Home", "Now It's by You")
     assert pack.read_member(flac, "README.txt").startswith("The Long Way Home\n")
     assert _run(flac, home=tmp_path / "home").stdout.startswith("The Long Way Home\n")
+
+
+def test_unpacking_refuses_more_than_the_bootstrap_allows(tmp_path, monkeypatch):
+    """pack.unpack holds a stranger's file to the same ceiling as the packet's own bootstrap (bootstrap.MOST)."""
+    from songbird import bootstrap
+
+    big = tmp_path / "big.zip"
+    with zipfile.ZipFile(big, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(pack.MANIFEST, "{}")
+        z.writestr("filler", b"\0" * 4096)
+    monkeypatch.setattr(bootstrap, "MOST", 1024)
+    with pytest.raises(ValueError, match="more than"):
+        pack.unpack(big, tmp_path / "out")
+    assert not (tmp_path / "out" / "filler").exists()

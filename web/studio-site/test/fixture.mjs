@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
 
 import { crc32 } from "../src/packet.js";
+import { Shares } from "../src/worker.js";
 
 globalThis.FixedLengthStream ??= class FixedLengthStream {
   constructor(length) {
@@ -137,11 +138,37 @@ export class Limiter {
   }
 }
 
+export class Storage {
+  // a Durable Object's storage, as Shares uses it; every call waits a turn, as the real one goes to disk
+  constructor() { this.map = new Map(); }
+  async get(key) { await null; return this.map.get(key); }
+  async put(key, value) {
+    await null;
+    for (const [k, v] of Object.entries(typeof key === "string" ? { [key]: value } : key)) this.map.set(k, v);
+  }
+  async deleteAll() { await null; this.map.clear(); }
+}
+
+export function namespace(Class) {
+  // a Durable Object namespace with one instance a name
+  const made = new Map();
+  return {
+    made,
+    idFromName: name => name,
+    get: name => {
+      if (!made.has(name)) made.set(name, new Class({ storage: new Storage() }));
+      const object = made.get(name);
+      return { fetch: (url, init) => object.fetch(new Request(url, init)) };
+    },
+  };
+}
+
 export const PAGE_HTML = "<!doctype html><title>Songbird studio</title>";
 
 export function env(extra = {}) {
   return {
     VERSIONS: new Bucket(), UPLOADS: new Limiter(1000), REQUESTS: new Limiter(100000), UNKNOWN: new Limiter(20),
+    SHARES: namespace(Shares),
     ASSETS: { fetch: async req => {
       const path = new URL(req.url).pathname;
       if (path === "/") return new Response(req.method === "HEAD" ? null : PAGE_HTML, { headers: { "Content-Type": "text/html", ETag: '"page"' } });

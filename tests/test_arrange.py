@@ -45,7 +45,7 @@ def options(slots, name):
 
 
 def sung(entry, chosen):
-    """The lines an entry sings with the slot words a record says were chosen, marks aside."""
+    """The lines an entry sings with the slot words a record says were chosen, marks and all."""
     slots = entry.get("slots", {})
     names = B.slot_names(entry["lines"])
     assert all(name in chosen for name in names)
@@ -71,7 +71,7 @@ def check(form, lyrics):
     verses = [s for s in lyrics.sections if s.block == "verse"]
     entries = [VERSES[s.id] for s in verses]
     for s, v in zip(verses, entries):
-        assert plain(s.lines) == sung(v, s.slots) and set(s.slots) == set(B.slot_names(v["lines"]))
+        assert list(s.lines) == list(sung(v, s.slots)) and set(s.slots) == set(B.slot_names(v["lines"]))
     ids = [v["id"] for v in entries]
     assert vr["count"][0] <= len(ids) <= vr["count"][1] and len(set(ids)) == len(ids)
     assert all(entries[0].get(key, False if key == "enjambed" else None) == want for key, want in vr["first"].items())
@@ -127,12 +127,13 @@ def check(form, lyrics):
         head = {"lines": HEADS[h]["lines"], "slots": shared}
         assert all(s.slots[k] == v for k, v in HEADS[h].get("fixed", {}).items())
         assert plain(s.lines) == plain(sung(head, s.slots) + sung(COUPLETS[s.id], s.slots))
+        assert list(s.lines[len(head["lines"]):]) == list(sung(COUPLETS[s.id], s.slots))  # the couplet's own marks
 
     bridges = [s for s in lyrics.sections if s.block == "bridge"]
     assert len(bridges) <= 2 and [b.id for b in bridges[:1]] in ([], [RULES["bridge"]["always"]])
     assert all(b.id in RULES["bridge"]["extra"] for b in bridges[1:])
     for s in bridges:
-        assert plain(s.lines) == sung(STANZAS[s.id], s.slots)
+        assert list(s.lines) == list(sung(STANZAS[s.id], s.slots))
 
     tags = [s for s in lyrics.sections if s.block == "tag"]
     assert len({s.id for s in tags}) <= 1
@@ -238,8 +239,8 @@ def test_the_seeds_focus_marks_come_with_its_words():
         for s in lyrics.sections:
             if s.block == "verse" and s.id == "wire":
                 assert s.lines == g.seed_verses[0]
-            if s.block == "verse" and s.id not in ("wire", "screen", "mind", "ink", "mouth"):
-                assert not any("*" in line for line in s.lines)  # the bank marks none of its own yet
+            if s.block == "verse":  # every verse line leans on one word, two in mind's third, as the seed's does
+                assert all(line.count("*") == (4 if s.id == "mind" and i == 2 else 2) for i, line in enumerate(s.lines))
     mind = next(v for v in (A.arrange(g, shape(3), s) for s in range(3000)) if "mind" in v.verses)
     verse = next(s for s in mind.sections if s.id == "mind")
     assert verse.lines[0].split()[3] == "*kept*" and "*slept*" in verse.lines[2]

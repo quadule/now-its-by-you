@@ -536,7 +536,7 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
 SEED_FILE = "now-its-by-you.flac"  # the seed page's file name (web/sing/src/worker.js SEED_FILE serves exactly this)
 EDITIONS = WEB / "editions.json"  # the song's editions: the seed page offers the newest, /history every one
 SOURCE = "https://github.com/quadule/now-its-by-you"  # the source code, linked from the pages once SOURCE_PUBLIC
-SOURCE_PUBLIC = False  # True once the repository is public: the home page links it, the history each edition's commit
+SOURCE_PUBLIC = True  # the repository is public: the home page links it, the history each edition's commit
 # files made from this day on find their libraries on an Intel Mac by themselves (docs/RUNNING-THE-SONG.md, "Intel
 # Macs"); the home page says to use the studio there only while it offers an edition made before it
 INTEL_SINCE = dt.date(2026, 10, 7)
@@ -652,6 +652,12 @@ def release(e: dict, to: Path) -> None:
                          "change. Keep the released file and name it as file.path in web/sing/editions.json")
 
 
+# Whether an edition this checkout lacks stops the build (the command line's, unless --allow-missing-editions): a
+# site deployed without one of its recordings would say only that it's missing. A test, or a page built by hand
+# for a look, leaves it out and goes on.
+REQUIRE_EDITIONS = False
+
+
 def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -> None:
     """The public seed page (/seed, and the root of now.itsby.you), the page about the song (/about: the artist's
     statement, how it was made, its credits) and its history (/history): every edition's
@@ -669,8 +675,13 @@ def seed_page(out: Path, path: Path | None = None, public: bool | None = None) -
                   file=sys.stderr)
             continue
         if not e["kept"] and not e["render"]["found"]:
-            print(f"seed page: edition {e['id']} ({e['title']}) isn't in this checkout ({e['file'].get('path') or ''}"
-                  f"{e['render'].get('path') or ''}); it's left out", file=sys.stderr)
+            where = f"{e['file'].get('path') or ''}{e['render'].get('path') or ''}"
+            if REQUIRE_EDITIONS:
+                raise SystemExit(f"seed page: edition {e['id']} ({e['title']}) isn't in this checkout ({where}): put "
+                                 f"its file there, hold it (\"held\": true in editions.json), or build with "
+                                 f"--allow-missing-editions")
+            print(f"seed page: edition {e['id']} ({e['title']}) isn't in this checkout ({where}); it's left out",
+                  file=sys.stderr)
             continue
         release(e, out / "seed" / e["name"])
         offered.append(e)
@@ -873,7 +884,11 @@ def main() -> None:
     ap.add_argument("--keep-wavs", action="store_true",
                     help="keep every spec's rendered mixes for the karaoke here (about 130 MB a spec; else let go once "
                          "encoded, and rendered again when the karaoke asks)")
+    ap.add_argument("--allow-missing-editions", action="store_true",
+                    help="build without an edition this checkout lacks (left out, said) in place of stopping")
     args = ap.parse_args()
+    global REQUIRE_EDITIONS
+    REQUIRE_EDITIONS = not args.allow_missing_editions
     out = Path(args.out).resolve()
     if args.pages:
         started = time.time()
