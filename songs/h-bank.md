@@ -1,7 +1,8 @@
 # H. Now It's by You: the bank
 
 Every verse, refrain couplet, bridge and tag syllable the song can draw on,
-for reading. The same bank, syllabified and with its rules as data, is under
+for reading. The same bank, syllabified, each line's focus word marked and
+with its rules as data, is under
 `bank` in [h-now-its-by-you.json](h-now-its-by-you.json); the seed
 arrangement and the notes on the tune stay in
 [h-now-its-by-you.md](h-now-its-by-you.md). Check every way each line can be

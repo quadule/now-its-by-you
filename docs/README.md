@@ -3,6 +3,10 @@
 **Now It's by You** is a folk song whose audio files carry the program that sings new versions of it. These
 pages say how it works; where a page and the code disagree, the code is right.
 
+They were written by the AI agents that built the program with the artist. The agents measure sound and can't
+hear it, so these pages say what was measured ("nobody but the artist can listen"); the artist listened to every
+part, and decided by ear.
+
 ## Start here
 
 - [Running the song](RUNNING-THE-SONG.md): what you need to play, run and change a version.

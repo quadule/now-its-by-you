@@ -776,12 +776,10 @@ def choose_capo(ctx: Context) -> int:
 
 
 def strum_pattern(ctx: Context, family: str, what: str) -> list[tuple[float, str, float]]:
-    """(position in beats, stroke, accent) for one bar: D down, U up, B the
-    thumb on the bass string, b the thumb on the next string up, C a chop of
-    the upper strings (boom-chick)."""
+    """(position in beats, stroke, accent) for one bar where the guitar doesn't strum a groove (songbird.strumming
+    plays those): D down, B the thumb on the bass string, b the thumb on the next string up, C a chop of the upper
+    strings (boom-chick)."""
     beats = ctx.beats
-    if what == "ring" or family == "air":
-        return [(0.0, "D", 0.9)]
     if what == "light":  # boom-chick: the thumb's bass note where a foot starts, the upper strings between
         if ctx.compound:
             return [(float(b), "B" if b == 0 else "C", 0.8 if b == 0 else 0.6) for b in range(beats)]
@@ -791,68 +789,60 @@ def strum_pattern(ctx: Context, family: str, what: str) -> list[tuple[float, str
             thumb = "B" if b == 0 else "b"
             out.append((float(b), thumb if start else "C", 0.8 if b == 0 else 0.65 if start else 0.55))
         return out
-    if ctx.compound:  # a jig's strum: down on the beat, up on its last third
-        pattern = []
-        for b in range(beats):
-            pattern.append((float(b), "D", 1.0 if b == 0 else 0.8))
-            if family == "strum":
-                pattern.append((b + 1 / 3, "U", 0.4))
-            pattern.append((b + 2 / 3, "U", 0.5))
-        return pattern
-    if family == "strum":  # the old faithful: down, down-up, up-down-up
-        base = {4: [(0, "D", 1.0), (1, "D", 0.7), (1.5, "U", 0.5), (2.5, "U", 0.5), (3, "D", 0.7), (3.5, "U", 0.5)],
-                3: [(0, "D", 1.0), (1, "D", 0.7), (1.5, "U", 0.5), (2, "D", 0.7), (2.5, "U", 0.5)],
-                2: [(0, "D", 1.0), (0.5, "U", 0.5), (1, "D", 0.75), (1.5, "U", 0.5)]}
-        return [(float(p), s, a) for p, s, a in base.get(beats, base[4] if beats > 3 else base[2])]
-    # the lilt: down on every beat, strongest where a foot starts; up on the off-beats within a foot
-    pattern = []
-    for b in range(beats):
-        start = b % ctx.foot == 0
-        pattern.append((float(b), "D", 1.0 if b == 0 else (0.85 if start else 0.65)))
-        if not start:
-            pattern.append((b + 0.5, "U", 0.5))
-    return pattern
+    return [(0.0, "D", 0.9)]  # a ring, or a slow air's strum: one stroke a chord
 
 
 def guitar_part(ctx: Context, capo: int) -> list[Ev]:
+    """The guitar: a strumming hand's grooves (songbird.strumming) where it strums, boom-chick where it plays
+    lightly, one stroke a chord where it rings, fingerpicking where it picks."""
+    from . import strumming
+
     out: list[Ev] = []
     density = ctx.band.density
     family = ctx.band.pattern
-    strokes: list[tuple[float, str, float, Chord]] = []
+    hand = strumming.Hand(ctx.seed, "guitar", beats=ctx.beats, compound=ctx.compound, bpm=float(ctx.params.tempo),
+                          density=density, style="ballad", base=family if family in ("lilt", "strum") else None)
+    strummed = family != "air"
+    strokes: list[tuple] = []  # (grid unit, stroke, accent, chord, the hand's stroke or None)
+    for i, s in enumerate(ctx.sections):  # where it strums: each bar of the section's groove as the hand plays it
+        chords = ctx.chords_in(i)
+        if s.parts.get("guitar") != "strum" or not strummed or not chords:
+            continue
+        groove, span = hand.groove(i, s.energy, s.role)
+        following = chords + ctx.chords_in(i + 1)
+        bar = chords[0].u0 - ((chords[0].u0 - s.u0) % ctx.bar)
+        while bar < chords[-1].u1 - 1e-9:
+            changes = tuple(sorted({(c.u0 - bar) / ctx.beat for c in following if bar + 1e-9 < c.u0 <= bar + ctx.bar + 1e-9}))
+            last = any(abs(bar + ctx.bar - p1) < 1e-6 for _p0, p1 in ctx.phrases)
+            for st in hand.bar(groove, ctx.rand("guitar", bar), last=last, changes=changes):
+                u = bar + st.at * ctx.beat
+                c = next((c for c in chords if c.u0 - 1e-9 <= u < c.u1 - 1e-9), None)
+                if c is not None:
+                    strokes.append((u, st.kind, st.accent, c, (st, span, hand.late(groove))))
+            bar += ctx.bar
     for c in ctx.chords:
         s = ctx.sections[c.section]
         what = s.parts.get("guitar")
-        if not what:
+        if not what or (what == "strum" and strummed):
             continue
         rng = ctx.rand("guitar", c.u0)
         if what == "pick":
             out += _fingerpick(ctx, rng, c, capo)
             continue
         bar_start = c.u0 - ((c.u0 - s.u0) % ctx.bar)
-        chopped = False
-        rebound = False  # after a chop the hand comes straight back up
         for pos, stroke, accent in strum_pattern(ctx, family, what):
             u = bar_start + pos * ctx.beat
             if not (c.u0 - 1e-9 <= u < c.u1 - 1e-9) or (what == "ring" and u > c.u0 + 1e-9):
                 continue
-            if stroke == "U" and not rebound and (density < 0.3 or rng.random() < 0.15 + 0.3 * max(0.0, 0.5 - density)):
+            if stroke == "U" and (density < 0.3 or rng.random() < 0.15 + 0.3 * max(0.0, 0.5 - density)):
                 continue
-            rebound = False
-            backbeat = pos % 2 == 1 and not ctx.compound
-            if stroke == "D" and backbeat and not chopped and what == "strum" and s.role == "refrain" \
-                    and rng.random() < 0.2 * density:
-                stroke, chopped, rebound = "X", True, True  # a muted chop on a backbeat, once a bar at most
             if stroke in ("B", "b"):  # the thumb takes the root where a chord starts, the next string after
                 stroke = "B" if abs(u - c.u0) < 1e-9 else "b"
-            strokes.append((u, stroke, accent, c))
-        if what == "strum" and density > 0.65:  # a busy player fills the gaps with light ups
-            for b in range(ctx.beats):
-                u = bar_start + (b + 0.5) * ctx.beat
-                if c.u0 <= u < c.u1 and not any(abs(st[0] - u) < 1e-6 for st in strokes) and rng.random() < density - 0.5:
-                    strokes.append((u, "U", 0.35, c))
+            strokes.append((u, stroke, accent, c, None))
     strokes.sort(key=lambda st: st[0])
     ringing: dict[int, tuple[Ev, str]] = {}  # string -> (its sounding note, the chord it was fingered for)
-    for u, stroke, accent, c in strokes:
+    beat_s = 60.0 / float(ctx.params.tempo)
+    for u, stroke, accent, c, played in strokes:
         s = ctx.sections[c.section]
         rng = ctx.rand("guitar", u)
         voicing, _ = shape(ctx, c.symbol, capo)
@@ -869,6 +859,9 @@ def guitar_part(ctx: Context, capo: int) -> list[Ev]:
         for string, (ev, symbol) in list(ringing.items()):
             if symbol != c.symbol and ev.u1 > u:  # the fretting hand has moved on: that string stops
                 ev.u1 = u
+        if played is not None:
+            out += _hand_stroke(ctx, hand, played, u, c, voicing, capo, rng, ringing, beat_s)
+            continue
         vel = ctx.vel("guitar", u, 0.85 * accent)
         ring = s.parts.get("guitar") == "ring"
         spread = (0.05 + 0.04 * rng.random()) if ring else (0.018 + 0.02 * (1.0 - vel)) * (0.8 if stroke == "U" else 1.0)
@@ -885,6 +878,37 @@ def guitar_part(ctx: Context, capo: int) -> list[Ev]:
                 held[0].u1 = u  # the pick meets the string again
             out.append(ev)
             ringing[string] = (ev, c.symbol)
+    return out
+
+
+def _hand_stroke(ctx: Context, hand, played, u: float, c: Chord, voicing, capo: int, rng: np.random.Generator,
+                 ringing: dict, beat_s: float) -> list[Ev]:
+    """One stroke of the strumming hand on the guitar's strings: the chord's shape, or the open top strings where
+    the fretting hand is lifting for the next chord (each left out where it would rub the sung note)."""
+    from . import strumming
+
+    st, span, late = played
+    s = ctx.sections[c.section]
+    if st.flag == "open":
+        sung = ctx.voices_at(u)
+        order = [(k, GUITAR_TUNING[k] + capo) for k in (5, 4, 3)
+                 if not any(min((GUITAR_TUNING[k] + capo - q) % 12, (q - GUITAR_TUNING[k] - capo) % 12) == 1 for q in sung)]
+        if len(order) < 2:  # too few strings that don't rub: the hand lifts without touching
+            return []
+        vel = ctx.vel("guitar", u, 0.85 * st.accent * 0.5)
+    else:
+        first = abs(u - c.u0) < 1e-9 or abs((u - s.u0) % ctx.bar) < 1e-9
+        order = hand.strings(st, list(voicing), span, rng, first=first)
+        vel = ctx.vel("guitar", u, 0.85 * st.accent * (0.85 + 0.3 * span))
+    art = "mute" if st.kind == "x" else "up" if st.kind in "Uu" else "down"
+    out = []
+    for (string, pitch), v, shift in hand.voiced(st, order, vel, beat_s * ctx.beats / st.slots, rng, late=late):
+        ev = Ev("guitar", u, c.u1, pitch, v, art=art, shift=shift, section=c.section)
+        held = ringing.get(string)
+        if held is not None and held[0].u1 > u:
+            held[0].u1 = u  # the pick meets the string again
+        out.append(ev)
+        ringing[string] = (ev, c.symbol)
     return out
 
 
@@ -1585,8 +1609,11 @@ def overheard():
 
 
 def overhear(ctx, melody, seconds, lead, end) -> None:
+    """Hands the block the first arrangement made in it: the version's own band. A stage edition realizes the
+    song again for its layers (another style's players, songbird.stage.layered) and its lead's takes; those
+    arrangements are not the version's, and the grid and the piano score keep the one before them."""
     heard = getattr(_ears, "heard", None)
-    if heard is not None:
+    if heard is not None and "ctx" not in heard:
         heard.update(ctx=ctx, melody=melody, seconds=seconds, lead=lead, end=end)
 
 

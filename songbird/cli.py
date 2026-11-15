@@ -498,6 +498,28 @@ DRIVES = {
 }
 
 
+READS = {
+    "tongue": "the system's languages, region and keyboard layout",
+    "machine": "the number of cores, the memory and the uptime",
+    "ages": "the ages of up to 50,000 files under your home folder (never their names)",
+    "colour": "the desktop picture's colours, or the screen's dark mode and accent colour",
+    "words": "the text of up to 600 documents in Documents and Desktop (only shares of eight word lists are kept)",
+    "hand": "the timing of a line you choose to type here",
+}
+
+
+def _reads(without=(), wallpaper=None, typing=True) -> str:
+    """What a harvest is about to read, signal by signal, before it reads any of it (docs/HARVEST.md has it all)."""
+    lines = []
+    for name, what in READS.items():
+        if name in without or name == "hand" and not typing:
+            continue
+        if name == "colour" and wallpaper:
+            what = f"the colours of {wallpaper}"
+        lines.append(f"  {name:8s} {what}")
+    return "\n".join(lines)
+
+
 def _describe(voice: harvest.Voice, without=()) -> str:
     lines = []
     for name in harvest.SIGNALS:
@@ -537,7 +559,9 @@ def harvest_command(args: argparse.Namespace) -> int:
 
     path = harvest.cache_path()
     cached = harvest.load()
-    stored = harvest.stored()  # also when the voice in it can't be read: what was left out stays out, the singer the same
+    stored = harvest.stored()
+    if args.show and not (args.refresh or args.new_voice or args.allow or args.without or args.wallpaper):
+        return _show_kept(path, cached, stored)  # showing reads nothing new and writes nothing  # also when the voice in it can't be read: what was left out stays out, the singer the same
     kept_out = {s for s in stored.get("without") or [] if isinstance(s, str)}
     without = (kept_out | {harvest.signal_name(s) for s in args.without}) - {harvest.signal_name(s) for s in args.allow}
     # a voice read quietly by a render (languages, size, screen) is read in full the first time a person asks
@@ -550,6 +574,9 @@ def harvest_command(args: argparse.Namespace) -> int:
     else:
         typing = sys.stdin.isatty() and sys.stdout.isatty() and not args.no_typing and "hand" not in without
         salt = None if args.new_voice else cached.salt if cached is not None else stored.get("salt") or None
+        reading = _reads(without, args.wallpaper, typing)
+        if reading:
+            print(f"Reading (docs/HARVEST.md has each in full):\n{reading}", flush=True)
         voice = harvest.harvest(without, wallpaper=Path(args.wallpaper) if args.wallpaper else None, typing=typing,
                                 salt=salt)
         if cached is not None and voice.hand is None and cached.hand is not None and "hand" not in without:
@@ -563,6 +590,26 @@ def harvest_command(args: argparse.Namespace) -> int:
         print(_describe(voice, without))
         print("\nExactly what is kept, and all that leaves this machine in a rendition's record:")
         print(json.dumps(voice.to_dict(), indent=2, sort_keys=True))
+    return 0
+
+
+def _show_kept(path: Path, cached, stored: dict) -> int:
+    """`songbird harvest --show`: what the cache holds, read from it alone."""
+    kept_out = {s for s in stored.get("without") or [] if isinstance(s, str)}
+    if cached is None:
+        print(f"Nothing is kept for this machine yet ({_shown(path)} {'cannot be read' if path.exists() else 'does not exist'}).\n"
+              f"A render as this machine reads its languages, size and screen only. `songbird harvest` reads:\n"
+              f"{_reads(kept_out)}")
+        return 0
+    print(f"This machine's voice (from the cache in {_shown(path)}), hash {cached.hash}")
+    print(_describe(cached, kept_out))
+    if stored.get("quiet"):
+        rest = [s for s in harvest.QUIET if s not in kept_out]
+        if rest:
+            print(f"\nA render read only its languages, size and screen. `songbird harvest` would also read:\n"
+                  f"{_reads(set(READS) - set(rest))}")
+    print("\nExactly what is kept, and all that leaves this machine in a rendition's record:")
+    print(json.dumps(cached.to_dict(), indent=2, sort_keys=True))
     return 0
 
 
@@ -707,8 +754,8 @@ def main(argv: list[str] | None = None) -> int:
     studio.set_defaults(run=studio_run)
 
     harvest_parser = commands.add_parser(
-        "harvest", help="read this machine's voice (--show prints exactly what is read and kept)")
-    harvest_parser.add_argument("--show", action="store_true", help="print the reduced numbers, all that is kept")
+        "harvest", help="read this machine's voice, saying first what it reads (--show only prints what is kept)")
+    harvest_parser.add_argument("--show", action="store_true", help="print the reduced numbers, all that is kept, reading nothing new")
     harvest_parser.add_argument("--refresh", action="store_true", help="read the machine again (the same singer)")
     harvest_parser.add_argument("--new-voice", action="store_true", help="read the machine again as a new singer (a new salt)")
     harvest_parser.add_argument("--without", nargs="+", default=[], metavar="SIGNAL",

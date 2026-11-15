@@ -72,12 +72,13 @@ distinct slot also kept once a song, a head fixing a word kept once a song, a he
 may be sung twice. One function (`_round_words`) gives every refrain's words for a fresh draw, held words, the
 drift and a person's choices alike, and one says why words break the rules.
 
-The singer leans on a line's focus word, marked `*like this*`. The bank's verses carry no marks; the refrain's
-heads do, on the question and on "yours". Where a bank entry is one of the seed's blocks (the five seed verses,
-the refrain's first two lines, the canon couplet, the canon bridge) the seed's marks come with it, on the same
-word in the same place, whatever the swaps: "It's *yours* when you sing it", "*hand* it along like a spark from
-the fire". A mark never moves onto a swapped word. Everything else is sung without a focus word until the bank
-marks it; a mark the bank adds to a line wins over a lent one.
+The singer leans on a line's focus word, marked `*like this*`. Every line of the bank's verses, couplets and
+bridges marks one ("A ship in the night picked it up on the *air*", "*Bor-row* it, wear it, and give it
+a-way;"), on a written word, never a slot; the refrain's other heads mark the question and one word of their
+second line. Where a bank entry is one of the seed's blocks (the five seed verses, the canon couplet, the canon
+bridge) its marks are the seed's. The refrain's own first two lines mark nothing, and the seed lends them its
+marks, on the same word in the same place, whatever the swaps: "Who *made* this song?", "It's *yours* when you
+sing it". A mark never moves onto a swapped word; a mark the bank writes on a line wins over a lent one.
 
 ## What can steer it
 
@@ -142,8 +143,6 @@ seed's words as a `Lyrics`, named for the bank entries they are.
   the other the answer, the bank could say which.
 - The sample verse swaps "girl" and "her" as separate slots, so "a boy put a piece of it under a beat ... and
   nobody paid her" can be drawn; the bank's rule is that a pronoun follows its noun.
-- The bank's verses carry no focus marks, so a song that draws one of the seed's verses and one of the others
-  leans on one and not the other.
 - The genome's form template has no second bridge, so the extra stanza is only sung in a form built outside it,
   and the template allows a single verse where the rules need two.
 

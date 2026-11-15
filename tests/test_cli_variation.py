@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from songbird import cli
 from songbird import harvest as H
 
@@ -44,6 +46,30 @@ def test_a_quiet_voice_is_read_in_full_when_a_person_asks(tmp_path, monkeypatch,
     assert cli.main(["harvest", "--no-typing"]) == 0
     assert asked == [(set(), "0a0b")]  # everything read, the same singer
     assert "quiet" not in json.loads(H.cache_path().read_text())
+
+
+def test_showing_what_is_kept_reads_nothing_and_writes_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(H, "harvest", lambda *a, **k: pytest.fail("--show harvested"))
+    assert cli.main(["harvest", "--show"]) == 0  # nothing kept yet: it says what a harvest would read
+    shown = capsys.readouterr().out
+    assert "Nothing is kept" in shown and "Documents and Desktop" in shown
+    assert not H.cache_path().exists()
+
+    H.save(H.Voice(machine=H.Machine(0.5, 0.4, 0.5), salt="0a0b"), quiet=True)  # as a render leaves it
+    before = H.cache_path().read_text()
+    assert cli.main(["harvest", "--show"]) == 0
+    shown = capsys.readouterr().out
+    assert '"salt"' in shown and "would also read" in shown and "Documents and Desktop" in shown
+    assert H.cache_path().read_text() == before
+
+
+def test_a_harvest_says_what_it_reads_before_it_reads(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    said = []
+    monkeypatch.setattr(H, "harvest", lambda without=(), salt=None, **k: said.append(capsys.readouterr().out) or H.Voice(salt="s"))
+    assert cli.main(["harvest", "--no-typing", "--without", "words"]) == 0
+    assert "Reading" in said[0] and "ages" in said[0] and "Documents" not in said[0] and "type" not in said[0]
 
 
 def test_a_new_voice_is_a_new_salt(tmp_path, monkeypatch):

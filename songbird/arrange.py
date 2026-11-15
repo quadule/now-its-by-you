@@ -1335,7 +1335,7 @@ def _match(lines, slots: dict, sung) -> dict[str, int] | None:
     names = slot_names(lines)
     for combo in itertools.product(*(range(width(slots, n)) for n in names)):
         picks = dict(zip(names, combo))
-        if fill(lines, slots, picks) == want:
+        if [unmarked(line) for line in fill(lines, slots, picks)] == want:
             return picks
     return None
 

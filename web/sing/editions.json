@@ -5,17 +5,18 @@
       "title": "Awards performance draft",
       "date": "2026-11-14",
       "note": "The song in B major for the AI Song Contest 2026 awards in Bangkok, its band and its voice moving from machine to human together.",
-      "audio": "a3615d5eed57c0d9a57317cbc4fc96c562157e8522f6c3182fa7c510f15c7f53",
+      "audio": "2751cf097e9da8c427d9d8886c1acdac9d677ad0d285e998bf6514c7b39263a1",
       "file": {
         "path": "renders/release/now-its-by-you-awards-draft.flac",
-        "sha256": "37c887ada920d65576d2da63a0b962d351f86a685323eaba8969035e21ae47fc",
-        "bytes": 17076945
+        "sha256": "88336eefd2e1f5dd481496e8426369843c7258a483cc85c54b6b05db2f9d670f",
+        "bytes": 16850711
       },
       "render": {},
-      "program": "479320b30bacbebf83199c0c304c30c05be21ae33393636cd99cbf201ddbbfea",
+      "program": "2f79e4721ab1526508e9345c2191cf4ad20513f8012e55519c06934dcf8ca450",
       "python": "3.12",
       "source": {
-        "commit": "5ce9c94"
+        "commit": "9c83fa5c6ec804e9d43c868524c6b37af3cc8d9b",
+        "tag": "awards-draft"
       },
       "command": "uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --pack --out renders/release/now-its-by-you-awards-draft.flac",
       "credit": "79 takes by eight people",

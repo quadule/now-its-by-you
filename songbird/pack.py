@@ -253,8 +253,8 @@ size, its screen's colours) and from the day. Those facts are reduced to a
 handful of numbers before anything uses them. Only the numbers are kept, in
 ~/.songbird/voice.json and in the new version's record, so no one can read
 your computer back out of them.
-`python3 THIS_FILE.flac songbird harvest --show` shows exactly what is read
-and kept, and `... songbird harvest --without ...` leaves anything out.
+`python3 THIS_FILE.flac songbird harvest --show` shows exactly what is kept,
+and `... songbird harvest --without ...` leaves anything out.
 
 The same program and record give the same samples on the same platform. On
 another platform the samples may differ, too little to hear, and a difference
@@ -272,7 +272,8 @@ Inside:
     genome.json       the song's skeleton: its tune, refrain, chords and verse bank
     lyrics.txt        the words as sung
     program/          the program that sang it (Songbird {m.get('program_version') or '?'}; its hash,
-                      {str(m.get('program_sha256') or '?')[:16]}, is the same in every version it sings)
+                      {str(m.get('program_sha256') or '?')[:16]}, is the same in every version it sings;
+                      https://now.itsby.you/history lists each edition's)
     requirements.txt  what it needs to run
     LICENSE           CC0: this song and its program belong to no one
     CREDITS.md        who sang the first version along with it, and asked to be named
@@ -396,6 +397,10 @@ def unpack(path: str | Path, to: str | Path) -> Path:
     with z:
         if MANIFEST not in z.namelist():
             raise ValueError(f"{path} carries no packet")
+        from .bootstrap import MOST
+
+        if sum(i.file_size for i in z.infolist()) > MOST:  # as the packet's own bootstrap holds it (safe_members)
+            raise ValueError(f"{path} would unpack to more than {MOST // 2**20} MB; not unpacking it")
         for info in z.infolist():
             if not (to / info.filename).resolve().is_relative_to(to.resolve()):
                 raise ValueError(f"refusing to unpack {info.filename!r} outside {to}")

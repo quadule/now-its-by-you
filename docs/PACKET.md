@@ -114,8 +114,8 @@ does four things.
 
 The first version made this way on a computer reads it quietly, only its
 languages, size and screen (docs/HARVEST.md).
-`python3 THIS_FILE.flac songbird harvest --show` reads the rest and shows
-exactly what is kept.
+`python3 THIS_FILE.flac songbird harvest --show` shows exactly what is kept;
+`python3 THIS_FILE.flac songbird harvest` says what else it reads, then reads it.
 
 **Parents.** `--parent` accepts a packet anywhere it accepted a render record.
 A packet is accepted as a parent only if its audio decodes to the samples its

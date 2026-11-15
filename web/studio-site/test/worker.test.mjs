@@ -112,7 +112,7 @@ test("nothing unchecked is ever under a version's name: checked in incoming/, wh
   assert.deepEqual(seen, []); // while it was being checked, nothing under versions/
   assert.deepEqual(e.VERSIONS.keys("versions/"), []);
   assert.deepEqual(e.VERSIONS.keys("incoming/"), []);
-  assert.equal(e.VERSIONS.keys("limits/").filter(k => k.includes("/kept-")).length, 0);
+  assert.equal(e.SHARES.made.get("shares").storage.map.get("all"), 0); // its place given back
 });
 
 test("its size is asked before a byte is read: too big, too small, unsaid", async () => {
@@ -163,14 +163,40 @@ test("the limits: a few a minute and so many tries an hour from one address (an 
   assert.equal(all.status, 429);
   assert.match(all.data.error, /Many versions/);
   // what's counted: 64 bits of an HMAC of the address under the site's own key, never the address
-  const marks = e.VERSIONS.keys("limits/");
-  assert.equal(marks.filter(k => k.includes("/kept-")).length, 3);
-  assert.equal(marks.filter(k => !k.includes("/kept-")).length, 10); // a, b, six junk, c, and one more
-  for (const k of marks) assert.match(k, /^limits\/\d{4}-\d\d-\d\dT\d\d\/([0-9a-f]{16}|kept)-[0-9a-f]{8}$/);
-  assert.ok(!marks.join().includes("2001") && !marks.join().includes("198.51"));
+  const counts = e.SHARES.made.get("shares").storage.map;
+  assert.equal(counts.get("all"), 3);
+  const tries = [...counts].filter(([k]) => k.startsWith("by:"));
+  assert.equal(tries.reduce((n, [, v]) => n + v, 0), 10); // a, b, six junk, c, and one more
+  for (const [k] of tries) assert.match(k, /^by:[0-9a-f]{16}$/);
+  assert.ok(![...counts.keys()].join().includes("2001") && ![...counts.keys()].join().includes("198.51"));
   assert.match(new TextDecoder().decode(e.VERSIONS.objects.get("keys/address").bytes), /^[0-9a-f]{64}$/);
-  assert.equal((await mod.tidy(e, Date.now())).marks, 0); // this hour's stay; the key is never tidied
-  assert.ok(e.VERSIONS.objects.has("keys/address"));
+  await mod.tidy(e, Date.now());
+  assert.ok(e.VERSIONS.objects.has("keys/address")); // the key is never tidied
+});
+
+test("shares arriving together are counted one at a time: no more are kept than the hour allows", async () => {
+  const w = await load(), e = env({ UPLOADS_AN_HOUR: "100", ALL_AN_HOUR: "3" });
+  const all = await Promise.all(Array.from({ length: 8 }, (_, i) => share(w, e, packet({ audio: 20000 + i }), { ip: `198.51.100.${i}` })));
+  assert.equal(all.filter(r => r.status === 201).length, 3);
+  assert.equal(all.filter(r => r.status === 429).length, 5);
+  assert.equal(e.VERSIONS.keys("versions/").length, 3);
+
+  const mine = env({ UPLOADS_AN_HOUR: "2", ALL_AN_HOUR: "100" });
+  const one = await Promise.all(Array.from({ length: 5 }, (_, i) => share(w, mine, packet({ audio: 20000 + i }))));
+  assert.equal(one.filter(r => r.status === 201).length, 2);
+});
+
+test("a new hour starts the count again", async () => {
+  const { Shares } = await import("../src/worker.js");
+  const { Storage } = await import("./fixture.mjs");
+  const shares = new Shares({ storage: new Storage() });
+  const ask = (what, body) => shares.fetch(new Request(`https://shares/${what}`, { method: "POST", body: JSON.stringify(body) })).then(r => r.json());
+  assert.equal((await ask("admit", { hour: "2026-11-14T10", me: "a", mine: 1, all: 1 })).said, "ok");
+  assert.equal((await ask("admit", { hour: "2026-11-14T10", me: "b", mine: 1, all: 1 })).said, "all");
+  assert.equal((await ask("admit", { hour: "2026-11-14T10", me: "a", mine: 1, all: 5 })).said, "mine");
+  assert.equal((await ask("admit", { hour: "2026-11-14T11", me: "a", mine: 1, all: 1 })).said, "ok");
+  assert.equal((await ask("release", { hour: "2026-11-14T10" })).said, "ok"); // the old hour's: nothing to give back
+  assert.equal(shares.storage.map.get("all"), 1);
 });
 
 test("a shared version: in ranges, unchanged, HEAD, and nothing to find by guessing", async () => {
@@ -191,6 +217,8 @@ test("a shared version: in ranges, unchanged, HEAD, and nothing to find by guess
   assert.equal(same.status, 304);
   assert.equal((await call(w, e, `/api/versions/${id}`, { method: "DELETE" })).status, 405);
 
+  const gone = "0".repeat(32);
+  assert.equal((await call(w, e, `/api/versions/${gone}`, { headers: { "If-None-Match": `"${gone}"` } })).status, 404); // a copy kept is no proof it's here
   const missing = await call(w, e, `/api/versions/${"0".repeat(32)}`);
   assert.equal(missing.status, 404);
   assert.match((await missing.json()).error, /no version here/);
@@ -246,9 +274,11 @@ test("kept 30 days after it was last shared or opened (an open noted at most wee
   e.VERSIONS.age(`versions/${fresh}.flac`, 36); // shared 36 days ago: within 30 + 7
   e.VERSIONS.age(`versions/${old}.flac`, 38);
   e.VERSIONS.age(`versions/${opened}.flac`, 40);
-  await call(w, e, `/api/versions/${opened}`, { headers: { "If-None-Match": `"${opened}"` } }); // a browser that has it
-  assert.deepEqual(e.VERSIONS.keys("opened/"), []); // it has the bytes, and isn't sent them: not an open
-  await call(w, e, `/api/versions/${opened}`); // opened today, after 40 days: noted
+  const same = await call(w, e, `/api/versions/${opened}`, { headers: { "If-None-Match": `"${opened}"` } }); // a browser that has it
+  assert.equal(same.status, 304);
+  assert.deepEqual(e.VERSIONS.keys("opened/"), [`opened/${opened}`]); // it isn't sent the bytes, but it is an open
+  e.VERSIONS.objects.delete(`opened/${opened}`);
+  await call(w, e, `/api/versions/${opened}`, { method: "HEAD" }); // the page opening the one it keeps: noted
   assert.deepEqual(e.VERSIONS.keys("opened/"), [`opened/${opened}`]);
   const puts = e.VERSIONS.puts;
   await call(w, e, `/api/versions/${opened}`, { headers: { Range: "bytes=0-3" } }); // again this week: no write

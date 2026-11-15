@@ -46,7 +46,7 @@ it, and the next line answers: it's yours while you sing it.
 refrain, turn, bridge, refrain, tag. A turn is two bars of the strings alone
 (IV, V) so a singer can catch their breath.
 
-**Further seed verses**, for longer forms and as the LLM's first context:
+**Further seed verses**, for longer forms:
 
 > A quiet man kept it alone in his head,
 > so close and so safe that it never was said.
@@ -87,7 +87,7 @@ harmony line against the melody from the chord underneath: the nearest chord
 tone a third or more below, the nearest above, the root beneath, then the
 same an octave down. The seed has no ancestors, so it sings its bridge alone;
 each generation adds a voice, so you can hear how far a rendition has
-travelled. Until the seed packet carries real ancestors (milestone 5),
+travelled: a version's record carries the singers before it, up to six.
 `songbird render --choir N` stands in N made-up singers.
 - **The tune.** Each foot is a quarter and two eighths. Refrain lines 1 and 2
 are a question and answer (open on so, closed on do); line 3 sits on la, the
@@ -111,9 +111,9 @@ knew it by heart"; A's screen verse with B's "nobody hummed it; it wasn't a
 song"; A's mind verse with C's "kept it alone in [his] head"; A's ink
 couplet with B's drawer couplet; A's sailor and orange girl with C's "only a
 mouth".
-- **The bank (2026-09-25).** Thirty-eight verses, six refrain couplets, three
-bridges and three tag syllables, riffed with the artist in one thread and
-checked against the tune: see [h-bank.md](h-bank.md). The artist's own lines
+- **The bank.** Fifty-one verses, eight refrain couplets, eight refrain heads,
+five bridges and three tag syllables, begun with the artist on September 25,
+2026 and grown since, each checked against the tune: see [h-bank.md](h-bank.md). The artist's own lines
 are the heard and owns refrains (now the true and take couplets) and the first
 line of the kids verse.
 

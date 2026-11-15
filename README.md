@@ -2,7 +2,7 @@
 
 <img src="web/sing/page/cover.jpg" width="240" align="right" alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
 
-By The Volunteers. A finalist in the [2026 AI Song Contest](https://www.aisongcontest.com/the-2026-finalists).
+By The Volunteers. A finalist in the [2026 AI Song Contest](https://www.aisongcontest.com/the-2026-finalists): [vote by November 21](https://www.aisongcontest.com/the-2026-finalists).
 
 **A folk song passed between people and computers** exploring music's ability to take on a life of its own, in verse
 and by embedding the software that sings it. Addressing the blurred authorship of AI music and code, its refrain asks
@@ -27,7 +27,9 @@ python3 now-its-by-you.flac
 It needs Python 3.11 or newer, or uv ([docs/RUNNING-THE-SONG.md](docs/RUNNING-THE-SONG.md)). The first run fetches
 the program's libraries once (about 100 MB) and asks before it writes; after that nothing goes over the network.
 
-Every run sings a new version. The shape of the tune, its stresses, its chords and the refrain's words never change.
+Every run sings a new version. The shape of the tune, its stresses and its chords never change. Every refrain asks
+who made (or sang, or owns) the song, and the last always ends "now it's by you"; its other words change from
+version to version, from the song's own bank.
 The key, mode, tempo, form, style, band and singer are chosen each time from a few plain facts about the computer
 (its languages, its size, its screen: `songbird harvest --show` prints what is kept) and from the date, through a
 slow drift: a little day to day, most year to year. The new version is the child of the one it was run from: it
@@ -101,7 +103,7 @@ uv sync                                                                      # t
 uv run songbird render songs/h-now-its-by-you.json                           # renders/h-now-its-by-you.flac: the seed, no computer's or day's choices
 uv run songbird render songs/h-now-its-by-you.json --machine fictional:ada   # sung by a made-up computer, today
 uv run songbird render songs/h-now-its-by-you.json --machine here --date 2026-12-25 --pack   # by this one on a day, program inside
-uv run songbird harvest --show                                               # what it reads from this computer: all that is kept
+uv run songbird harvest --show                                               # all that is kept of this computer; reads nothing new
 uv run songbird year songs/h-now-its-by-you.json --machine fictional:ada     # one computer's choices through a year
 uv run songbird studio                                                       # the studio, on this computer only
 uv run songbird budget                                                       # the program and its voice against the 8 MiB goal

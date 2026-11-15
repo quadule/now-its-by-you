@@ -39,6 +39,7 @@ def test_drawing_without_choices_is_as_it_was():
     last two lines were rewritten with a carry swap, and the wind couplet, the bone and border verses and the lyric review's six came, and the refrain came to ask about this, that or the song (2026-09-27), and when the daisy verse and the grew
     head came, two heads asking the same question as written never sharing a song (2026-09-27), and when the
     shepherd, names, mine and nurse verses came to say wind{air}, tears{crying} and used{habit} (2026-09-30: every draw as before, the says
+    stripped), and when every bank line came to mark its focus word (2026-11-14: every draw as before, the marks
     stripped)."""
     lean = A.Leanings(mood_weights={"light": 2.0, "dark": 0.5}, era_bias=-0.4, rarity_appetite=0.6,
                       vocabulary=frozenset({"sea", "ship", "fiddle", "bird"}))

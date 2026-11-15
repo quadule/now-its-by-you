@@ -9,8 +9,9 @@ small function whose docstring says the same as its entry here.
 See it for yourself:
 
 ```
-uv run songbird harvest --show            # read this machine, cache it, print exactly what is kept
-uv run songbird harvest --show --without words hand
+uv run songbird harvest --show            # print exactly what is kept; reads nothing new, writes nothing
+uv run songbird harvest                   # say what it will read, read it, cache it (the signals below)
+uv run songbird harvest --without words hand
 ```
 
 ## The rules

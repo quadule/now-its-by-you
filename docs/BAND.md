@@ -150,16 +150,27 @@ The rules, briefly:
   next root pushed an eighth early and tied over.
 - **Guitar.** Open shapes found by searching every fingering within three
   frets (the root lowest, the third present, open strings welcome) and a capo
-  that suits the song's chords. A strum is one note per string, 18 to 40 ms
-  across, low to high down and high to low up (catching only the top strings);
-  a string sounds until the pick meets it again or the hand moves to another
-  chord. The lilt puts a down stroke on every beat and an up on the off-beats
-  inside each metrical foot (the long-short-short of H); the strum family is
-  the old faithful; compound meters get a jig's; the light pattern is a
-  boom-chick (the thumb on the bass string where a foot starts, a brush of
-  the upper strings between; the thumb takes the root wherever a chord
-  starts). A chop falls on a backbeat, once a bar at most, and the hand comes
-  straight back up.
+  that suits the song's chords. Where it strums, it is a strumming hand
+  (songbird/strumming.py, shared with the styles' guitars): a home groove for
+  the song from a library of grooves (the lilt's D.DUD.DU, the old faithful
+  D.DU.UDU, calypso, sparse, half, drive, waltzes and six-eights, sixteenths
+  in a song under 85 bpm), chosen by the band's pattern and density, and held
+  through each section as a player holds it. A section's energy moves how
+  many strings a down stroke crosses and how hard before it moves the groove
+  a step; a bridge sometimes changes it. Accents lean on 2 and 4. A phrase's
+  last bar may leave its last beat to ring or fill a rest with a light up; an
+  up is now and then a ghost on the top two strings; the up just before a
+  chord change is often the open strings (the fretting hand lifting), or left
+  out. A down on 1 or where a chord starts crosses every string, one on a
+  backbeat or between beats the upper four or five, one on 3 the lower; an up
+  catches the top two to four. A stroke meets its strings 4 to 7 ms apart
+  (quicker when hard or fast, never more than 30% of a slot), starts before
+  the beat so its weight lands on it, and its ups sit a few ms late in the
+  lazier grooves. A string sounds until the pick meets it again or the hand
+  moves to another chord. The light pattern is a boom-chick (the thumb on the
+  bass string where a foot starts, a brush of the upper strings between; the
+  thumb takes the root wherever a chord starts). The guitar's renderer adds
+  the pick's noise crossing the strings once a stroke, brighter on an up.
 - **Harp.** `Params.accomp` is its picking pattern, varied bar by bar (a half
   turned round, passing notes, a rolled chord and quiet at some line ends);
   in the refrains it climbs from just above the tune; rolled chords in the
@@ -194,7 +205,7 @@ clamped.
 |---|---|---|---|
 | lute, guitar, harp, bass, fiddle, whistle, drum, drone | 0..2 | 1 | each instrument's stem gain; 0 sits it out (its part isn't written, and the next lead takes over) |
 | brightness | 0..1 | 0.5 | fingertips, gut, a breathy pipe (0) to picks, steel, an edgy bow (1): loop loss, pluck hardness, jet drive, reed spectrum |
-| pattern | lilt, strum, pick, air | lilt | the accompaniment family: the melody's foot; the old faithful strum; fingerpicking (no strums, harp rolls); a slow air (rolled chords, held bass, drone, no drum) |
+| pattern | lilt, strum, pick, air | lilt | the accompaniment family: the melody's foot; a steady strum in the player's own groove; fingerpicking (no strums, harp rolls); a slow air (rolled chords, held bass, drone, no drum) |
 | density | 0..1 | 0.5 | roots, boom-chick or a strum a chord (0) to eighth-note picking, walking bass, extra ups and many fills (1) |
 | swing | 0..1 | 0 | straight to a triplet lilt on each beat's off-beat half, for the singer too (compound meters keep their own lilt) |
 | wear | 0..1 | 0.25 | a new, tight band (0) to an old, loose one (1): courses and reeds 1.5 to 7.5 cents apart, strings up to 4.5 cents off, timing wobble 6 to 15 ms, more bow and breath noise, a lower skin |
@@ -288,8 +299,8 @@ arranged in range and replays exactly.
 
 ## Limits
 
-- Nobody has listened. The models are right by the measures above, but the
-  measures are not the ear: the whistle in particular is physically inspired
+- The artist judges the band by ear. The models are right by the measures
+  above, but the measures are not the ear: the whistle in particular is physically inspired
   rather than a jet-bore waveguide, and the drone is additive.
 - The fiddle speaks slowest on the G string (about 115 ms), where it rarely
   plays in this arrangement. Keeping every line above the tune has a price: in
