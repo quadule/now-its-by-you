@@ -117,6 +117,42 @@ def test_rewritten_music_has_the_same_score_notes_import_midi_and_render_spec(de
     assert spec["json"] == server.render_spec(edits, "you", verse["index"])
 
 
+def test_written_drums_have_the_same_strokes_import_midi_and_render_spec(device, server):
+    """A drum part written in the editor crosses both runtimes: its pieces in the view, the program's strokes as
+    pieces for the editor's starting part, the take that turns them into an edit, the MIDI file and the spec."""
+    original = server.song({})["composition"]
+    drum = next(p for p in original["players"] if p["name"] == "drum")
+    assert [d["name"] for d in drum["drums"]] == ["bass", "tip", "mute", "rim", "top"]
+    refrain = next(s for s in original["sections"] if s["name"] == "refrain")
+    phrase = refrain["phrases"][0]
+    path = f"part.drum.{phrase['part_key']}"
+    edits = {path: [[0, 24, 0, 100], [96, 24, 1, 60], [192, 48, 3, 90], [288, 24, 4, 110]],
+             f"part.drum.{refrain['phrases'][1]['part_key']}": []}
+    for route in ("/api/song", "/api/arrangement", "/api/players"):
+        actual = ask(device, route, {"edits": edits})
+        assert actual["status"] == 200 and actual["json"] == S.answer(server, route, {"edits": edits})
+    view = ask(device, "/api/song", {"edits": edits})["json"]
+    assert not view["problems"]
+    written = next(s for s in view["composition"]["sections"] if s["id"] == refrain["id"])["phrases"][0]
+    assert written["part_notes"]["drum"] == edits[path]
+
+    players = ask(device, "/api/players", {"edits": {}})["json"]["players"]
+    strokes = next(p for p in players if p["part"] == "drum")["strokes"]
+    body = {"edits": {}, "take": {"player": "drum", "lines": [phrase["part_key"]], "notes": strokes}}
+    preview = ask(device, "/api/notes-in", body)
+    assert preview["status"] == 200 and preview["json"] == S.answer(server, "/api/notes-in", body)
+    assert not preview["json"]["refused"] and preview["json"]["changes"][0]["path"] == path
+
+    exported = ask(device, "/api/export", {"edits": edits, "what": "midi"})
+    native = server.export(edits, "midi")
+    assert exported["status"] == 200 and exported["json"] == native
+    filename = native["url"].split("?")[0].rsplit("/", 1)[1]
+    assert Path(exported["file"]["path"]).read_bytes() == (server.cache / filename).read_bytes()
+    spec = ask(device, "/api/render/spec", {"edits": edits, "section": refrain["index"]})
+    assert spec["status"] == 200
+    assert spec["json"] == server.render_spec(edits, "you", refrain["index"])
+
+
 def test_start_says_the_device_and_what_it_can_t_do(device, server):
     out = ask(device, "/api/start", method="GET")
     start, theirs = out["json"], server.start_view()
@@ -346,7 +382,8 @@ def test_the_static_page_and_its_headers():
     assert {"index.html", "device.js", "studio.js", "renderer.js", "notice.css", "piano/index.html", "piano/piano.js",
             "piano/identity.css", "licenses.txt"} <= set(files)
     # New editor modules cannot ship in just one studio: both use these exact assets.
-    for name in ("parts.js", "model.js", "composer.js", "author.js", "score.js", "studio.js", "score.css"):
+    for name in ("parts.js", "drums.js", "model.js", "composer.js", "author.js", "score.js", "studio.js", "score.css",
+                 "drums.css"):
         assert files[name] == (S.PAGE / name).read_bytes()
         assert f'/{name}"' in html
     # the licences of what the site sends besides the project's own, linked from the page's foot and shown as text

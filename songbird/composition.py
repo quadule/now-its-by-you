@@ -1078,9 +1078,10 @@ def view(genome, params, lyrics) -> dict:
 #
 # A person's own notes for one band player in one line of one section of the form (docs/STUDIO.md, "Notes
 # in"): part.<player>.<section>:<n>.<line>, a list of [onset, length, pitch, velocity], whole numbers: onset
-# and length in PPB-ths of a beat from the line's first bar line, pitch in semitones from the key's note,
-# velocity 1..127. Kept in params.composition["parts"][player]["<section>:<n>.<line>"]; realize plays them in
-# place of that player's own notes there (performed()), on the rendition's clock beat by beat.
+# and length in PPB-ths of a beat from the line's first bar line, pitch in semitones from the key's note (a
+# percussion player's: its piece, a place in DRUM_PIECES), velocity 1..127. Kept in
+# params.composition["parts"][player]["<section>:<n>.<line>"]; realize plays them in place of that player's
+# own notes there (performed()), on the rendition's clock beat by beat.
 
 PPB = 96  # parts of a beat a played note's times are counted in
 PART_PATH = re.compile(r"part\.([a-z][a-z0-9-]{0,31})\.([A-Za-z][A-Za-z0-9_-]{0,31}):(\d{1,3})\.(\d{1,2})")
@@ -1091,27 +1092,79 @@ PART_SOUNDING = 10  # notes sounding at once (ten fingers)
 PART_LONGEST = 32  # beats a note may be held
 PART_SLACK = 5  # semitones a note may go past its player's range, for the key moving (the table's own reach)
 EARLY = 1 / 8  # of a beat: a band note this much before a line's first bar line belongs to that line
-UNPLAYABLE = ("drum", "voice")  # the drums' strokes aren't pitches; the singer's notes are the tune
+
+# A percussion player's pieces, each (the stroke its synth plays: Note.art, its name on the page). A written
+# drum part's note is [onset, length, piece, velocity]: its piece is a place in its player's list, so a list
+# only ever grows at its end. Length is the time a stroke is held where its synth reads one (an open hat, a
+# brush's sweep, a shaken tambourine, a roll); others take it as a strike.
+DRUM_PIECES = {
+    "kit": (("kick", "Kick"), ("snare", "Snare"), ("rim", "Rim shot"), ("snare-cross", "Cross-stick"),
+            ("hat", "Hi-hat"), ("hat-open", "Open hat"), ("hat-foot", "Hat pedal"), ("ride", "Ride"),
+            ("ride-bell", "Ride bell"), ("crash", "Crash"), ("tom-hi", "High tom"), ("tom-mid", "Mid tom"),
+            ("tom-lo", "Floor tom"), ("brush-tap", "Brush"), ("brush-sweep", "Brush sweep")),
+    "drum": (("bass", "Bass"), ("tip", "Tip"), ("mute", "Muted"), ("rim", "Rim"), ("top", "Top")),
+    "drummachine": (("kick", "Kick"), ("snare", "Snare"), ("clap", "Clap"), ("rim", "Rim"), ("hat", "Hi-hat"),
+                    ("hat-open", "Open hat"), ("hat-pedal", "Hat pedal"), ("ride", "Ride"), ("crash", "Crash"),
+                    ("tom-hi", "High tom"), ("tom-mid", "Mid tom"), ("tom-lo", "Low tom"), ("cowbell", "Cowbell"),
+                    ("clave", "Clave"), ("conga-hi", "High conga"), ("conga-mid", "Mid conga"),
+                    ("conga-lo", "Low conga"), ("maracas", "Maracas")),
+    "claps": (("clap", "Claps"), ("clap-solo", "One clap"), ("snap", "Snap")),
+    "stomps": (("stomp", "Stomps"), ("stomp-solo", "One stomp")),
+    "shaker": (("shaker", "Shake"), ("shaker-roll", "Roll")),
+    "tambourine": (("tambourine", "Hit"), ("tambourine-shake", "Shake"), ("tambourine-tap", "Tap"),
+                   ("tambourine-roll", "Roll")),
+    "cajon": (("cajon-bass", "Bass"), ("cajon-slap", "Slap"), ("cajon-mid", "Middle"), ("cajon-tap", "Tap")),
+}
 
 
 def part_player(name: str) -> dict:
     """What a player that can be played in is: its range and whether it plays one note at a time (its
-    synth's own spec), or why it can't be."""
+    synth's own spec), or for a percussion player its pieces (DRUM_PIECES); or why it can't be."""
     from .synth.instruments import known, spec
 
     if name == "voice" or name.startswith("choir") or name not in known():
         raise ValueError(f"{name} isn't a player whose notes can be played in"
                          + ("; the tune is changed as the tune" if name == "voice" else ""))
+    if name in DRUM_PIECES:
+        return {"register": None, "poly": True, "drums": DRUM_PIECES[name]}
     about = spec(name)
-    if about["register"] is None or name in UNPLAYABLE:
+    if about["register"] is None:
         raise ValueError(f"the {name} plays strokes, not notes; its part can't be played in yet")
     return {"register": tuple(about["register"]), "poly": bool(about["poly"])}
+
+
+def drum_piece(player: str, art: str) -> int | None:
+    """The place in the player's pieces (DRUM_PIECES) of a stroke its program played (a Note's art, as the
+    player's synth reads it: the kit's "rim" is its rim shot, a tambourine's "shaker" its shake), or None."""
+    pieces = [a for a, _ in DRUM_PIECES.get(player, ())]
+    if art in pieces:
+        return pieces.index(art)
+    if player == "kit":
+        from .synth.kit import parse
+
+        name = parse(art)[0]
+        name = {"snare-rim": "rim"}.get(name, name)
+    elif player == "drummachine":
+        from .synth.drummachine import ALIASES
+
+        name = ALIASES.get(art, art)
+    elif player == "tambourine":
+        from .synth.shaker import KIT
+
+        name = KIT.get(art, art)
+    elif player == "cajon":
+        from .synth.cajon import KIT
+
+        name = KIT.get(art, art)
+    else:
+        name = art
+    return pieces.index(name) if name in pieces else None
 
 
 def playable(params) -> list[dict]:
     """The players of this version's band whose notes a person can play in (the page's choices): the
     singer's tune first, then each pitched player that plays, with its range (MIDI notes) and whether it
-    plays one note at a time."""
+    plays one note at a time, and each percussion player that plays, with its pieces ("drums")."""
     from .band import INSTRUMENTS
     from .midi import part_name
 
@@ -1122,6 +1175,11 @@ def playable(params) -> list[dict]:
         try:
             about = part_player(name)
         except ValueError:
+            continue
+        if "drums" in about:  # a percussion player: its pieces, one a row
+            out.append({"name": name, "label": part_name(name), "poly": True,
+                        "drums": [{"index": k, "name": art, "label": label}
+                                  for k, (art, label) in enumerate(about["drums"])]})
             continue
         lo, hi = about["register"]
         out.append({"name": name, "label": part_name(name), "low": lo, "high": hi, "poly": about["poly"]})
@@ -1170,11 +1228,13 @@ def check_part(genome, path: str, value) -> list[list[int]] | None:
     if len(value) > PART_LINE_NOTES:
         raise ValueError(f"a line takes at most {PART_LINE_NOTES} notes; this has {len(value)}")
     about = part_player(player)
-    lo, hi = about["register"]
-    tonic = int(genome.seed_params["tonic"])
     phrase = genome.phrases[pid]
     span = int(round(phrase.bars * genome.meter.bar / genome.meter.beat * PPB))
     pickup = int(round(phrase.pickup / genome.meter.beat * PPB))  # a note may lead in from the line's pickup
+    if "drums" in about:
+        return _check_strokes(player, about["drums"], value, span, pickup)
+    lo, hi = about["register"]
+    tonic = int(genome.seed_params["tonic"])
     notes = []
     for i, item in enumerate(value):
         if not isinstance(item, (list, tuple)) or len(item) != 4:
@@ -1207,6 +1267,33 @@ def check_part(genome, path: str, value) -> list[list[int]] | None:
             ends = [e for e in ends if e > n[0]] + [n[0] + n[1]]
             if len(ends) > PART_SOUNDING:
                 raise ValueError(f"more than {PART_SOUNDING} notes sound at once in beat {n[0] // PPB + 1}")
+    return unique
+
+
+def _check_strokes(player: str, pieces, value: list, span: int, pickup: int) -> list[list[int]]:
+    """A percussion player's strokes in one line, checked as check_part checks notes: [onset, length, piece,
+    velocity], the piece a place in its pieces; sorted, a piece struck twice at once kept once (the longest).
+    Strokes ring as their synth rings them, so any number may sound at once."""
+    notes = []
+    for i, item in enumerate(value):
+        if not isinstance(item, (list, tuple)) or len(item) != 4:
+            raise ValueError(f"stroke {i + 1} needs its onset, length, piece and velocity")
+        onset, length, piece, vel = (_whole(x, f"stroke {i + 1}'s numbers") for x in item)
+        if not -pickup <= onset < span:
+            raise ValueError(f"stroke {i + 1} starts outside the line")
+        if not 1 <= length <= PART_LONGEST * PPB:
+            raise ValueError(f"stroke {i + 1} is held longer than {PART_LONGEST} beats, or not at all")
+        if not 0 <= piece < len(pieces):
+            raise ValueError(f"stroke {i + 1} isn't one of the {player}'s {len(pieces)} pieces")
+        if not 1 <= vel <= 127:
+            raise ValueError(f"stroke {i + 1}'s velocity must be 1 to 127")
+        notes.append([onset, length, piece, vel])
+    notes.sort(key=lambda n: (n[0], n[2], -n[1]))
+    unique = [n for k, n in enumerate(notes) if not k or (n[0], n[2]) != (notes[k - 1][0], notes[k - 1][2])]
+    starts = Counter(n[0] // PPB for n in unique)
+    if starts and max(starts.values()) > PART_BEAT_ONSETS:
+        beat = max(starts, key=starts.get)
+        raise ValueError(f"more than {PART_BEAT_ONSETS} strokes start in beat {beat + 1}")
     return unique
 
 
@@ -1280,7 +1367,7 @@ def _runs(genome, params, placed, lead):
     windows = line_windows(genome, params, placed, lead)
     out = {}
     for player, lines in sorted(parts.items()):
-        if player in UNPLAYABLE or not params.band.plays(player):
+        if player == "voice" or not params.band.plays(player):
             continue
         here = sorted((windows[k][0], windows[k][1], k) for k in lines if k in windows)
         runs: list[list[float]] = []
@@ -1320,8 +1407,10 @@ def make_room(genome, params, placed, lead, events: list, seconds) -> list:
 def played_in(genome, params, placed, clock) -> list:
     """A person's played parts as notes (score.Note): each on the rendition's clock beat by beat (beat_clock:
     as the MIDI file's tempo map places a tick), its onset from its line's first bar line, held as played but
-    not past the run of lines played in, at the key's note plus its pitch, as hard as it was played. None
-    when nobody played any in."""
+    not past the run of lines played in, at the key's note plus its pitch, as hard as it was played. A
+    percussion player's strokes are its pieces, as their art, and lie on the rendition's own clock (swung, or
+    re-barred in three) as the program's strokes do: the grid the drum editor writes on, and the one
+    midi.in_beats reads the program's strokes back to. None when nobody played any in."""
     played = _runs(genome, params, placed, clock.lead)
     if not played:
         return []
@@ -1332,11 +1421,19 @@ def played_in(genome, params, placed, clock) -> list:
     out = []
     lines = performed_parts(params)
     for player, (here, runs, windows) in played.items():
+        pieces = DRUM_PIECES.get(player)
         for w0, _, key in here:
             end = next(b for a, b in runs if a - 1e-9 <= w0 < b)
             _, _, u0, name = windows[key]
             for onset, length, pitch, vel in lines[player][key]:
                 u = u0 + onset / PPB * beat
+                if pieces is not None:  # a stroke: its piece is its art, on the pitch the program's strokes carry
+                    start = clock.seconds(u)
+                    stop = clock.seconds(min(u + length / PPB * beat, end))
+                    out.append(Note(part=player, start=start, dur=max(stop - start, 0.03), pitch=float(
+                        params.tonic - 24 if player == "drum" else 0), vel=vel / 127, section=name,
+                        art=pieces[pitch][0]))
+                    continue
                 start = at(u)
                 stop = at(min(u + length / PPB * beat, end))
                 out.append(Note(part=player, start=start, dur=max(stop - start, 0.03),

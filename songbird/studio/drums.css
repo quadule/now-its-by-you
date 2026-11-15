@@ -1,0 +1,21 @@
+/* A percussion player's step grid (drums.js): one row a piece, one column a step; tokens from score.css */
+.sbc-drum-grid { --sbc-drum-label: 92px; display: grid; width: max-content; border: 1px solid var(--rule); border-right: 0; user-select: none; }
+.sbc-drum-row { display: grid; height: 24px; }
+.sbc-drum-ruler { height: 18px; border-bottom: 1px solid var(--rule); }
+.sbc-drum-tick { font-size: 9px; color: var(--ink-3); padding-left: 3px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.sbc-drum-tick.is-bar { font-weight: 650; color: var(--ink-2); }
+.sbc-drum-head { position: sticky; left: 0; z-index: 3; display: flex; background: var(--card); border-right: 1px solid var(--rule); }
+.sbc-drum-piece { flex: 1; border: 0; border-bottom: 1px solid var(--rule); background: var(--card); color: var(--ink-2); font-size: 10px; text-align: left; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sbc-drum-piece:hover { color: var(--ink); background: var(--wash); }
+.sbc-drum-cell { position: relative; border-left: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--rule) 65%, transparent); cursor: pointer; touch-action: manipulation; }
+.sbc-drum-cell.is-beat { border-left-color: color-mix(in srgb, var(--ink-2) 22%, transparent); }
+.sbc-drum-cell.is-bar { border-left-color: color-mix(in srgb, var(--ink-2) 45%, transparent); }
+.sbc-drum-cell:hover { background: var(--wash); }
+.sbc-drum-cell::after { content: ""; position: absolute; inset: 4px 3px; border-radius: var(--radius); }
+.sbc-drum-cell.is-hit::after { background: var(--note); }
+.sbc-drum-cell.is-hit.is-edited::after { background: var(--hand); }
+.sbc-drum-cell.is-hit.is-ghost::after { opacity: .4; inset: 7px 5px; }
+.sbc-drum-cell.is-hit.is-accent::after { inset: 2px 2px; box-shadow: inset 0 0 0 2px var(--note-strong); }
+.sbc-drum-cell:focus-visible { outline: 2px solid var(--note-strong); outline-offset: -2px; z-index: 2; }
+.sbc-drum-held { position: absolute; left: 3px; top: 10px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--note) 45%, transparent); pointer-events: none; z-index: 1; }
+.sbc-drum-cell.is-edited .sbc-drum-held { background: color-mix(in srgb, var(--hand) 45%, transparent); }

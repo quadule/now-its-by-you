@@ -48,7 +48,8 @@ The bounds that remain are concrete engine contracts: finite numbers,
 monophonic vocal timing, pronounceable syllables, bounded note counts and
 instrument polyphony, and the phrase clock. They prevent ambiguous rendering
 or unbounded work. A melisma still uses scale degrees in its existing compact
-representation. Drum strokes are not pitched parts.
+representation. A percussion player's part is written as strokes: the same
+part notes, each naming one of its pieces, on a step grid.
 
 A rewritten lyric line still belongs to its verse or refrain identity. Its
 words and melody follow that identity wherever it occurs, as existing

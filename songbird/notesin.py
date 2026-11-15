@@ -102,17 +102,17 @@ def bucket(lines: list[dict], notes: list, early: float, at=lambda n: n[0]) -> t
 # ---------------------------------------------------------------- one line's notes, as edits
 
 
-def part_notes(genome, line: dict, notes, tonic: int) -> list[list[int]]:
+def part_notes(genome, line: dict, notes, tonic: int, drums: bool = False) -> list[list[int]]:
     """A band player's notes in one line as a part edit's numbers: [onset, length, pitch, velocity], onset in
     composition.PPB-ths of a beat from the line's first bar line (never before its pickup), pitch from the key's
-    note (and from under a style's lift)."""
+    note (and from under a style's lift); a percussion player's piece (drums) as it is."""
     beat = genome.meter.beat
     pickup = int(round(line["pickup"] / beat * C.PPB))
     out = []
     for u, u_end, pitch, vel in notes:
         onset = max(-pickup, int(round((u - line["u0"]) / beat * C.PPB)))
         length = min(C.PART_LONGEST * C.PPB, max(1, int(round((u_end - u) / beat * C.PPB))))
-        out.append([onset, length, int(pitch) - tonic - line["up"], max(1, min(127, int(vel)))])
+        out.append([onset, length, int(pitch) if drums else int(pitch) - tonic - line["up"], max(1, min(127, int(vel)))])
     return out
 
 
@@ -150,7 +150,8 @@ def tune_notes(genome, params, line: dict, notes) -> list[dict]:
 
 
 def _what(player: str, notes: list) -> str:
-    return f"the {player}: {len(notes)} note{'s' if len(notes) != 1 else ''}" if notes else f"the {player} rests"
+    kind = "stroke" if player in C.DRUM_PIECES else "note"
+    return f"the {player}: {len(notes)} {kind}{'s' if len(notes) != 1 else ''}" if notes else f"the {player} rests"
 
 
 def _change(changes: dict, path: str, value, where: str, what: str) -> None:
@@ -164,15 +165,16 @@ def take(genome, params, player: str, notes, keys) -> dict:
     """A take played along with the sketch, as edits for the lines it covered (keys, "verse:1.0"...): notes as
     [beat, length, pitch, velocity], beats counted as the page's score counts them (from the song's first
     pickup), pitch a MIDI note. A band player's lines become part edits ([] where nothing was played: it
-    rests there); the singer's ("voice") tune edits, the first place a line was played taken."""
+    rests there); the singer's ("voice") tune edits, the first place a line was played taken. A percussion
+    player's notes name its pieces (composition.DRUM_PIECES) in place of a pitch, as the studio's players have
+    its strokes."""
     if not isinstance(notes, list) or len(notes) > MAX_TAKE:
         raise ValueError(f"a take is a list of at most {MAX_TAKE} notes")
     lines = layout(genome, params)
     by_key = {ln["key"]: ln for ln in lines}
     if not isinstance(keys, list) or not keys or len(keys) > len(lines) or any(k not in by_key for k in keys):
         raise ValueError("a take covers lines this version sings")
-    if player != "voice":
-        C.part_player(player)
+    drums = player != "voice" and "drums" in C.part_player(player)
     beat = genome.meter.beat
     clean = []
     for item in notes:
@@ -211,7 +213,7 @@ def take(genome, params, player: str, notes, keys) -> dict:
     for ln, mine in zip(covered, shared):
         path = f"part.{player}.{ln['key']}"
         try:
-            value = C.check_part(genome, path, part_notes(genome, ln, mine, params.tonic))
+            value = C.check_part(genome, path, part_notes(genome, ln, mine, params.tonic, drums))
         except ValueError as e:
             refused.append({"where": ln["where"], "why": str(e)})
             continue

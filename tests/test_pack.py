@@ -49,6 +49,7 @@ def test_packet_plays_unzips_and_keeps_its_audio(rendition, tmp_path):
         # including the instrument piano roll used by the static web studio.
         from songbird.studio import PAGE, STATIC
 
+        assert {"parts.js", "drums.js", "drums.css"} <= {name for name, _ in STATIC.values()}
         for name, _ in STATIC.values():
             assert z.read(f"program/songbird/studio/{name}") == (PAGE / name).read_bytes()
     assert manifest["id"] == record["id"] and manifest["generation"] == 0 and manifest["ancestry"] == []
