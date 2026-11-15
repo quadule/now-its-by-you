@@ -789,9 +789,9 @@
         kind === "song" && !S.songShown ? null : h("button", { class: "iconbtn close", type: "button", "aria-label": "Close (Esc)", title: "Close (Esc)",
           onclick: () => { S.songShown = false; select(null); } }, "✕")),
       S.about ? h("p", { class: "about" }, STATE_ABOUT[kind] || "") : null,
-      set ? h("p", { class: `set${mine ? " you" : ""}`, title: typeof set === "string" ? set : null }, set) : null,
       (problems || []).map((p) => h("p", { class: "problem" }, typeof p === "string" ? p : `Couldn't keep ${describePath(p.path)}: ${p.why}.`)),
       body || null,
+      set ? h("p", { class: `set${mine ? " you" : ""}` }, set) : null,  // what the choices above come to: a change moves only what's under it
       why?.length ? reasonsFold(kind, why, whyOpen) : null,
       hear || release || extra ? h("div", { class: "foot" },
         hear ? h("button", { class: "btn", type: "button", onclick: hear }, "▶ Hear it") : null, extra || null,

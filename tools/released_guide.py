@@ -1,6 +1,6 @@
 """The released version's guide, for singing it in the web studio: webstudio/released.json.
 
-    uv run python tools/released_guide.py            # renders/review/contest.flac -> webstudio/released.json
+    uv run python tools/released_guide.py FILE       # the newest edition's file -> webstudio/released.json
 
 Opening the release in the studio gives its child (the next version, as the program sings it today: another day,
 another tempo, other words), not the release. So the release's guide is laid once, here, as tools/piano_score.py
@@ -33,6 +33,12 @@ OUT = ROOT / "webstudio" / "released.json"
 LEAD = ROOT / "songs" / "h-now-its-by-you.json"
 
 
+def named(flac: Path) -> str:
+    """The file as the checkout names it: from renders/ on, for a file in another checkout's renders/."""
+    parts = flac.resolve().parts
+    return "/".join(parts[parts.index("renders"):]) if "renders" in parts else flac.name
+
+
 def lay(flac: Path, tmp: Path) -> dict:
     """The release's guide score, laid with its own program."""
     tonic_now = params_now(G_now.load(LEAD)).tonic
@@ -56,7 +62,7 @@ def lay(flac: Path, tmp: Path) -> dict:
     beats = [[t, int(bar)] for t, bar in timeline(genome, params).beats()]
     data = {**score.to_dict(), "tempo": params.tempo, "seed": params.seed, "transpose": params.tonic - tonic_now,
             "beats": beats}
-    return {"source": {"file": "renders/review/contest.flac", "id": record.get("id"),
+    return {"source": {"file": named(flac), "id": record.get("id"),
                        "program_sha256": record.get("program_sha256"), "title": genome.title,
                        "made_by": "tools/released_guide.py"},
             "score": GD.slim(data)}
@@ -64,7 +70,8 @@ def lay(flac: Path, tmp: Path) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("flac", nargs="?", default=str(piano_score.RELEASE))
+    newest = json.loads((ROOT / "web" / "sing" / "editions.json").read_text())["editions"][0]
+    ap.add_argument("flac", nargs="?", default=str(ROOT / newest["file"]["path"]))
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
     with tempfile.TemporaryDirectory() as tmp:
