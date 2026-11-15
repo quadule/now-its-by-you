@@ -253,6 +253,38 @@
     return (here ?? early)?.i ?? null;
   }
 
+  // The melody roll's rows are semitones above the tonic; a note is stored as a scale degree and a half step (alter).
+  const MAJOR = [0, 2, 4, 5, 7, 9, 11];
+  function semitone(degree, alter = 0, scale = MAJOR) {
+    return Math.floor((degree - 1) / 7) * 12 + scale[((degree - 1) % 7 + 7) % 7] + (alter || 0);
+  }
+  // A semitone written as the scale writes it: a tone of the scale is its degree; one between two is the degree
+  // below sharpened where it was reached going up, else the degree above flattened (F♯ climbing from F, G♭ falling
+  // from G).
+  function spell(semi, scale = MAJOR, up = false) {
+    const octave = Math.floor(semi / 12), pc = semi - octave * 12, at = (k) => scale.indexOf(k);
+    if (at(pc) >= 0) return { degree: octave * 7 + at(pc) + 1, alter: 0 };
+    const below = { degree: octave * 7 + at(pc - 1) + 1, alter: 1 };
+    const above = pc === 11 ? { degree: (octave + 1) * 7 + 1, alter: -1 } : { degree: octave * 7 + at(pc + 1) + 1, alter: -1 };
+    if (up && at(pc - 1) >= 0) return below;
+    return pc === 11 || at(pc + 1) >= 0 ? above : below;
+  }
+  // A note moved by rows (semitones) of the roll, inside the degrees lo..hi. Where it may carry a half step (a line
+  // of its own's note, not slurred: chromatic), it lands on the row; elsewhere on the scale's next tone the way it
+  // moved, keeping its own half step.
+  function moveRows(note, rows, { scale = MAJOR, chromatic = false, lo = -Infinity, hi = Infinity } = {}) {
+    const alter = note.alter || 0;
+    if (!rows) return { degree: note.degree, alter };
+    const up = rows > 0;
+    if (chromatic) {
+      const target = Math.min(semitone(hi, 0, scale), Math.max(semitone(lo, 0, scale), semitone(note.degree, alter, scale) + rows));
+      return spell(target, scale, up);
+    }
+    let target = semitone(note.degree, 0, scale) + rows;
+    while (spell(target, scale).alter) target += up ? 1 : -1;
+    return { degree: Math.min(hi, Math.max(lo, spell(target, scale).degree)), alter };
+  }
+
   // ------------------------------------------------------------------ said after an edit (the live region)
   function saidCell(track, section, level) {
     return level === "out" ? `${section.label}: the ${track.label} sits out` : `${section.label}: the ${track.label} now ${level === "plays" ? "plays" : `plays ${level}`}`;
@@ -324,7 +356,7 @@
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
-    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, saidCell, fitNotes, writtenNotes, lyricPatch,
+    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, semitone, spell, moveRows, saidCell, fitNotes, writtenNotes, lyricPatch,
     phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;

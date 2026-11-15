@@ -826,9 +826,35 @@ test('writing words first fits their rhythm and chromatic edits use the existing
   assert.equal(s.commits.at(-1).value.notes.length, 3);
   const m = setup(writableScore());
   m.find('[data-note="1"]').emit('click');
-  m.find('#sbc-note-alter').emit('change', { target: { value: '-1' } });
+  m.find('#sbc-note-pitch').emit('change', { target: { value: '4♯' } });
   assert.equal(m.commits.at(-1).path, 'line.verse:wire.0');
-  assert.equal(m.commits.at(-1).value.notes[1].alter, -1);
+  assert.deepEqual(m.commits.at(-1).value.notes[1], { degree: 4, onset: 0, duration: 1, alter: 1 });
+});
+test("the roll's rows are semitones: a sung line's note moves by half steps, spelled as a musician would, and a tune line's by the scale", () => {
+  const s = setup(writableScore());
+  assert(s.find("#sbc-key-6").classList.contains("is-out"), "F♯ is between the scale's tones");
+  assert(s.find("#sbc-key-0").classList.contains("is-tonic") && s.find("#sbc-key-12").classList.contains("is-tonic"));
+  assert.equal(s.root.querySelectorAll(".sbc-out-row").length > 0, true);
+  // "this" is F (degree 4): one row up is F♯ (4 sharpened), and back down is F again
+  let item = s.find('[data-note="1"]'), rect = item.getBoundingClientRect();
+  item.emit("pointerdown", { clientX: rect.left + 2, clientY: 150 });
+  item.emit("pointermove", { clientX: rect.left + 2, clientY: 127 });
+  item.emit("pointerup", { clientX: rect.left + 2, clientY: 127 });
+  assert.equal(s.commits.at(-1).path, "line.verse:wire.0", "a half step goes with the line's words");
+  assert.deepEqual(s.commits.at(-1).value.notes[1], { degree: 4, onset: 0, duration: 1, alter: 1 });
+  assert.equal(s.commits.at(-1).value.words, "Sing this song your way");
+  // from G (degree 5), a half step down is G♭: the degree above flattened
+  s.find('[data-note="2"]').emit("click");
+  s.find('[data-note="2"]').emit("keydown", { key: "ArrowDown" });
+  assert.deepEqual(s.commits.at(-1).value.notes[2], { degree: 6, onset: 1, duration: 1, alter: -1 }, "A♭, from A");
+  // the inspector lists every semitone for it
+  assert(s.find("#sbc-note-pitch").children.some((o) => o.value === "6♭"));
+  // a tune line (no words of its own here) moves by the scale: one row up from F is G
+  const t = setup();
+  t.find('[data-note="1"]').emit("keydown", { key: "ArrowUp" });
+  assert.equal(t.commits.at(-1).path, "tune.a1");
+  assert.deepEqual(t.commits.at(-1).value[1], { degree: 5, onset: 0, duration: 1 });
+  assert(!t.find("#sbc-note-pitch").children.some((o) => /[♯♭]/.test(o.value)));
 });
 test("the whole section is one roll: each phrase's notes in its own time, chosen by its notes, moved only inside its bounds", () => {
   const s = setup(writableScore());

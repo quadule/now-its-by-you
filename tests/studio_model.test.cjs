@@ -224,3 +224,27 @@ test("a time of the section's roll belongs to the phrase that can sing a note th
   assert.equal(M.phraseAt(spans, 8), null);
   assert.equal(M.phraseAt(spans, -1), null);
 });
+
+test("a semitone is spelled as the scale writes it: a sharp reached going up, else a flat; a tune line's note keeps to the scale", () => {
+  const major = [0, 2, 4, 5, 7, 9, 11], minor = [0, 2, 3, 5, 7, 8, 10];
+  assert.deepEqual(M.spell(4, major), { degree: 3, alter: 0 });
+  assert.deepEqual(M.spell(6, major, true), { degree: 4, alter: 1 }, "F♯ from F");
+  assert.deepEqual(M.spell(6, major, false), { degree: 5, alter: -1 }, "G♭ from G");
+  assert.deepEqual(M.spell(-1, major), { degree: 0, alter: 0 }, "the B below the tonic");
+  assert.deepEqual(M.spell(-2, major, false), { degree: 0, alter: -1 }, "the B♭ below");
+  assert.deepEqual(M.spell(11, minor, false), { degree: 8, alter: -1 }, "the leading tone, falling from the octave");
+  assert.deepEqual(M.spell(11, minor, true), { degree: 7, alter: 1 }, "and climbing to it");
+  assert.equal(M.semitone(8, -1, minor), 11);
+  for (let semi = -14; semi <= 26; semi++) for (const up of [true, false]) {
+    const at = M.spell(semi, minor, up);
+    assert.equal(M.semitone(at.degree, at.alter, minor), semi, `${semi}`);
+  }
+  const free = { scale: major, chromatic: true, lo: -3, hi: 10 };
+  assert.deepEqual(M.moveRows({ degree: 4 }, 1, free), { degree: 4, alter: 1 });
+  assert.deepEqual(M.moveRows({ degree: 4, alter: 1 }, -1, free), { degree: 4, alter: 0 });
+  assert.deepEqual(M.moveRows({ degree: 10 }, 5, free), { degree: 10, alter: 0 }, "kept inside the line's range");
+  const scaleOnly = { scale: major, chromatic: false, lo: -3, hi: 10 };
+  assert.deepEqual(M.moveRows({ degree: 4 }, 1, scaleOnly), { degree: 5, alter: 0 }, "F♯ is passed over to G");
+  assert.deepEqual(M.moveRows({ degree: 3 }, 1, scaleOnly), { degree: 4, alter: 0 }, "E to F is a row");
+  assert.deepEqual(M.moveRows({ degree: 1 }, -12, scaleOnly), { degree: -3, alter: 0 }, "an octave, held at the range's bottom");
+});
