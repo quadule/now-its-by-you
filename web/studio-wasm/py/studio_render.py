@@ -207,88 +207,157 @@ def stems(spec: dict, folder: Path, out: str | Path) -> list[str]:
     return list(parts)
 
 
-def stems_zipped(spec: dict, folder: Path, emit, progress=None, recording: tuple[str, str] | None = None) -> dict:
-    """The stems, as Studio._stems packs them (every part alone and dry, padded to bar 1 of the MIDI file, one gain
-    for all, 24-bit FLAC with the song's artwork; the MIDI file and the note beside them), made one part at a time so
-    only one part's samples are held at once: each part's file is handed to emit(index, name, data, crc32) as soon as
-    it is made, then let go; the page zips them. The gain that keeps every part from clipping is known only once all
-    are made, so a part made at a gain the parts after it lowered is made again at the last one: the band is made
-    first and the singers (the slowest) last, so it is the quick parts that are made again (H's band before its
-    drum). recording: the file name and id of the recording of this version, if the page has it.
+CEILING = 0.989  # the stems' loudest sample: Studio._stems' gain is min(1, CEILING / the loudest part's peak)
 
-    -> {"name": the zip's folder, "parts": the order, "gain", "midi": (name, data, crc), "readme": (name, text, crc)}"""
-    import zlib
 
-    import numpy as np
-    import soundfile as sf
+def stems_gain(peak: float) -> float:
+    return min(1.0, CEILING / peak) if peak > 0 else 1.0
 
-    from songbird import artwork, explain, midi, synth
-    from songbird.cli import choir_of
-    from songbird.studio import stages, stage_words, stems_note
 
-    _STEM_CACHE.clear()
-    job = _job(spec["key"], "export", progress)
-    job.stage = stage_words("score")
-    _, genome, params, lyrics = load(spec, folder)
-    score = _score(genome, params, lyrics, spec)
-    job.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
-    data, lead_in = midi.from_score(genome, params, score, title=genome.title, lyrics=lyrics)
-    singer = explain.singer_of(params)
-    ancestors = choir_of(spec.get("parent"), singer)[1]
+class Stems:
+    """The stems of a spec of kind "stems", as Studio._stems packs them (every part alone and dry, padded to bar 1 of
+    the MIDI file, one gain for all, 24-bit FLAC with the song's artwork; the MIDI file and the note beside them), in
+    steps the page schedules, so several render workers can each make some of the parts, and each holds one part's
+    samples at a time: make(part) makes it and says its peak; encode(gain) packs it at the gain the page says (the
+    one every peak heard so far gives) and lets it go; rescale turns a part packed at a gain a louder part later
+    lowered down from its file (its 24-bit samples times the ratio, packed again: within a step of 24 bits of the
+    server's, not the server's to the byte); finish(gain) is the MIDI file and the note. recording: the file name and
+    id of the recording of this version, if the page has it."""
 
-    def makers() -> dict:  # each maker makes its part once (a player's stem is handed over to its twins' level)
-        return dict(synth.stem_jobs(score, seed=params.seed, voice=singer, ancestors=ancestors)[0])
+    def __init__(self, spec: dict, folder: Path, recording: tuple[str, str] | None = None):
+        from songbird import explain, midi, synth
+        from songbird.cli import choir_of
+        from songbird.studio import stages
 
-    jobs, singers = synth.stem_jobs(score, seed=params.seed, voice=singer, ancestors=ancestors)
-    names = [name for name, _ in jobs]
-    order = sorted(names, key=lambda p: (p != "voice", not p.startswith("choir"), names.index(p)))
-    # the band before the singers: the slowest made last, so a louder part after them seldom has them made again
-    making = [p for p in names if p not in singers] + [p for p in order if p in singers]
-    makes = dict(jobs)
-    stem = recording[0][: -len(".flac")] if recording else spec["stem"]
-    pad = int(round(-lead_in * synth.SR))
-    peak, made_at = 0.0, {}
+        _STEM_CACHE.clear()
+        self.spec, self.recording = spec, tuple(recording) if recording else None
+        _, self.genome, self.params, lyrics = load(spec, folder)
+        self.score = _score(self.genome, self.params, lyrics, spec)
+        self.weights = dict([p for p in stages(self.score) if p[0] not in ("mix", "master")] + [("master", 1.0)])
+        self.midi, self.lead_in = midi.from_score(self.genome, self.params, self.score, title=self.genome.title,
+                                                  lyrics=lyrics)
+        self.singer = explain.singer_of(self.params)
+        self.ancestors = choir_of(spec.get("parent"), self.singer)[1]
+        jobs, singers = synth.stem_jobs(self.score, seed=self.params.seed, voice=self.singer, ancestors=self.ancestors)
+        names = [name for name, _ in jobs]
+        self.order = sorted(names, key=lambda p: (p != "voice", not p.startswith("choir"), names.index(p)))
+        self.singers = [p for p in self.order if p in singers]
+        self.band = [p for p in names if p not in singers]
+        self.makes, self.used = dict(jobs), set()
+        self.stem = self.recording[0][: -len(".flac")] if self.recording else spec["stem"]
+        self.pad = int(round(-self.lead_in * synth.SR))
+        self.part = self.y = None
 
-    def gain_now() -> float:
-        return min(1.0, 0.989 / peak) if peak > 0 else 1.0
+    def plan(self) -> dict:
+        """What the page schedules: the parts in the zip's order, the band and the singers (the slowest), each part's
+        share of the time and what the player says it is doing."""
+        from songbird.studio import stage_words
 
-    def make(i: int, part: str) -> None:
-        nonlocal peak
-        y = makes[part]()
-        if y.size:
-            peak = max(peak, float(np.max(np.abs(y))))
-        gain = gain_now()
-        out = np.zeros((pad + len(y), y.shape[1]), y.dtype)  # padded where it's made: one copy more, not two
-        np.multiply(y, gain, out=out[pad:])
-        del y
+        return {"parts": self.order, "band": self.band, "singers": self.singers, "name": self.stem,
+                "weights": {p: self.weights.get(p, 1.0) for p in self.order},
+                "words": {p: stage_words(p) for p in self.order}}
+
+    def make(self, part: str) -> float:
+        """The part made (and held until encode), and its peak."""
+        import numpy as np
+
+        from songbird import synth
+
+        if part in self.used:  # each maker makes its part once (a player's stem is handed over to its twins' level)
+            self.makes = dict(synth.stem_jobs(self.score, seed=self.params.seed, voice=self.singer,
+                                              ancestors=self.ancestors)[0])
+            self.used.clear()
+        self.used.add(part)
+        self.part, self.y = None, None
+        y = self.makes[part]()
+        self.part, self.y = part, y
+        return float(np.max(np.abs(y))) if y.size else 0.0
+
+    def _file(self, part: str, out) -> tuple[int, str, bytes, int]:
+        import zlib
+
+        import soundfile as sf
+
+        from songbird import artwork, synth
+
         buffer = io.BytesIO()
         sf.write(buffer, out, synth.SR, format="FLAC", subtype="PCM_24")
         del out
-        flac = artwork.embed(buffer.getvalue(), genome.title)
-        del buffer
-        emit(i, f"{stem}/{i:02d}-{part}.flac", flac, zlib.crc32(flac))
-        del flac
-        made_at[part] = gain
-        gc.collect()
+        flac = artwork.embed(buffer.getvalue(), self.genome.title)
+        i = self.order.index(part) + 1
+        return i, f"{self.stem}/{i:02d}-{part}.flac", flac, zlib.crc32(flac)
 
+    def encode(self, gain: float) -> tuple[int, str, bytes, int]:
+        """The part made last, packed at gain (as Studio._stems packs it), and let go."""
+        import numpy as np
+
+        y, part = self.y, self.part
+        self.part = self.y = None
+        out = np.zeros((self.pad + len(y), y.shape[1]), y.dtype)  # padded where it's made: one copy more, not two
+        np.multiply(y, gain, out=out[self.pad:])
+        del y
+        try:
+            return self._file(part, out)
+        finally:
+            del out
+            gc.collect()
+
+    def rescale(self, part: str, data: bytes, was: float, gain: float) -> tuple[int, str, bytes, int]:
+        """A part's file packed at gain `was`, turned to `gain`: its samples read back, times the ratio, packed again."""
+        import soundfile as sf
+
+        out, _ = sf.read(io.BytesIO(data), dtype="float64", always_2d=True)
+        out *= gain / was
+        try:
+            return self._file(part, out)
+        finally:
+            del out
+            gc.collect()
+
+    def finish(self, gain: float) -> dict:
+        import zlib
+
+        from songbird.studio import stems_note
+
+        note = stems_note(self.genome.title, self.params, -self.lead_in, gain, self.order,
+                          recording=self.recording).encode("utf-8")
+        return {"name": self.stem, "parts": self.order, "gain": gain,
+                "midi": [f"{self.stem}/{self.stem}.mid", self.midi, zlib.crc32(self.midi)],
+                "readme": [f"{self.stem}/README.txt", note, zlib.crc32(note)]}
+
+
+def stems_zipped(spec: dict, folder: Path, emit, progress=None, recording: tuple[str, str] | None = None) -> dict:
+    """The stems made by one worker, a part at a time, every file the server's to the byte: the band first and the
+    singers (the slowest) last, each part packed at the gain the peaks so far give and handed to emit(index, name,
+    data, crc32) at once; a part a louder one after it turned down is made again, quieter. The page's pool of workers
+    (renderer.js) schedules a Stems' steps itself; this is the reference it is held to (tests/test_studio_device.py).
+
+    -> Stems.finish's, and "again": the parts made again"""
+    from songbird.studio import stage_words
+
+    stems = Stems(spec, folder, recording)
+    job = _job(spec["key"], "export", progress)
+    job.plan = list(stems.weights.items())
+    peak, made_at = 0.0, {}
+
+    def make(part: str) -> None:
+        nonlocal peak
+        peak = max(peak, stems.make(part))
+        made_at[part] = stems_gain(peak)
+        emit(*stems.encode(made_at[part]))
+
+    making = stems.band + stems.singers
     for part in making:
         job.report(part)
-        make(order.index(part) + 1, part)
-    again = [part for part in making if made_at[part] != gain_now()]
-    if again:
-        makes = makers()
+        make(part)
+    again = [part for part in making if made_at[part] != stems_gain(peak)]
     for part in again:  # a louder part came after it: made again at the gain every part shares
         job.stage = f"{stage_words(part)} again, quieter"
         if progress is not None:
             progress(job.progress, job.stage)
-        make(order.index(part) + 1, part)
+        make(part)
     job.report("master")
-    gain = gain_now()
-    note = stems_note(genome.title, params, -lead_in, gain, order,
-                      recording=tuple(recording) if recording else None).encode("utf-8")
-    return {"name": stem, "parts": order, "gain": gain, "again": again,
-            "midi": [f"{stem}/{stem}.mid", data, zlib.crc32(data)],
-            "readme": [f"{stem}/README.txt", note, zlib.crc32(note)]}
+    return {**stems.finish(stems_gain(peak)), "again": again}
 
 
 def check(spec: dict, program: str | None = None) -> None:

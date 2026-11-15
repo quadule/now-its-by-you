@@ -390,3 +390,23 @@ def test_the_stems_are_what_to_make_and_made_a_part_at_a_time_as_the_server_pack
         assert mine[name][1] == theirs.getinfo(name).CRC
     with pytest.raises(R.Refused):
         R.run(answer["spec"], tmp_path, None, device.studio.program_digest)
+
+    # the page's workers pack each part at the gain the peaks so far give, and turn one down from its file if a louder
+    # part lowered it after: within a step of 24 bits of the server's
+    import soundfile as sf
+
+    stems = R.Stems(spec, tmp_path, (f"{stem}.flac", "5beef0" + "a" * 58))
+    assert stems.plan()["band"] == ["guitar"] and stems.plan()["singers"] == ["voice"]
+    assert stems.make("guitar") == pytest.approx(0.5)
+    _, name, early, _ = stems.encode(1.0)
+    stems.make("voice")
+    stems.encode(out["gain"])
+    i, again, data, crc = stems.rescale("guitar", early, 1.0, out["gain"])
+    assert (i, again) == (2, name) and name.endswith("02-guitar.flac") and crc == __import__("zlib").crc32(data)
+    mine_samples, _ = sf.read(io.BytesIO(data))
+    theirs_samples, _ = sf.read(io.BytesIO(theirs.read(name)))
+    assert mine_samples.shape == theirs_samples.shape
+    assert np.max(np.abs(mine_samples - theirs_samples)) <= 1.01 / 2**23
+    assert stems.make("guitar") == pytest.approx(0.5)  # a part asked for again is made by a fresh maker
+    assert stems.encode(out["gain"])[2] == theirs.read(name)
+    assert stems.finish(out["gain"])["readme"][1] == theirs.read(f"{stem}/README.txt")

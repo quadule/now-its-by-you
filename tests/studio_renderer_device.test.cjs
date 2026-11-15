@@ -18,19 +18,28 @@ function fakeWorkers(fate) {
         this.posted.push(m);
         const say = (d) => setImmediate(() => { if (!w.terminated) w.onmessage?.({ data: d }); });
         if (m.cmd === "init") return say({ kind: "ready", seconds: 5 });
-        const what = JSON.parse(m.spec);
+        const what = m.spec ? JSON.parse(m.spec) : {};
         if (fate === "memory") return say({ kind: "error", message: "MemoryError", memory: true });
         if (fate === "crash") return setImmediate(() => w.onerror?.({ message: "the worker stopped" }));
         if (fate === "oops") return say({ kind: "error", message: "ValueError: something", memory: false });
-        if (m.cmd === "stems") {  // two parts, the first made again quieter, each moved here as it's made
+        if (m.cmd === "stems") {  // the stems' steps (studio-worker.mjs): the guitar loudest, made after the voice
           const file = (text) => new TextEncoder().encode(text).buffer;
-          say({ kind: "progress", progress: 0.1, stage: "singing" });
-          say({ kind: "part", index: 1, name: "x/01-voice.flac", crc: 1, bytes: file("loud voice"), heap: 400 });
-          say({ kind: "part", index: 2, name: "x/02-guitar.flac", crc: 2, bytes: file("guitar"), heap: 420 });
-          say({ kind: "part", index: 1, name: "x/01-voice.flac", crc: 3, bytes: file("voice"), heap: 410 });
-          return say({ kind: "done", made: "stems", name: m.recording ? "rec" : "x", parts: ["voice", "guitar"], gain: 0.5,
-            again: ["voice"], midi: { name: "x/x.mid", crc: 4, bytes: file("MThd") },
-            readme: { name: "x/README.txt", crc: 5, bytes: file("hello") }, seconds: 3, heap: 430 });
+          const index = { voice: 1, guitar: 2, choir1: 3 };
+          const peaks = { voice: 0.5, guitar: 1.978, choir1: 0.2 };
+          const ok = (o, heap = 400) => say({ kind: "stems", id: m.id, ok: o, heap, seconds: 1 });
+          if (m.op === "open") {
+            w.recording = m.recording;
+            return ok({ parts: ["voice", "choir1", "guitar"], band: ["guitar"], singers: ["voice", "choir1"], name: m.recording ? "rec" : "x",
+              weights: { voice: 8, choir1: 2, guitar: 1 }, words: { voice: "singing", choir1: "a voice from before singing", guitar: "playing the guitar" } });
+          }
+          if (m.op === "make") { w.part = m.part; (w.made ||= []).push(m.part); return ok({ peak: peaks[m.part] }, m.part === "voice" ? 900 : 500); }
+          if (m.op === "encode") return ok({ index: index[w.part], name: `x/0${index[w.part]}-${w.part}.flac`, crc: index[w.part], bytes: file(`${w.part} at ${m.gain}`) });
+          if (m.op === "rescale") {
+            (w.rescaled ||= []).push([m.part, new TextDecoder().decode(m.bytes), m.was, m.gain]);
+            return ok({ index: index[m.part], name: `x/0${index[m.part]}-${m.part}.flac`, crc: 10 + index[m.part], bytes: file(`${m.part} at ${m.gain}`) });
+          }
+          if (m.op === "finish") return ok({ name: w.recording ? "rec" : "x", parts: ["voice", "choir1", "guitar"], gain: m.gain,
+            midi: { name: "x/x.mid", crc: 4, bytes: file("MThd") }, readme: { name: "x/README.txt", crc: 5, bytes: file("hello") } });
         }
         say({ kind: "progress", progress: 0.5, stage: "singing" });
         say({ kind: "done", made: what.kind, key: what.key, id: `id-${what.key}`, duration: 9.2, seconds: 4.8, heap: 300,
@@ -68,7 +77,8 @@ function device(fate, extra = {}) {
     throw new Error(`a server was asked: ${path}`);
   };
   const store = storage();
-  const r = R.create(ask, { wait: now, env: extra.env || PHONE, spawn: fake.spawn, storage: store, device: true });
+  const r = R.create(ask, { wait: now, env: extra.env || PHONE, spawn: fake.spawn, storage: store, device: true,
+    ...(extra.stemWorkers ? { stemWorkers: extra.stemWorkers } : {}) });
   return { r, fake, asked, store };
 }
 
@@ -149,26 +159,50 @@ async function unzipped(blob) {
   return out;
 }
 
-test("the stems are made a part at a time in a worker of their own, and zipped here", async () => {
-  const { r, fake, store, asked } = device();
+test("the stems are made over a few workers of their own, the voice first, and zipped here", async () => {
+  const { r, fake, store, asked } = device(undefined, { env: { wasm: true, worker: true, mobile: false, memory: 8, cores: 8 }, stemWorkers: 3 });
   const heard = [];
   const answer = { state: "device", key: "w", name: "x.stems.zip", spec: '{"v":1,"kind":"stems","key":"w"}' };
   const job = await r.stems(answer, (j) => heard.push(j.stage)).done;
   assert.equal(job.state, "done", job.error);
   assert.equal(job.name, "x.stems.zip");
-  assert.deepEqual(job.parts, ["voice", "guitar"]);
-  assert.equal(job.heap, 430);
-  const worker = fake.made[0];
-  assert.equal(worker.terminated, true);  // its heap goes with it
-  assert.equal(worker.posted[1].cmd, "stems");
-  assert.equal(worker.posted[1].recording, null);
-  assert.ok(heard.includes("singing"));
+  assert.equal(job.workers, 3);
+  assert.equal(fake.made.length, 3);
+  assert.ok(fake.made.every((w) => w.terminated));  // their heaps go with them
+  assert.deepEqual(fake.made.map((w) => w.made), [["voice"], ["guitar"], ["choir1"]]);  // the voice first, the band next
+  assert.equal(job.heap, 900);
+  assert.equal(job.times.length, 3);
+  // the voice was packed at full level before the guitar lowered everything: turned down from its file, by a free worker
+  const gain = 0.989 / 1.978;
+  assert.equal(job.gain, gain);
+  assert.deepEqual(job.turned, ["voice"]);
+  assert.deepEqual(fake.made.flatMap((w) => w.rescaled || []), [["voice", "voice at 1", 1, gain]]);
+  assert.ok(heard.some((s) => /singing/.test(s)) && heard.some((s) => /turning every part down/.test(s)));
   assert.deepEqual(store.log.filter(([, k]) => k === R.MAKING), [["set", R.MAKING], ["remove", R.MAKING]]);
   assert.ok(!asked.some((p) => p.startsWith("/api/")));
   const blob = await (await fetch(job.url)).blob();
   assert.deepEqual(await unzipped(blob), [
-    { name: "x/01-voice.flac", crc: 3, text: "voice" }, { name: "x/02-guitar.flac", crc: 2, text: "guitar" },
+    { name: "x/01-voice.flac", crc: 11, text: `voice at ${gain}` }, { name: "x/02-guitar.flac", crc: 2, text: `guitar at ${gain}` },
+    { name: "x/03-choir1.flac", crc: 3, text: `choir1 at ${gain}` },
     { name: "x/x.mid", crc: 4, text: "MThd" }, { name: "x/README.txt", crc: 5, text: "hello" }]);
+});
+
+test("one worker makes the band first, then the singers", async () => {
+  const { r, fake } = device();  // a phone
+  const job = await r.stems({ state: "device", key: "w", spec: '{"v":1,"kind":"stems","key":"w"}' }).done;
+  assert.equal(job.state, "done", job.error);
+  assert.equal(job.workers, 1);
+  assert.deepEqual(fake.made[0].made, ["guitar", "voice", "choir1"]);
+  assert.deepEqual(job.turned, []);
+});
+
+test("how many workers make the stems: one where memory or cores are short, else two", () => {
+  assert.equal(R.stemWorkers({ mobile: true, memory: 8, cores: 8 }), 1);
+  assert.equal(R.stemWorkers({ mobile: false, memory: 2, cores: 8 }), 1);
+  assert.equal(R.stemWorkers({ mobile: false, memory: 4, cores: 8 }), 2);
+  assert.equal(R.stemWorkers({ mobile: false, memory: 32, cores: 24 }), 2);
+  assert.equal(R.stemWorkers({ mobile: false, memory: 8, cores: 2 }), 1);
+  assert.equal(R.stemWorkers({ mobile: false, memory: null, cores: null }), 2);
 });
 
 test("the stems name the recording the page made of the same version", async () => {
@@ -176,13 +210,14 @@ test("the stems name the recording the page made of the same version", async () 
   const made = await r.record({ edits: {} }).done;
   const job = await r.stems({ state: "device", key: made.key, spec: '{"v":1,"kind":"stems","key":"w"}' }).done;
   assert.equal(job.state, "done");
-  assert.deepEqual(fake.made[1].posted[1].recording, [made.result.recorded.name, made.result.recorded.id]);
+  assert.deepEqual(fake.made[1].recording, [made.result.recorded.name, made.result.recorded.id]);
   assert.equal(job.name, "rec.stems.zip");
 });
 
 test("stems that run out of memory are said plainly", async () => {
-  const { r } = device("memory");
+  const { r, fake } = device("memory");
   const job = await r.stems({ state: "device", key: "w", spec: '{"v":1,"kind":"stems","key":"w"}' }).done;
   assert.equal(job.state, "failed");
   assert.match(job.error, /ran out of memory in this browser/);
+  assert.ok(fake.made.every((w) => w.terminated));
 });

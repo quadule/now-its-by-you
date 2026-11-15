@@ -55,7 +55,17 @@
     const ipad = /Macintosh/.test(ua) && (nav.maxTouchPoints || 0) > 1;  // an iPad says it's a Mac
     const small = typeof screen === "object" && Math.min(screen.width || 1e4, screen.height || 1e4) < 600;
     return { wasm: typeof WebAssembly === "object", worker: typeof Worker === "function",
-      mobile: !!mobile || ipad || small, memory: typeof nav.deviceMemory === "number" ? nav.deviceMemory : null };
+      mobile: !!mobile || ipad || small, memory: typeof nav.deviceMemory === "number" ? nav.deviceMemory : null,
+      cores: typeof nav.hardwareConcurrency === "number" ? nav.hardwareConcurrency : null };
+  }
+
+  // How many workers make the stems at once: one on a phone or a computer with little memory, else two. The voice
+  // is half the time (H in Chromium: 108 s of 208, the four voices before it 12 s each, the band's parts 1 to 9 s
+  // each), so a second worker making everything else halves it, and a third would only hold more memory (each holds
+  // the program and its part: 0.6 to 1.2 GiB).
+  function stemWorkers(env) {
+    if (env.mobile || (env.memory !== null && env.memory < 4)) return 1;
+    return env.cores !== null && env.cores < 3 ? 1 : 2;
   }
 
   // Whether this browser should make the song, and why not: pure, for the tests.
@@ -157,12 +167,10 @@
       return { stalled, poke, stop: () => unschedule(timer) };
     }
 
-    // size: "section", "whole" or "stems" (a worker of its own for either of the last two, let go after); asked: the
-    // message that makes it ({ cmd: "render", spec } unless given); a stems part is heard as it comes (m.kind "part")
-    async function make(spec, size, hear, task, asked = null) {
+    async function make(spec, size, hear, task) {
       if (task?.cancelled) throw Object.assign(new Error("cancelled"), { cancelled: true });
       globalThis.SongbirdDevice?.renderStarts?.();  // singing's own worker lets its memory go first (device.js)
-      const alone = size !== "section";
+      const alone = size === "whole";
       let entry;
       if (alone) {
         close(kept);
@@ -186,12 +194,12 @@
         entry.uses += 1;
         const made = new Promise((resolve, reject) => {
           entry.listener = (m) => {
-            if (m.kind === "progress" || m.kind === "part") { making.poke(); hear(m); }
+            if (m.kind === "progress") { making.poke(); hear(m); }
             else if (m.kind === "done") resolve(m);
             else if (m.kind === "error") reject(Object.assign(new Error(m.message), { memory: !!m.memory }));
           };
         });
-        entry.w.postMessage({ cmd: "render", spec, ...(asked || {}) });
+        entry.w.postMessage({ cmd: "render", spec });
         const out = await Promise.race([made, making.stalled, stopped]);
         // wasm heaps never shrink: an unusually large section mustn't keep its heap for the next few previews.
         if (out.heap > maxHeap) close(entry);
@@ -209,17 +217,124 @@
       }
     }
 
+    // The stems over `count` workers of their own (studio-worker.mjs "stems", studio_render.Stems), let go after:
+    // each lays the song, then takes the next part (the voice first where there are several, since it takes
+    // longest; then the band, whose peaks are known before the singers are packed; then the other singers), makes it,
+    // and packs it at the gain the peaks heard so far give. A part packed before a louder one lowered that gain is
+    // turned down from its file at the end, by whichever workers are free. hear(m): { kind: "loading" | "ready" },
+    // { kind: "progress", progress, stage }; the files come back by index, and a timing of each part.
+    async function makeStems(spec, recording, count, hear, task) {
+      if (task?.cancelled) throw Object.assign(new Error("cancelled"), { cancelled: true });
+      globalThis.SongbirdDevice?.renderStarts?.();
+      close(kept);
+      const all = Array.from({ length: count }, () => open());
+      const first = !fetchedBefore();
+      const loading = watch(timeouts.ready, "getting the singer ready");
+      all[0].onLoading = (m) => { loading.poke(); hear({ kind: "loading", first, received: m.received, bytes: m.bytes }); };
+      const stopped = new Promise((_, reject) => { current = { entry: all[0], all, reject, task }; });
+      stopped.catch(() => {});
+      let making = null;
+      let seq = 0;
+      try {
+        const ready = await Promise.race([Promise.all(all.map((e) => e.ready)), loading.stalled, stopped]);
+        loading.stop();
+        hear({ kind: "ready", seconds: Math.max(...ready.map((r) => r.seconds || 0)) });
+        making = watch(timeouts.stems, "making the stems");
+        for (const entry of all) {
+          entry.pending = new Map();
+          entry.listener = (m) => {
+            if (m.kind === "stems") {
+              const p = entry.pending.get(m.id);
+              entry.pending.delete(m.id);
+              making.poke();
+              if (m.error) p?.reject(Object.assign(new Error(m.error), { memory: !!m.memory }));
+              else p?.resolve(m);
+            } else if (m.kind === "error") {
+              const e = Object.assign(new Error(m.message), { memory: !!m.memory });
+              for (const p of entry.pending.values()) p.reject(e);
+              entry.pending.clear();
+            }
+          };
+        }
+        const ask = (entry, msg, moved = []) => Promise.race([new Promise((resolve, reject) => {
+          const id = ++seq;
+          entry.pending.set(id, { resolve, reject });
+          entry.w.postMessage({ cmd: "stems", id, ...msg }, moved);
+        }), making.stalled, stopped]);
+        const plans = await Promise.all(all.map((e) => ask(e, { op: "open", spec, recording })));
+        const plan = plans[0].ok;
+        const weight = (p) => plan.weights[p] || 1;
+        const total = plan.parts.reduce((n, p) => n + weight(p), 0) + 1;
+        const [lead, ...others] = plan.singers;
+        const queue = count > 1 && lead ? [lead, ...plan.band, ...others] : [...plan.band, ...plan.singers];
+        let peak = 0;
+        let done = 0;
+        const gain = () => (peak > 0 ? Math.min(1, 0.989 / peak) : 1);
+        const files = new Map();  // index -> { name, crc, size, data (a Blob), part, gain }
+        const times = [];  // [part, seconds to make, worker, its heap after]
+        const busy = new Set();
+        const say = (stage) => hear({ kind: "progress", progress: Math.min(0.99, done / total), stage });
+        const saying = () => say([...busy].map((p) => plan.words[p] || p).join(", ") || "packing the stems");
+        const keep = (part, g, m) => {
+          const f = m.ok;
+          files.set(f.index, { name: f.name, crc: f.crc, size: f.bytes.byteLength, data: new Blob([f.bytes]), part, gain: g });
+        };
+        await Promise.all(all.map(async (entry, w) => {
+          while (queue.length) {
+            const part = queue.shift();
+            busy.add(part);
+            saying();
+            const made = await ask(entry, { op: "make", part });
+            peak = Math.max(peak, made.ok.peak);
+            const g = gain();
+            keep(part, g, await ask(entry, { op: "encode", gain: g }));
+            times.push([part, Math.round(made.seconds * 10) / 10, w, Math.round(made.heap)]);
+            busy.delete(part);
+            done += weight(part);
+            saying();
+          }
+        }));
+        const final = gain();
+        const lower = [...files.values()].filter((f) => f.gain !== final);
+        const turned = lower.map((f) => f.part);
+        const began = Date.now();
+        if (lower.length) say("turning every part down together");
+        await Promise.all(all.map(async (entry) => {
+          while (lower.length) {
+            const f = lower.shift();
+            const bytes = await f.data.arrayBuffer();
+            keep(f.part, final, await ask(entry, { op: "rescale", part: f.part, bytes, was: f.gain, gain: final }, [bytes]));
+          }
+        }));
+        const turning = (Date.now() - began) / 1000;
+        const end = (await ask(all[0], { op: "finish", gain: final })).ok;
+        return { ...end, files: [...files.keys()].sort((a, b) => a - b).map((i) => files.get(i)), turned, turning,
+          times, heap: Math.max(0, ...times.map((t) => t[3])), heaps: all.map((_, w) => Math.max(0, ...times.filter((t) => t[2] === w).map((t) => t[3]))),
+          workers: count };
+      } finally {
+        loading.stop();
+        making?.stop();
+        current = null;
+        for (const e of all) close(e);
+      }
+    }
+
     return {
-      render(spec, size, hear, task, asked = null) {
-        const run = chain.then(() => make(spec, size, hear, task, asked));
+      stems(spec, recording, count, hear, task) {
+        const run = chain.then(() => makeStems(spec, recording, count, hear, task));
+        chain = run.catch(() => {});
+        return run;
+      },
+      render(spec, size, hear, task) {
+        const run = chain.then(() => make(spec, size, hear, task));
         chain = run.catch(() => {});
         return run;
       },
       // stop what is being made (a whole song cancelled; or, for the tests, the worker killed mid-render)
       kill(why = "the worker was stopped", task = null) {
         if (!current || (task && current.task !== task)) return false;
-        const { entry, reject } = current;
-        close(entry);
+        const { entry, reject, all } = current;
+        for (const e of all || [entry]) close(e);
         reject(new Error(why));
         return true;
       },
@@ -470,9 +585,9 @@
       return task;
     }
 
-    // The stems, on the device: each part made alone in a worker of its own and moved here as it is made (only one
-    // part's samples in the worker at once), kept as a Blob, then zipped with the MIDI file and the note. Named after
-    // this version's recording if the page has made it, as a server names them.
+    // The stems, on the device: every part made alone, over a few workers of their own (as many as this device has
+    // room for: stemWorkers), each part moved here as it is made and kept as a Blob, then zipped with the MIDI file
+    // and the note. Named after this version's recording if the page has made it, as a server names them.
     function stems(answer, onProgress) {
       const task = { kind: "stems", size: "stems", job: null, cancelled: false, where: "browser" };
       const failed = (error) => (task.job = { state: "failed", error, where: "browser", size: "stems" });
@@ -491,15 +606,9 @@
           const warn = answer.warn ? ` (${answer.warn})` : "";
           const say = (job) => { task.job = { ...job, stage: `${job.stage}${warn}` }; if (!task.cancelled) onProgress?.(task.job); };
           say({ state: "running", progress: 0, stage: "getting the singer ready", where: "browser" });
-          const files = new Map();  // index -> the part's file (a later one replaces it: made again, quieter)
-          let heap = 0;
-          const heaps = [];  // the worker's heap (MiB) as each part was handed over
-          const out = await browser().render(answer.spec, "stems", (m) => {
-            if (m.kind === "part") {
-              files.set(m.index, { name: m.name, crc: m.crc, size: m.bytes.byteLength, data: new Blob([m.bytes]) });
-              heap = Math.max(heap, m.heap || 0);
-              heaps.push([m.name.split("/").pop(), Math.round(m.heap || 0)]);
-            } else if (m.kind === "loading") {
+          const count = options.stemWorkers ?? stemWorkers(env);
+          const out = await browser().stems(answer.spec, recording, count, (m) => {
+            if (m.kind === "loading") {
               const fetching = m.first && m.bytes ? ` (${Math.min(99, Math.round(100 * (m.received || 0) / m.bytes))}%)` : "";
               say({ state: "running", progress: 0, stage: `getting the singer ready${fetching}`, where: "browser" });
             } else if (m.kind === "ready") {
@@ -507,15 +616,15 @@
             } else if (m.kind === "progress") {
               say({ state: "running", progress: m.progress, stage: m.stage, where: "browser" });
             }
-          }, task, { cmd: "stems", recording });
-          const all = [...files.keys()].sort((a, b) => a - b).map((i) => files.get(i));
+          }, task);
+          const all = [...out.files];
           for (const f of [out.midi, out.readme]) all.push({ name: f.name, crc: f.crc, size: f.bytes.byteLength, data: f.bytes });
           const zip = zipped(all);
-          heap = Math.max(heap, out.heap || 0);
-          note({ kind: "stems", size: "stems", key: answer.key, where: "browser", seconds: out.seconds, at: began });
+          const seconds = (Date.now() - began) / 1000;
+          note({ kind: "stems", size: "stems", key: answer.key, where: "browser", seconds, at: began });
           return (task.job = { state: "done", progress: 1, where: "browser", key: answer.key, url: URL.createObjectURL(zip),
-            name: `${out.name}.stems.zip`, parts: out.parts, gain: out.gain, again: out.again, seconds: out.seconds,
-            heap, heaps, bytes: zip.size });
+            name: `${out.name}.stems.zip`, parts: out.parts, gain: out.gain, turned: out.turned, turning: out.turning,
+            seconds, workers: out.workers, heap: out.heap, heaps: out.heaps, times: out.times, bytes: zip.size });
         } catch (e) {
           if (task.cancelled || e.cancelled) return failed("cancelled");
           note({ kind: "stems", size: "stems", where: "browser", failed: String(e.message || e), at: began });
@@ -641,7 +750,7 @@
     show();
   }
 
-  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared, plainly, playing, MAKING, zipped,
+  const api = { create, capable, choose, environment, workers, setMode, status, mount, shared, plainly, playing, MAKING, zipped, stemWorkers,
     get made() { return shared.made; },
     debug: { kill: () => shared.browser?.kill() || false, busy: () => !!shared.browser?.busy() },
     reset() {  // a fresh page, for the tests
