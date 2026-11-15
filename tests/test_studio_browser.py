@@ -186,14 +186,55 @@ def test_a_recording_from_its_spec_is_the_studios_own_packet_byte_for_byte(home)
     spec = json.loads(answer["spec"])
     assert spec["packet"]["requirements"] == pack.requirements() and spec["marks"]["tempo"]["value"] == 70.0
     render = studio_render()
-    made = render.run(answer["spec"], home / "browser", program=studio.program_digest)
+    made = render.run(answer["spec"], home / "browser", program=studio.program_digest, keep=answer["name"])
     job = S.Job(id="x", key=answer["key"], kind="record", label="", work=None)
     here = studio._whole(job, studio.version(edits), answer["key"])
     assert answer["bar_seconds"] == here["bar_seconds"]  # its clock, for the page to start it at the playhead's bar
     theirs = studio.cache / answer["key"] / "rendition.flac"
     assert made["record"] == pack.read_manifest(theirs)
     assert made["record"]["program_sha256"] == studio.program_digest and made["record"]["chosen_by_you"]
-    assert Path(made["flac"]).read_bytes() == theirs.read_bytes()
+    assert Path(made["flac"]).read_bytes() == theirs.read_bytes()  # the stems kept as it was made change nothing
+
+    # ...and the stems both kept as they made it (the device's, and the studio's own zip, Studio._whole) are the ones
+    # Studio._stems makes after it: to the byte, but a part packed before a louder one, turned down from its file
+    # (within a step of 24 bits; which those are, on the studio's threads, is whichever came first)
+    import io
+    import zipfile
+    import zlib
+
+    import numpy as np
+    import soundfile as sf
+
+    zip_path = studio.cache / f"{answer['key']}.zip"
+    native = zipfile.ZipFile(io.BytesIO(zip_path.read_bytes()))  # kept by _whole
+    url = studio.export(edits, "stems")["url"]
+    assert url == f"/export/{answer['key']}.zip?name={studio.stems_name(answer['key'])}.stems.zip"  # at once
+    kept = made["stems"]
+    zip_path.unlink()
+    studio._stems(S.Job(id="y", key=answer["key"], kind="preview", label="", work=None), studio.version(edits),
+                  answer["key"])
+    zip_ = zipfile.ZipFile(zip_path)
+    assert kept["name"] == studio.stems_name(answer["key"])
+    mine = {name: data for _, name, data, _ in kept["files"]}
+    mine |= {kept["midi"][0]: kept["midi"][1], kept["readme"][0]: kept["readme"][1]}
+    assert sorted(mine) == sorted(zip_.namelist()) == sorted(native.namelist())
+    assert [i for i, *_ in kept["files"]] == list(range(1, len(kept["parts"]) + 1))
+    assert all(crc == zlib.crc32(data) for _, _, data, crc in kept["files"])
+    turned = {f"{kept['name']}/{i:02d}-{part}.flac" for i, part in enumerate(kept["parts"], 1) if part in kept["again"]}
+
+    def near(a: bytes, b: bytes) -> bool:
+        x, _ = sf.read(io.BytesIO(a))
+        y, _ = sf.read(io.BytesIO(b))
+        return x.shape == y.shape and np.max(np.abs(x - y)) <= 1.01 / 2**23
+
+    same = 0
+    for name in zip_.namelist():
+        theirs_ = zip_.read(name)
+        assert mine[name] == theirs_ or (name in turned and near(mine[name], theirs_)), name
+        ours = native.read(name)
+        same += ours == theirs_
+        assert ours == theirs_ or (name.endswith(".flac") and near(ours, theirs_)), name
+    assert same >= 3  # the MIDI file, the note and the loudest part at least
     with pytest.raises(render.Refused, match="another|program"):
         render.run(answer["spec"], home / "again", program="f" * 64)
     with pytest.raises(render.Refused, match="shape"):

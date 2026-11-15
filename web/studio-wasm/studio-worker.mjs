@@ -7,8 +7,11 @@
 //   → { cmd: "init", pyodide: URL of py-<hash>/, app: URL of app-<hash>/, bytecode?: URL of bc-<hash>/,
 //       bytes: what a first visit fetches }
 //   ← { kind: "loading", received, bytes, step }  ...  { kind: "ready", seconds, heap }
-//   → { cmd: "render", spec: the spec as JSON text }
-//   ← { kind: "progress", progress, stage }  ...  { kind: "done", id, duration, flac (ArrayBuffer), seconds, heap, record }
+//   → { cmd: "render", spec: the spec as JSON text, keep?: { song, day } }
+//   ← { kind: "progress", progress, stage }  ...  { kind: "done", id, duration, flac (ArrayBuffer), seconds, heap, record,
+//       stems? }
+//   (keep, for a whole song: its stems kept as it is made, named after it (studio_render.Kept): stems is
+//    { name, parts, gain, again, seconds, files: [{ index, name, crc, bytes }], midi: { name, crc, bytes }, readme })
 //   ← { kind: "error", message, memory } at any point: the renderer then asks the server instead
 //
 // One render at a time; the renderer terminates the worker after a whole song (wasm memory never shrinks).
@@ -184,7 +187,7 @@ ${control ? `import lazy_imports\nlazy_imports.install(${JSON.stringify(LAZY)})`
   postMessage({ kind: 'ready', seconds: (performance.now() - t0) / 1000, heap: heapMiB(), received });
 }
 
-function render(spec) {
+function render(spec, keep = null) {
   const t0 = performance.now();
   let told = 0;
   const progress = (fraction, stage) => {
@@ -193,10 +196,13 @@ function render(spec) {
   };
   py.globals.set('SPEC', spec);
   py.globals.set('PROGRESS', progress);
+  py.globals.set('KEEP', keep ? JSON.stringify(keep) : null);
   py.runPython(`
 import gc, json, shutil
 shutil.rmtree("/tmp/render", ignore_errors=True)
-OUT = studio_render.run(SPEC, "/tmp/render", PROGRESS, PROGRAM)
+OUT = studio_render.run(SPEC, "/tmp/render", PROGRESS, PROGRAM, json.loads(KEEP) if KEEP else None)
+del KEEP
+KEPT = OUT.pop("stems", None)
 RECORD = OUT.pop("record", None)
 SUMMARY = json.dumps({**{k: OUT[k] for k in ("kind", "key", "id", "duration")},
                       "record": {"generation": RECORD.get("generation"), "rendered_at": RECORD.get("rendered_at"),
@@ -208,51 +214,94 @@ gc.collect()
   const summary = JSON.parse(py.globals.get('SUMMARY'));
   const path = py.runPython('OUT["flac"]');
   const flac = py.FS.readFile(path);  // a copy, out of Pyodide's memory
-  py.runPython('shutil.rmtree("/tmp/render", ignore_errors=True); del OUT, SPEC; gc.collect()');
+  const moved = [flac.buffer];
+  let stems;
+  const kept = py.runPython('KEPT');
+  if (kept) {
+    const out = kept.toJs({ dict_converter: Object.fromEntries });  // the files copied out of Pyodide's memory
+    kept.destroy();
+    const own = (data) => (data.byteLength === data.buffer.byteLength ? data.buffer : data.slice().buffer);
+    const file = (index, name, data, crc) => ({ index, name, crc: crc >>> 0, bytes: own(data) });
+    stems = { name: out.name, parts: out.parts, gain: out.gain, again: out.again, seconds: out.seconds,
+      files: out.files.map((f) => file(...f)), midi: file(0, ...out.midi), readme: file(0, ...out.readme) };
+    moved.push(...stems.files.map((f) => f.bytes), stems.midi.bytes, stems.readme.bytes);
+  }
+  py.runPython('shutil.rmtree("/tmp/render", ignore_errors=True); del OUT, SPEC, KEPT; gc.collect()');
   py.globals.delete('PROGRESS');
   postMessage({ ...summary, kind: 'done', made: summary.kind, seconds: (performance.now() - t0) / 1000, heap: heapMiB(),
-    flac: flac.buffer }, [flac.buffer]);
+    flac: flac.buffer, ...(stems ? { stems } : {}) }, moved);
 }
 
-// The stems (py/studio_render.py stems_zipped): every part made alone, one at a time, each part's file moved to the
-// page as soon as it is made and let go here, so only one part's samples are held at once; the page zips them.
-//   → { cmd: "stems", spec, recording?: [file name, id] }
-//   ← { kind: "progress" } ... { kind: "part", index, name, crc, bytes (ArrayBuffer) } ... (a part may come again,
-//     made at a lower gain: it replaces the one before)  { kind: "done", made: "stems", parts, gain, again, name,
-//     midi: { name, crc, bytes }, readme: { name, crc, bytes }, seconds, heap }
-function stems(m) {
+// The stems, in the steps the page schedules over a few of these workers (py/studio_render.py Stems; renderer.js
+// stems): each worker lays the song once, then makes the parts it is given one at a time, holding one part's samples:
+//   → { cmd: "stems", id, op: "open", spec, recording?: [file name, id] }  ← plan: { parts, band, singers, weights, words, name }
+//   → { cmd: "stems", id, op: "make", part }       ← { peak, seconds }   (the part held until it is encoded)
+//   → { cmd: "stems", id, op: "encode", gain }     ← { index, name, crc, bytes (ArrayBuffer) }, and let go
+//   → { cmd: "stems", id, op: "rescale", part, bytes, was, gain }   a part's file turned down: the same answer
+//   → { cmd: "stems", id, op: "finish", gain }     ← { name, parts, gain, midi: { name, crc, bytes }, readme: { ... } }
+// each as { kind: "stems", id, ok, heap } or { kind: "stems", id, error, memory }
+function stemsFile([index, name, data, crc]) {
+  const bytes = data.toJs();  // a copy, out of Pyodide's memory
+  data.destroy?.();
+  return { index, name, crc: crc >>> 0, bytes: bytes.buffer };
+}
+
+function stemsStep(m) {
   const t0 = performance.now();
-  let told = 0;
-  const progress = (fraction, stage) => {
-    const now = performance.now();
-    if (now - told > 100) { told = now; postMessage({ kind: 'progress', progress: fraction, stage }); }
-  };
-  const emit = (index, name, data, crc) => {
-    const bytes = data.toJs();  // a copy, out of Pyodide's memory
-    data.destroy();
-    postMessage({ kind: 'part', index, name, crc: crc >>> 0, bytes: bytes.buffer, heap: heapMiB() }, [bytes.buffer]);
-  };
-  py.globals.set('SPEC', m.spec);
-  py.globals.set('PROGRESS', progress);
-  py.globals.set('EMIT', emit);
-  py.globals.set('RECORDING', m.recording ? JSON.stringify(m.recording) : null);
-  py.runPython(`
-import gc, json, shutil
-shutil.rmtree("/tmp/render", ignore_errors=True)
-OUT = studio_render.run_stems(SPEC, "/tmp/render", EMIT, PROGRESS, PROGRAM,
-                              json.loads(RECORDING) if RECORDING else None)
-del SPEC, RECORDING
-gc.collect()
+  const said = (ok, moved = []) => postMessage({ kind: 'stems', id: m.id, ok, heap: heapMiB(),
+    seconds: (performance.now() - t0) / 1000 }, moved);
+  try {
+    if (m.op === 'open') {
+      py.globals.set('SPEC', m.spec);
+      py.globals.set('RECORDING', m.recording ? JSON.stringify(m.recording) : null);
+      const plan = py.runPython(`
+import json, shutil
+from pathlib import Path
+shutil.rmtree("/tmp/stems", ignore_errors=True)
+_spec = json.loads(SPEC)
+studio_render.check(_spec, PROGRAM)
+if _spec["kind"] != "stems":
+    raise studio_render.Refused("this spec doesn't make the stems")
+STEMS = studio_render.Stems(_spec, Path("/tmp/stems"), json.loads(RECORDING) if RECORDING else None)
+del SPEC, RECORDING, _spec
+json.dumps(STEMS.plan())
 `);
-  const out = py.globals.get('OUT').toJs({ dict_converter: Object.fromEntries });
-  py.runPython('shutil.rmtree("/tmp/render", ignore_errors=True); del OUT; gc.collect()');
-  py.globals.delete('PROGRESS');
-  py.globals.delete('EMIT');
-  const file = ([name, data, crc]) => ({ name, crc: crc >>> 0, bytes: new Uint8Array(data).buffer });
-  const midi = file(out.midi);
-  const readme = file(out.readme);
-  postMessage({ kind: 'done', made: 'stems', name: out.name, parts: out.parts, gain: out.gain, again: out.again,
-    midi, readme, seconds: (performance.now() - t0) / 1000, heap: heapMiB() }, [midi.bytes, readme.bytes]);
+      return said(JSON.parse(plan));
+    }
+    if (m.op === 'make') {
+      py.globals.set('PART', m.part);
+      return said({ peak: py.runPython('STEMS.make(PART)') });
+    }
+    if (m.op === 'encode' || m.op === 'rescale') {
+      py.globals.set('GAIN', m.gain);
+      let out;
+      if (m.op === 'encode') out = py.runPython('STEMS.encode(GAIN)');
+      else {
+        py.globals.set('PART', m.part);
+        py.globals.set('DATA', new Uint8Array(m.bytes));
+        py.globals.set('WAS', m.was);
+        out = py.runPython('_out = STEMS.rescale(PART, DATA.to_bytes(), WAS, GAIN)\ndel DATA\n_out');
+      }
+      const file = stemsFile(out.toJs({ depth: 1 }));
+      out.destroy();
+      return said(file, [file.bytes]);
+    }
+    if (m.op === 'finish') {
+      py.globals.set('GAIN', m.gain);
+      const done = py.runPython('STEMS.finish(GAIN)');
+      const out = done.toJs({ dict_converter: Object.fromEntries });
+      done.destroy();
+      const file = ([name, data, crc]) => ({ name, crc: crc >>> 0, bytes: new Uint8Array(data).buffer });
+      const ok = { name: out.name, parts: out.parts, gain: out.gain, midi: file(out.midi), readme: file(out.readme) };
+      py.runPython('del STEMS\nimport gc\ngc.collect()');
+      return said(ok, [ok.midi.bytes, ok.readme.bytes]);
+    }
+    throw new Error(`no stems step ${m.op}`);
+  } catch (err) {
+    const message = String((err && err.message) || err);
+    postMessage({ kind: 'stems', id: m.id, error: message.trim().split('\n').slice(-3).join(' ').slice(0, 600),
+      memory: /MemoryError|out of memory|Out of memory|memory access out of bounds|Array buffer allocation|RangeError/i.test(message) });
+  }
 }
 
 function failed(err) {
@@ -474,8 +523,8 @@ let pumping = false;
 
 async function handle(m) {
   if (m.cmd === 'init') return init(m);
-  if (m.cmd === 'render') return render(m.spec);
-  if (m.cmd === 'stems') return stems(m);
+  if (m.cmd === 'render') return render(m.spec, m.keep);
+  if (m.cmd === 'stems') return stemsStep(m);
   if (m.cmd === 'studio') return studio(m).catch((err) => failed(err));
   if (m.cmd === 'request') return request(m);
   if (m.cmd === 'read') return read(m);

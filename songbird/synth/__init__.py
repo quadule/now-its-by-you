@@ -206,11 +206,15 @@ def mix(stems: dict[str, np.ndarray], sr: int = SR, seed: int = 0, params: MixPa
 
 def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None = None,
            mix_params: MixParams | None = None, ancestors: list[VoiceParams] | None = None,
-           progress=None, cache=None) -> np.ndarray:
+           progress=None, cache=None, kept=None) -> np.ndarray:
     """The unmastered stereo mix, in its room. progress, if given, is told each
-    part's name as it starts on it, then "mix"."""
+    part's name as it starts on it, then "mix". kept, if given, is handed each
+    part's dry stem as it is made, before the mix treats it: kept(name, stem),
+    which mustn't change it."""
     # each part is made as the mix comes to it, treated and let go (mixing.mix_made): never all held at once
     jobs, _ = stem_jobs(score, sr, seed, voice, ancestors)
+    if kept is not None:
+        jobs = [(name, _handed(name, make, kept)) for name, make in jobs]
     if cache is not None:
         from .cache import Cached, keys
 
@@ -225,6 +229,14 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
     length = int(np.ceil(score.duration * sr)) if jobs else 0
     return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress,
                            sound=getattr(score, "sound", None) or None)  # a person's sound design, if any
+
+
+def _handed(name: str, make, kept):
+    def handed() -> np.ndarray:
+        y = make()
+        kept(name, y)
+        return y
+    return handed
 
 
 def lift_of(score: Score, sr: int, stems: dict | int) -> np.ndarray | None:
