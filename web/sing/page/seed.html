@@ -33,10 +33,11 @@
          alt="The cover: a seed packet printed The Volunteers, Now It's by You, with a daisy growing from a cracked stone, propped on a curb beside a lawn.">
     <div class="preview">
       <audio id="player" controls preload="metadata" aria-label="Now It's by You: play the song" src="/seed/{{SEED_FILE}}?v={{SEED_V}}"></audio>
-      <div class="lyric" id="lyric" data-words="{{SEED_WORDS}}" role="group" aria-label="The words, as they are sung" hidden>
-      </div>
-      <p class="hint which">{{EDITION}} · <a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download</a> ({{SEED_MB}} MB, FLAC)</p>
+      <p class="hint which">{{EDITION}} · <span class="size"><a href="/seed/{{SEED_FILE}}?v={{SEED_V}}" download>Download</a> ({{SEED_MB}} MB, FLAC)</span></p>
     </div>
+    <details class="lyric" id="lyric" data-words="{{SEED_WORDS}}" hidden>
+      <summary>Words</summary>
+    </details>
     <div class="pitch">
       <p class="lead"><strong>A folk song passed between people and computers</strong> exploring music's ability to
         take on a life of its own, in verse and by embedding the software that sings it. Addressing the blurred

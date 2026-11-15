@@ -205,13 +205,16 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
    under both. On a phone, in the page's own order: the masthead, the cover whole, the player, then the pitch, so
    the cover and the way to play it share the first screen. */
 .hero { display: grid; gap: 0 36px; align-items: start; margin: 0 0 22px;
-        grid-template-columns: minmax(0, 46fr) minmax(0, 54fr); grid-template-rows: auto 1fr auto;
-        grid-template-areas: "cover head" "cover pitch" "preview preview"; }
+        grid-template-columns: minmax(0, 46fr) minmax(0, 54fr); grid-template-rows: auto auto 1fr auto;
+        grid-template-areas: "cover head" "cover pitch" "preview pitch" "lyric lyric"; }
 .hero .masthead { grid-area: head; margin: 0 0 16px; }
 .hero .cover { grid-area: cover; }
 .hero .pitch { grid-area: pitch; margin: 0; }
-.hero .preview { grid-area: preview; margin-top: 22px; }
-.hero .preview audio { margin-top: 0; }
+.hero .preview { grid-area: preview; margin-top: 12px; }
+.hero .which { margin-top: 6px; line-height: 1.4; }
+.which .size { white-space: nowrap; }
+.hero .preview audio { display: block; width: 100%; margin-top: 0; }
+.hero .lyric { grid-area: lyric; margin-top: 18px; }
 .hero .pitch .lead { font-size: 21px; line-height: 1.4; font-style: normal; margin-bottom: 12px; text-wrap: pretty; }
 .hero .pitch .lead strong { font-weight: 600; }
 .hero .pitch p:last-child { margin-bottom: 0; }
@@ -221,18 +224,24 @@ pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--
 @media (max-width: 720px) {
   .hero { display: block; }
   .hero .masthead { margin-bottom: 16px; }
-  .hero .preview { margin: 14px 0 18px; }
+  .hero .preview { margin: 14px 0 0; }
+  .hero .lyric { margin: 12px 0 18px; }
   .hero .pitch .lead { font-size: 19px; }
 }
-/* the words under the player: a slim strip of the stage, a window two lines tall onto a reel of every line at one
-   size. The line being sung is at the top, lit (.on) and filled as it goes; the next is under it, dimmed, and
-   slides up into its place when its turn comes (seed.js), so the order is always top to bottom and nothing jumps */
-.lyric { margin-top: 8px; padding: 12px 16px 14px; background: var(--stage); border: 3px double rgba(239, 230, 218, .28);
-         color: var(--stage-ink); }
-.lyric .view { overflow: hidden; transition: height .45s cubic-bezier(.2, .7, .2, 1); }
-.lyric .roll { position: relative; transition: transform .45s cubic-bezier(.2, .7, .2, 1); }
+/* the words: a slim strip of the stage under both columns, folded to its name until the song plays (seed.js
+   opens it then; a visitor can open or fold it at any time). Playing, it is a window two lines tall onto every
+   line at one size: the line being sung at the top, lit (.on) and filled as it goes, the next under it, dimmed,
+   scrolling up into its place when its turn comes. Paused, the window is taller, to read and scroll through */
+.lyric { padding: 0 16px; background: var(--stage); border: 3px double rgba(239, 230, 218, .28); color: var(--stage-ink); }
+.lyric > summary { cursor: pointer; padding: 8px 0; font: 600 14px/1.4 var(--serif); font-variant-caps: all-small-caps;
+                   letter-spacing: .08em; color: var(--stage-dim); }
+.lyric > summary:hover, .lyric > summary:focus-visible { color: var(--stage-ink); }
+.lyric[open] > summary { padding-bottom: 4px; }
+.lyric .view { position: relative; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+               margin-bottom: 12px; transition: height .45s cubic-bezier(.2, .7, .2, 1); }
 .lyric .line { margin: 0; padding-bottom: 4px; font: 600 clamp(17px, 4.3vw, 22px)/1.35 var(--serif); text-wrap: balance; }
 .lyric .line:not(.on) .syl { background: none; color: var(--stage-dim); }
+@media (prefers-reduced-motion: reduce) { .lyric .view { transition: none; } }
 /* which edition plays, under the player, and the way to the others */
 .which { margin: 8px 0 0; }
 .which:empty { display: none; }

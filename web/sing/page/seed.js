@@ -1,7 +1,8 @@
-// The seed page's words, as the file sings them: under the player, a slim strip of the stage with the line being
-// sung (each syllable filled as it is sung, as on the singing page) and the next under it, dimmed, at the same
-// size; the next slides up into the first's place when its turn comes. The words and
-// their times are the render's own (tools/sing_site.py seed_words: /seed/words.json). And the song's name,
+// The seed page's words, as the file sings them: a slim strip of the stage under the cover and the pitch, folded
+// until the song plays. Playing, it shows the line being sung (each syllable filled as it is sung, as on the
+// singing page) and the next under it, dimmed, at the same size; the next scrolls up into the first's place when
+// its turn comes. Paused, it is a taller window to read and scroll. The words and their times are the render's
+// own (tools/sing_site.py seed_words: /seed/words.json). And the song's name,
 // who it's by and its cover for the phone's lock screen and the browser's media controls. And the steps to run
 // the file as tabs, one for each kind of computer, opening on the visitor's own.
 
@@ -28,12 +29,16 @@ if (audio && "mediaSession" in navigator && typeof MediaMetadata === "function")
 }
 
 // lines: [[start, end, [[text, start, end, wordEnd], ...]], ...], in seconds
-// Every line is set once, one under another at one size, in a reel behind a window two lines tall: the line being
-// sung at the top, lit, and the next under it, dimmed. When a line is done the reel slides up by that line, so
-// the next rises into its place as it brightens: always in order, top to bottom, and never changing size.
+// Every line is set once, one under another at one size, in a window that scrolls. Playing, the window is two lines
+// tall, the line being sung at its top, lit, and the next under it, dimmed; when a line is done the window scrolls
+// down by it, so the next rises into its place: always in order, and never changing size. A visitor who scrolls
+// the words themselves is left to read for a few seconds before they follow the song again. The strip opens when
+// the song starts, unless the visitor folded it while it played.
 function follow(lines) {
   const view = document.createElement("div"), reel = document.createElement("div");
   view.className = "view";
+  view.tabIndex = 0; // scrolled with the keys too
+  view.setAttribute("aria-label", "The words, as they are sung");
   reel.className = "roll";
   const rows = lines.map(([, , syllables]) => {
     const p = document.createElement("p");
@@ -49,8 +54,10 @@ function follow(lines) {
     return p;
   });
   view.append(reel);
-  box.replaceChildren(view);
-  let shown = -1, frame = 0;
+  box.append(view);
+  let shown = -1, frame = 0, folded = false, reading = -Infinity;
+  const READ = 4000; // ms a visitor's own scrolling holds the words still
+  const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // the line being sung, or the next to be (through the intro and between verses); the last once all are sung
   const at = t => {
@@ -59,12 +66,19 @@ function follow(lines) {
     return i;
   };
 
-  // the reel moved so line i is at the top of the window, the window as tall as that line and the one after
-  const place = i => {
+  // the window's height: two lines (line i and the one after) while the song plays, more to read while it doesn't
+  const size = i => {
+    if (audio.paused) return Math.min(reel.offsetHeight, Math.max(160, Math.round(innerHeight * 0.4)));
     const row = rows[i], after = rows[i + 1] || row;
+    return after.offsetTop === row.offsetTop ? 2 * row.offsetHeight : after.offsetTop + after.offsetHeight - row.offsetTop;
+  };
+
+  // line i lit, the window sized, and scrolled to it unless the visitor is reading on their own
+  const place = (i, jump) => {
     rows.forEach((r, k) => r.classList.toggle("on", k === i));
-    reel.style.transform = `translateY(${-row.offsetTop}px)`;
-    view.style.height = `${after.offsetTop === row.offsetTop ? 2 * row.offsetHeight : after.offsetTop + after.offsetHeight - row.offsetTop}px`;
+    if (!box.open) return;
+    view.style.height = `${size(i)}px`;
+    if (performance.now() - reading > READ) view.scrollTo({ top: rows[i].offsetTop, behavior: smooth && !jump ? "smooth" : "auto" });
   };
 
   const draw = () => {
@@ -84,9 +98,20 @@ function follow(lines) {
     draw();
     frame = audio.paused ? 0 : requestAnimationFrame(run);
   };
-  audio.addEventListener("play", () => { if (!frame) frame = requestAnimationFrame(run); });
-  for (const ev of ["pause", "seeked", "ended", "loadedmetadata"]) audio.addEventListener(ev, draw);
-  addEventListener("resize", () => { if (shown >= 0) place(shown); }); // the lines wrap anew at another width
+  for (const ev of ["wheel", "touchmove", "keydown"]) view.addEventListener(ev, () => { reading = performance.now(); }, { passive: true });
+  box.addEventListener("toggle", () => {
+    if (box.open) { folded = false; reading = -Infinity; place(shown, true); }
+    else if (!audio.paused) folded = true;
+  });
+  audio.addEventListener("play", () => {
+    if (!box.open && !folded) box.open = true; // its toggle places the words
+    reading = -Infinity;
+    place(shown);
+    if (!frame) frame = requestAnimationFrame(run);
+  });
+  audio.addEventListener("pause", () => place(shown));
+  for (const ev of ["seeked", "ended", "loadedmetadata"]) audio.addEventListener(ev, () => { reading = -Infinity; draw(); place(shown, true); });
+  addEventListener("resize", () => { if (shown >= 0) place(shown, true); }); // the lines wrap anew at another width
 
   box.hidden = false;
   draw();
