@@ -48,13 +48,15 @@
       const target = state.view.composition.sections.find((s) => s.id === id);
       const patch = M.sectionPatch(sectionClipboard, target);
       const drawn = sectionAt(id);
-      if (drawn.canPlay) patch[drawn.paths.sung] = sectionClipboard.sung;
-      if (drawn.canRound && drawn.paths.round) patch[drawn.paths.round] = sectionClipboard.round;
-      if (drawn.paths.build) patch[drawn.paths.build] = sectionClipboard.build;
+      // only what differs is the person's: a choice the destination already makes stays the program's
+      const put = (path, value, now) => { if (path && JSON.stringify(value ?? null) !== JSON.stringify(now ?? null)) patch[path] = value ?? null; };
+      if (drawn.canPlay) put(drawn.paths.sung, sectionClipboard.sung, target.sung);
+      if (drawn.canRound) put(drawn.paths.round, sectionClipboard.round, drawn.round);
+      put(drawn.paths.build, sectionClipboard.build, drawn.build);
       for (const source of sectionClipboard.cells) {
         const cell = S.grid.cells.get(`${source.player}|${id}`);
         if (!cell || cell.plays === false) continue;
-        for (const name of ["level", "pattern", "from", "fill"]) if (cell.paths?.[name]) patch[cell.paths[name]] = source.value[name] ?? null;
+        for (const name of ["level", "pattern", "from", "fill"]) put(cell.paths?.[name], source.value[name], cell.value?.[name]);
       }
       await window.StudioBridge.applyPatch(patch, `Paste contents into ${target.label}`);
       toast("Section contents pasted. Undo restores the destination.");
@@ -986,7 +988,7 @@
           h("div", { class: "row" },
             h("button", { class: "btn", type: "button", onclick: () => copySection(s.id) }, "Copy contents"),
             h("button", { class: "btn", type: "button", disabled: !sectionClipboard, onclick: () => pasteSection(s.id) }, "Paste contents")),
-          h("p", { class: "hint" }, "Copies words, melody, chords, custom notes and player patterns. Paste into a section with the same number of phrases.")),
+          h("p", { class: "hint" }, "Words, melody, chords, your notes and the players' patterns.")),
         // what the style and the words offer here last: rows that come and go with an answer push only what's below
         options,
         rules),

@@ -240,7 +240,6 @@
     return el("div", { class: "sbc-own" },
       el("strong", {}, "Write this line"),
       el("p", { class: "sbc-muted" }, "One syllable a note; split longer words with hyphens (car-ry)."),
-      el("p", { class: "sbc-muted" }, "Words and melody replace this lyric line wherever it occurs."),
       input, count, d.error ? el("p", { role: "alert", class: "problem" }, d.error) : null,
       el("div", { class: "sbc-button-group" },
         button("Use these words", () => {
@@ -296,6 +295,7 @@
       (!next && onset > b.max_final_onset)) { bridge().toast?.("Draw in an empty space with room for a syllable."); return; }
     const newNote = { degree: clamp(degree ?? note()?.degree ?? 1, b.min_degree, b.max_degree), onset, duration, syllable: "?", alter: 0 };
     notes.push(newNote); notes.sort((a, z) => a.onset - z.onset); state.note = notes.indexOf(newNote);
+    state.focusNote = true;  // the new note takes the keys: Delete and the arrows are its own
     commitNotes(notes, "Note added. Write the words for this line.");
   }
   function deleteNote() {
@@ -1183,7 +1183,7 @@
       p?.notes?.length ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
       ownCard(),
       el("p", { class: "readonly hint notes-foot" }, "Tap a note to change it in the column."),
-      el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys nudge the selected note; ⇧ ← → its length." }, "Drag to move or resize. Double-click empty space to add a note. Delete removes the selected note."),
+      el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys nudge the selected note; ⇧ ← → its length; Delete removes it." }, "Drag to move or resize. Double-click to add a note."),
         p?.notes?.length ? button("▶ Hear this phrase", () => { state.scope = "phrase"; state.playIndex = null; play(); }, { class: "sbc-button" }) : null),
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" })));
   }
@@ -1258,7 +1258,9 @@
       : focusNote !== undefined ? box.querySelector(`[data-note="${focusNote}"]`)
       : focusId ? document.getElementById(focusId)
         : focusAction ? [...box.querySelectorAll("button")].find((node) => node.dataset.composerAction === focusAction) : null;
-    (restore || (focused && box.querySelector('.sbc-note.is-selected')))?.focus({ preventScroll: true });
+    const drawn = state.focusNote ? box.querySelector(".sbc-note.is-selected") : null;
+    state.focusNote = false;
+    (drawn || restore || (focused && box.querySelector('.sbc-note.is-selected')))?.focus({ preventScroll: true });
   }
   function render(view) {
     const changed = state.view !== view;

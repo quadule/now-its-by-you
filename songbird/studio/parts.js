@@ -81,7 +81,8 @@
     try {
       const clean = normalize(notes, s.player, s.bounds);
       s.notes = clean; s.ready = true; s.mine = true; s.error = null; s.loading = false;
-      s.selected = selection ? clean.findIndex((n) => n.every((x, i) => x === selection[i])) : null;
+      // by its start and pitch: a note a later one cuts short is still the one selected
+      s.selected = selection ? clean.findIndex((n) => n[0] === selection[0] && n[2] === selection[2]) : null;
       if (s.selected === -1) s.selected = null;
       bridge().setEdit(s.path, clean);
       s.paint();
@@ -164,7 +165,7 @@
     return el("div", { class: "sbc-roll-scroll", tabindex: "0", "aria-label": `${s.player.label} piano roll` }, box);
   }
   function render(view, phrase, name, options) {
-    if (phrase.part_editable === false) return el("p", { class: "notes-foot" }, "This is a generated extension. Choose one of the section's original phrases to write this instrument's notes.");
+    if (phrase.part_editable === false) return el("p", { class: "notes-foot" }, "The arrangement added this phrase. Its notes can't be written.");
     const player = view.composition.players.find((p) => p.name === name), path = `part.${name}.${phrase.part_key}`;
     const key = `${view.listen?.whole || JSON.stringify(bridge().getEdits?.() || {})}|${path}`;
     if (!current || current.key !== key) {
@@ -184,7 +185,7 @@
         button("Paste notes", () => save(copy(clipboard)), { disabled: !clipboard }),
         button(s.ready ? "Clear notes" : "Start empty", () => save([])),
         button("Reset part", () => { bridge().releaseEdit(s.path); current = null; s.paint(); }, { disabled: !s.mine })),
-      el("p", { class: "notes-foot", role: "status" }, s.error || (s.loading ? "Loading the instrument's notes…" : s.mine ? "Your notes · this phrase only" : "Generated notes · edit to make them yours"),
+      el("p", { class: "notes-foot", role: "status" }, s.error || (s.loading ? "Loading the instrument's notes…" : s.mine ? "Your notes" : "The program's notes"),
         s.error ? button("Retry", () => { s.error = null; s.loading = true; load(s); s.paint(); }) : null),
       s.ready ? roll(s) : null,
       n ? el("div", { class: "notes-foot" },
@@ -193,7 +194,8 @@
         field("Length (beats)", n[1] / PPB, 1 / PPB, 32, s.snap, (v) => change(s.selected, { 1: Math.round(v * PPB) })),
         field("Velocity", n[3], 1, 127, 1, (v) => change(s.selected, { 3: Math.round(v) }))) : null,
       s.ready ? el("div", { class: "notes-foot" }, button("Hear phrase", () => s.hear(s.notes)),
-        "Double-click to draw. Drag to move or resize. Arrow keys move; Shift + arrows change length.") : null);
+        el("span", { title: "Arrow keys nudge the selected note; ⇧ ← → its length; Delete removes it." },
+          "Drag to move or resize. Double-click to add a note.")) : null);
   }
   window.SongbirdParts = { render, reset: () => { current = null; }, core: { limits, normalize } };
 })();
