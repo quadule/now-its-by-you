@@ -433,9 +433,8 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .inspector .top { display: flex; align-items: baseline; gap: 2px; border-bottom: 1px solid var(--red-rule); padding-bottom: 6px; margin-bottom: var(--gap); }
 .inspector .top .rubric { font-size: 16px; flex: 1; min-width: 0; outline-offset: 2px; }
 .inspector .about { font: 13px/1.5 var(--serif); color: var(--ink-2); background: var(--paper); padding: 8px 10px; margin: 0 0 var(--gap); }
-/* what it is now, whole and wrapped; it keeps the height it has had while the same thing is open (score.js shell), so
-   a choice that shortens it moves nothing under the pointer */
-.inspector .set { font: 14.5px/1.45 var(--serif); color: var(--ink-2); margin: 0 0 16px; text-wrap: pretty; overflow-wrap: anywhere; }
+/* what the choices come to, whole and wrapped, under them: a change moves only what's below it */
+.inspector .set { font: 14.5px/1.45 var(--serif); color: var(--ink-2); margin: 4px 0 var(--gap); padding-top: 10px; border-top: 1px solid var(--rule); text-wrap: pretty; overflow-wrap: anywhere; }
 .inspector .set.you { color: var(--hand); }
 .inspector h4 { margin: 12px 0 4px; font: 600 11px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 /* the rows: one grid through every state, a label's column and the controls' (whatever else a row holds goes under
