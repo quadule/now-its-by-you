@@ -46,6 +46,10 @@ DRUM_KEYS = {
     "kick": 36, "bass": 36, "stomp": 36, "cajon-bass": 36, "tom-lo": 41, "tom-mid": 45, "tom-hi": 48,
     "snare": 38, "rim": 37, "clap": 39, "cajon-slap": 38, "crash": 49, "ride": 51, "hat": 42, "hat-open": 46,
     "shaker": 70, "tambourine": 54, "brush-tap": 38, "brush-sweep": 40, "ghost": 38, "tip": 60, "mute": 61,
+    "snare-cross": 37, "hat-foot": 44, "hat-pedal": 44, "ride-bell": 53, "cowbell": 56, "clave": 75,
+    "conga-hi": 63, "conga-mid": 62, "conga-lo": 64, "maracas": 70, "top": 62, "clap-solo": 39, "snap": 39,
+    "stomp-solo": 36, "shaker-roll": 70, "tambourine-shake": 54, "tambourine-tap": 54, "tambourine-roll": 54,
+    "cajon-mid": 40, "cajon-tap": 37,
 }
 
 
@@ -490,7 +494,9 @@ def in_beats(genome, params, score) -> list[dict]:
     grid starts, as the studio's composition view counts (a phrase's start_beat). The rendition's clock is read
     backwards, so the final slowing, a swing and a re-barring come back to the grid, and the band's small human
     timing stays. For the studio's sketch, which plays at the song's tempo and sends these to a musician's own
-    instruments in step with its tune (songbird/studio/players.js)."""
+    instruments in step with its tune (songbird/studio/players.js). A percussion player that can be written
+    (composition.DRUM_PIECES) has its strokes too, each [beat, length, piece, velocity], its piece a place in
+    its pieces: the drum editor's starting part."""
     from bisect import bisect_left
 
     from .realize import timeline
@@ -506,16 +512,22 @@ def in_beats(genome, params, score) -> list[dict]:
         t0, t1 = ts[i - 1], ts[i]
         return (us[i - 1] + (t - t0) * (us[i] - us[i - 1]) / max(t1 - t0, 1e-9)) / unit
 
+    from .composition import DRUM_PIECES, drum_piece
+
     out = []
     for track in layout(score):
-        notes = []
+        notes, strokes = [], []
         for n in score.part(track["part"]):
             key = note_key(n, track["drums"])
+            b0 = beat(n.start)
+            at = [round(b0, 3), round(max(beat(n.start + n.dur) - b0, 0.01), 3)]
+            vel = max(1, min(127, int(round(n.vel * 127))))
             if 0 <= key <= 127:
-                b0 = beat(n.start)
-                notes.append([round(b0, 3), round(max(beat(n.start + n.dur) - b0, 0.01), 3), key,
-                              max(1, min(127, int(round(n.vel * 127))))])
-        out.append({**track, "notes": notes})
+                notes.append([*at, key, vel])
+            piece = drum_piece(track["part"], n.art) if track["part"] in DRUM_PIECES else None
+            if piece is not None:
+                strokes.append([*at, piece, vel])
+        out.append({**track, "notes": notes, **({"strokes": strokes} if track["part"] in DRUM_PIECES else {})})
     return out
 
 

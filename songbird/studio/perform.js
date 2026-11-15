@@ -118,7 +118,7 @@
   }
 
   const composition = () => state.view?.composition;
-  const players = () => composition()?.players || [];
+  const players = () => (composition()?.players || []).filter((p) => !p.drums);  // a keyboard plays pitches, not a drum's pieces
   const choice = (id, fallback) => $(id)?.value ?? fallback;
 
   function say(id, text) { const n = $(id); if (n) n.textContent = text; }

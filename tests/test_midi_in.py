@@ -251,8 +251,13 @@ def test_a_take_becomes_a_part_line_by_line_and_rests_where_nothing_was_played()
     assert got["part.fiddle.verse:0.1"] == got["part.fiddle.verse:0.2"] == got["part.fiddle.verse:0.3"] == []
     too_low = notesin.take(G, params, "fiddle", [[start, 1, 30, 90]], [lines[0]["key"]])
     assert "outside what the fiddle plays" in too_low["refused"][0]["why"]
+    pitched = notesin.take(G, params, "drum", notes, [lines[0]["key"]])  # a drum's notes name its pieces
+    assert "pieces" in pitched["refused"][0]["why"] and not pitched["changes"]
+    struck = notesin.take(G, params, "drum", [[start, 0.25, 0, 100], [start + 1, 0.25, 3, 60]], [lines[0]["key"]])
+    assert struck["changes"][0]["value"] == [[0, 24, 0, 100], [96, 24, 3, 60]]
+    assert struck["changes"][0]["what"] == "the drum: 2 strokes"
     with pytest.raises(ValueError):
-        notesin.take(G, params, "drum", notes, [lines[0]["key"]])
+        notesin.take(G, params, "chip-drums", notes, [lines[0]["key"]])
     with pytest.raises(ValueError):
         notesin.take(G, params, "fiddle", notes, ["verse:9.0"])
 

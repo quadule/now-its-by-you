@@ -65,7 +65,8 @@ def test_none_played_in_is_the_same_song():
 def test_a_part_is_checked_whole_and_refused_with_why():
     bad = {
         "part.fiddle.verse:0.9": TUNE,  # the verse has four lines
-        "part.drum.verse:0.0": [],  # strokes, not notes
+        "part.drum.verse:0.0": [[0, 24, 7, 90]],  # the frame drum has five pieces
+        "part.chip-drums.verse:0.0": [],  # strokes it can't yet be written
         "part.voice.verse:0.0": [],  # the tune is changed as the tune
         "part.choir1.verse:0.0": [],
         "part.fiddle.chorus:0.0": [],
@@ -84,7 +85,8 @@ def test_a_part_is_checked_whole_and_refused_with_why():
     assert clean == {} and {p["path"] for p in problems} == set(bad)
     said = {p["path"]: p["why"] for p in problems}
     assert "four lines" not in said["part.fiddle.verse:0.9"] and "has 4 lines" in said["part.fiddle.verse:0.9"]
-    assert "strokes" in said["part.drum.verse:0.0"] and "tune" in said["part.voice.verse:0.0"]
+    assert "5 pieces" in said["part.drum.verse:0.0"] and "tune" in said["part.voice.verse:0.0"]
+    assert "strokes" in said["part.chip-drums.verse:0.0"]
     assert "outside what the lute plays" in said["part.lute.verse:1.0"]
     assert "one note at a time" in said["part.fiddle.refrain:0.0"]
     assert "10 notes sound at once" in said["part.harp.verse:1.3"]
@@ -193,7 +195,6 @@ def test_a_styles_player_can_be_played_in(style):
 
 def _pitched(player):
     try:
-        C.part_player(player)
-        return True
+        return C.part_player(player)["register"] is not None
     except ValueError:
         return False
