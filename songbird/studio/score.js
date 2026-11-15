@@ -10,6 +10,7 @@
   const $ = (id) => document.getElementById(id);
   const C = () => window.SongbirdComposer;
   const P = () => window.SongbirdPlayers?.ui;
+  let sectionClipboard = null;
   const S = {
     view: "page", sel: null, how: "sung", howSet: false, open: null, arr: null, sound: null, grid: null, serial: 0,
     keyed: false, about: false, playhead: null, sketch: false, recording: null, why: {}, tall: false, pop: null,
@@ -30,6 +31,35 @@
   const narrow = () => ($("app")?.clientWidth || innerWidth) <= 620;
   const compIndex = (id) => (state.view?.composition?.sections || []).findIndex((s) => s.id === id);
   const sectionAt = (id) => S.grid?.sections.find((s) => s.id === id);
+  const customPhrases = (id, player) => (state.view?.composition?.sections?.find((s) => s.id === id)?.phrases || [])
+    .filter((p) => Object.prototype.hasOwnProperty.call(p.part_notes || {}, player));
+  function copySection(id) {
+    if (C()?.hasDraft?.(id)) { toast("Apply or cancel the section's melody drafts before copying."); return; }
+    const source = state.view.composition.sections.find((s) => s.id === id);
+    const drawn = sectionAt(id);
+    sectionClipboard = JSON.parse(JSON.stringify({ ...source,
+      round: drawn.round, build: drawn.build,
+      cells: [...S.grid.cells.values()].filter((c) => c.section === id).map((c) => ({ player: c.player, value: c.value })) }));
+    renderInspector(); toast("Section contents copied. Select another section and paste its contents.");
+  }
+  async function pasteSection(id) {
+    try {
+      if (C()?.hasDraft?.(id)) throw new Error("Apply or cancel the section's melody drafts before pasting.");
+      const target = state.view.composition.sections.find((s) => s.id === id);
+      const patch = M.sectionPatch(sectionClipboard, target);
+      const drawn = sectionAt(id);
+      if (drawn.canPlay) patch[drawn.paths.sung] = sectionClipboard.sung;
+      if (drawn.canRound && drawn.paths.round) patch[drawn.paths.round] = sectionClipboard.round;
+      if (drawn.paths.build) patch[drawn.paths.build] = sectionClipboard.build;
+      for (const source of sectionClipboard.cells) {
+        const cell = S.grid.cells.get(`${source.player}|${id}`);
+        if (!cell || cell.plays === false) continue;
+        for (const name of ["level", "pattern", "from", "fill"]) if (cell.paths?.[name]) patch[cell.paths[name]] = source.value[name] ?? null;
+      }
+      await window.StudioBridge.applyPatch(patch, `Paste contents into ${target.label}`);
+      toast("Section contents pasted. Undo restores the destination.");
+    } catch (error) { toast(error.message); }
+  }
   const wordsOf = (s) => state.view?.words?.find((w) => w.index === s?.index);
   function say(text) { const el = $("said"); if (el) { el.textContent = ""; setTimeout(() => { el.textContent = text; }, 40); } }
   function lockIcon() {
@@ -87,14 +117,14 @@
     if (kind) select({ kind, section: S.open });
     else if (S.sel && ["note", "chord"].includes(S.sel.kind)) select({ kind: "section", id: S.open });
   }
-  function openNotes(id, focus = false) {
+  function openNotes(id, focus = false, player = "voice") {
     const i = compIndex(id);
     if (i < 0) return;
     S.open = id;
     if (S.sel && ["note", "chord"].includes(S.sel.kind) && S.sel.section !== id) S.sel = { kind: "section", id };  // the old note's gone
     $("notes").hidden = false;
     if (S.view !== "arrange") showView("arrange");
-    C()?.open?.(i);
+    C()?.open?.(i, player);
     renderGrid();
     renderInspector();
     if (focus) $("notesTitle")?.focus();
@@ -594,9 +624,15 @@
         title: `${s.label}: ${names.join(" ")}` }, names.slice(0, 4).join(" · ") + (names.length > 4 ? " …" : ""));
     }
     const cell = S.grid.cells.get(`${t.id}|${s.id}`), l = M.look(cell);
+    const custom = customPhrases(s.id, t.id), count = custom.reduce((n, p) => n + p.part_notes[t.id].length, 0);
     const cls = `cell ${l.level}${l.whose === "you" ? " you" : l.locked ? " locked" : l.whose === "before" ? " before" : ""}${l.chance ? " chance" : ""}${chosen ? " selected" : ""}`;
     // no marks on a cell (a glyph at this size gets covered): whose it is is in its drawing, and in its words
-    return h("button", { ...common, class: cls, "aria-label": M.cellLabel(t, s, cell), title: M.cellLabel(t, s, cell) }, h("span", { class: "e" }));
+    const playable = state.view?.composition?.players?.some((p) => p.name === t.id);
+    const label = custom.length ? `${t.label} in ${s.label}: ${count} custom notes in ${custom.length} phrases; generated playing in the others` : M.cellLabel(t, s, cell);
+    return h("button", { ...common, class: cls + (custom.length ? " custom" : ""), "aria-label": label,
+      title: label + (playable ? ". Double-click to edit notes." : ""),
+      ondblclick: playable ? () => openNotes(s.id, false, t.id) : undefined },
+      custom.length ? h("span", { class: "custom-notes" }, count ? `${count} notes` : "rests") : h("span", { class: "e" }));
   }
   function roving() {  // one cell of the grid in the tab order: the selected one, else the first
     const cells = [...document.querySelectorAll("#grid button[role=gridcell]")];
@@ -946,6 +982,11 @@
           h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, { step: -1 }), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
           h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, { step: 1 }), title: "Later (⌘/Ctrl →)" }, "Later →"),
           h("button", { class: "btn quiet", type: "button", hidden: S.open !== s.id, onclick: closeNotes }, "Close the notes")),
+        h("details", {}, h("summary", {}, "Section contents"),
+          h("div", { class: "row" },
+            h("button", { class: "btn", type: "button", onclick: () => copySection(s.id) }, "Copy contents"),
+            h("button", { class: "btn", type: "button", disabled: !sectionClipboard, onclick: () => pasteSection(s.id) }, "Paste contents")),
+          h("p", { class: "hint" }, "Copies words, melody, chords, custom notes and player patterns. Paste into a section with the same number of phrases.")),
         // what the style and the words offer here last: rows that come and go with an answer push only what's below
         options,
         rules),
@@ -1007,11 +1048,15 @@
     const cell = S.grid.cells.get(`${t.id}|${s.id}`), l = M.look(cell);
     if (!cell) return false;
     const v = cell.value || {}, mine = l.whose === "you" || l.locked;
+    const custom = customPhrases(s.id, t.id);
     const lineChoices = s.lines.map((_, j) => ({ value: j, text: j === 0 ? "from the start" : `line ${j + 1}` }));
     shell({ kind: "cell", rubric: `${t.label} · ${s.label}`, mine,
-      set: `${l.level === "out" ? "out" : `${l.level}${v.pattern_label && v.pattern_label !== "out" ? `, ${v.pattern_label}` : ""}`}${v.from ? `, from line ${v.from + 1}` : ""}; ${M.whoseWords(l)}`,
+      set: custom.length ? `Your notes in ${custom.length} phrases` : `${l.level === "out" ? "out" : `${l.level}${v.pattern_label && v.pattern_label !== "out" ? `, ${v.pattern_label}` : ""}`}${v.from ? `, from line ${v.from + 1}` : ""}; ${M.whoseWords(l)}`,
       problems: cell.problems,
       body: h("div", {},
+        state.view?.composition?.players?.some((p) => p.name === t.id) ?
+          h("button", { class: "btn", type: "button", onclick: () => openNotes(s.id, true, t.id) }, "Edit notes") : null,
+        custom.length ? h("p", { class: "hint" }, "Your notes replace the generated part in those phrases. The choices below affect the other phrases.") : null,
         chipRow("Here", M.LEVELS.map((x) => ({ value: x, text: x })), l.level, (lv) => {
           if (lv === cell.program?.level && edited(cell.paths.level)) releaseEdit(cell.paths.level, M.saidCell(t, s, lv)); else setEdit(cell.paths.level, lv, M.saidCell(t, s, lv));
           say(M.saidCell(t, s, lv)); },

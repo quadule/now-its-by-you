@@ -156,6 +156,7 @@ function setup(view = score(), { audioAvailable = true } = {}) {
   window.StudioBridge = { setEdit: (path, value) => commits.push(clone({ path, value })), toast: (message) => toasts.push(message),
     pauseAudio: () => { pauseCount++; }, listen() {} };
   if (audioAvailable) window.AudioContext = AudioContext;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/model.js"), "utf8"), { window });
   vm.runInNewContext(source, { window, document, Node: Element, console,
     setTimeout: (fn) => { timers.push(fn); return timers.length; },
     requestAnimationFrame: (fn) => { const id = ++frameId; frames.set(id, fn); return id; },
@@ -247,15 +248,15 @@ test("a vertical pitch drag preserves off-grid timing after the preceding note i
   assert.equal(s.commits.at(-1).value[2].onset, original, "vertical movement must not quantize the other axis");
 });
 
-test("composition tools preserve the cadence, count, phrase bounds and nonoverlap", () => {
+test("composition tools transpose the whole phrase while preserving count and timing bounds", () => {
   const s = setup(), p = s.phrase(), ending = p.notes.at(-1).degree;
   s.clickText("↑ Step");
-  assert.equal(p.notes.at(-1).degree, ending);
+  assert.equal(p.notes.at(-1).degree, ending + 1);
   s.clickText("Soften leaps");
   assert(p.notes.every((note, index) => !index || Math.abs(note.degree - p.notes[index - 1].degree) <= 2));
   s.clickText("Even rhythm");
   assert.equal(p.notes.length, 5);
-  assert.equal(p.notes.at(-1).degree, ending);
+  assert.equal(p.notes.at(-1).degree, ending + 1);
   assert(p.notes.every((note, index) => note.duration >= 0.25 && (!index || note.onset >= p.notes[index - 1].onset + p.notes[index - 1].duration - 1e-8)));
   assert(p.notes[0].onset >= p.bounds.min_onset);
   assert(p.notes.at(-1).onset + p.notes.at(-1).duration <= p.bounds.max_end);
@@ -390,7 +391,7 @@ test("editing a compound-meter pitch preserves exact thirds in every note", () =
   assert.equal(s.commits.at(-1).value[0].onset, -1 / 3);
 });
 
-test("the final note keeps its cadence and leaves time for the following pickup", () => {
+test("the final note moves freely and leaves time for the following pickup", () => {
   const view = score(); view.composition.sections[1].phrases[0].bounds.max_final_onset = 3.25;
   const s = setup(view);
   s.find('[data-note="4"]').emit("click");
@@ -398,8 +399,7 @@ test("the final note keeps its cadence and leaves time for the following pickup"
   s.find("#sbc-note-start").emit("change", { target: { value: "4" } });
   assert.equal(s.commits.at(-1).value[4].onset, 3.25);
   s.find('[data-note="4"]').emit("keydown", { key: "ArrowUp" });
-  assert.equal(s.commits.at(-1).value[4].degree, 8);
-  assert.equal((s.commits.at(-1).value[4].degree - 1) % 7, 0);
+  assert.equal(s.commits.at(-1).value[4].degree, 2);
 });
 
 test("audio sketch schedules finite tones, advances the full-song playhead and stops", () => {
@@ -617,9 +617,11 @@ test("one place or everywhere: the tune and the chords are changed where the per
     }
   }
   const s = setup(view);
-  // the first verse: everywhere by default, both verses drawn with the change at once
+  // New edits are local by default; explicitly link the phrase to every appearance.
   const choice = s.find("#sbc-where-tune");
   assert.deepEqual(choice.children.map((o) => o.textContent), ["Everywhere it's sung (2 places)", "Only here (Verse 1)"]);
+  assert.equal(choice.children.find((o) => o.attrs.selected !== undefined).value, "place");
+  choice.emit("change", { target: { value: "line" } });
   s.find('[data-note="1"]').emit("click");
   s.find("#sbc-note-pitch").emit("change", { target: { value: "5" } });
   assert.equal(s.commits.at(-1).path, "tune.a1");
@@ -651,7 +653,7 @@ test("one place or everywhere: the tune and the chords are changed where the per
   assert.deepEqual(s.commits.at(-1), { path: "chords.verse:last.0", value: null });
 });
 
-test("a melisma: a note split sings its syllable on, moved and joined again; the ending freed when asked", () => {
+test("a melisma: a note split sings its syllable on, moved and joined again; the ending and leaps freely rewritten", () => {
   const view = score();
   const s = setup(view);
   s.find('[data-note="1"]').emit("click"); // "this", a whole beat
@@ -663,7 +665,7 @@ test("a melisma: a note split sings its syllable on, moved and joined again; the
   assert.equal(drawn.length, 6);
   assert(drawn[2].classList.contains("is-slur") && drawn[2].textContent === "‿", "the slurred note is drawn joined");
   assert.match(drawn[2].getAttribute("aria-label"), /^this, held on/);
-  assert.match(s.find(".sbc-health").textContent, /5 syllable slots preserved, 1 slurred on \(a melisma\)/);
+  assert.match(s.find(".sbc-health").textContent, /5 syllables, 1 slurred on \(a melisma\)/);
   // the slurred note moved up a step, and its start moved: the boundary with the note before moves with it
   s.find('[data-note="2"]').emit("click");
   s.find("#sbc-note-pitch").emit("change", { target: { value: "5" } });
@@ -671,17 +673,14 @@ test("a melisma: a note split sings its syllable on, moved and joined again; the
   s.find("#sbc-note-start").emit("change", { target: { value: "0.75" } });
   notes = s.commits.at(-1).value;
   assert.deepEqual([notes[1].duration, notes[2].onset, notes[2].duration], [0.75, 0.75, 0.25]);
-  // a melisma moves a fifth at most
+  // A melisma can explore the whole editable range.
   const pitches = s.find("#sbc-note-pitch").children.map((o) => Number(o.value));
-  assert(Math.max(...pitches) <= 4 + 4 && Math.min(...pitches) >= 4 - 4, JSON.stringify(pitches));
+  assert.equal(Math.max(...pitches), 9);
   s.clickText("Join");
   notes = s.commits.at(-1).value;
   assert.equal(notes.length, 5);
   assert.deepEqual(notes[1], { degree: 4, onset: 0, duration: 1 });
-  // the ending keeps its home note unless it is freed
-  s.find('[data-note="4"]').emit("click");
-  assert(s.find("#sbc-note-pitch").children.every((o) => (Number(o.value) - 1) % 7 === 0));
-  s.find("#sbc-option-free the ending").emit("change", { target: { checked: true } });
+  // The ending has the same controls as every other note.
   s.find('[data-note="4"]').emit("click");
   assert(s.find("#sbc-note-pitch").children.some((o) => Number(o.value) === 2));
   s.find("#sbc-note-pitch").emit("change", { target: { value: "2" } });
@@ -744,7 +743,7 @@ test("a line's own count: a syllable added or merged away waits for its words, t
   s.find('[data-note="1"]').emit("click"); // "this", a whole beat
   s.clickText("New syllable");
   assert.equal(s.commits.length, 0, "nothing is sung until the words are written");
-  assert.match(s.find(".sbc-own").textContent, /6 syllables; the tune's line has 5/);
+  assert.match(s.find(".sbc-own").textContent, /5 \/ 6 syllables/);
   const input = s.find("#sbc-own-words");
   input.value = "Sing this song your way"; input.emit("input");
   s.clickText("Use these words");
@@ -764,7 +763,7 @@ test("a line's own count: a syllable added or merged away waits for its words, t
   const c = setup(again);
   c.find('[data-note="2"]').emit("click");
   c.clickText("Merge");
-  assert.match(c.find(".sbc-own").textContent, /4 syllables; the tune's line has 5/);
+  assert.match(c.find(".sbc-own").textContent, /5 \/ 4 syllables/);
   assert.equal(c.phrase().notes.length, 4);
   c.clickText("Cancel");
   assert.equal(c.phrase().notes.length, 5);
@@ -780,4 +779,53 @@ test("a line's own count: a syllable added or merged away waits for its words, t
   assert.equal(m.commits.at(-1).value.words, "Sing this song your way");
   assert.equal(m.commits.at(-1).value.notes[2].degree, 5);
   assert(!m.root.querySelectorAll("button").some((b) => /Everywhere it's sung/.test(b.textContent)));
+});
+
+function writableScore() {
+  const view = score(), p = view.composition.sections[1].phrases[0];
+  Object.assign(p, { own_path: 'line.verse:wire.0', lyric_text: 'Sing this song your way', syllable_count: 5, tune_syllable_count: 5 });
+  view.composition.sections[1].phrases.push({ ...clone(p), id: 'a2', path: 'tune.a2', own_path: 'line.verse:wire.1' });
+  return view;
+}
+test('deleting a syllable leaves a rest and a draft that survives navigation and refresh', () => {
+  const s = setup(writableScore());
+  s.find('[data-note="2"]').emit('keydown', { key: 'Delete' });
+  assert.equal(s.phrase().notes.length, 4);
+  assert.equal(s.phrase().notes[2].onset, 2, 'later notes do not close the gap');
+  let input = s.find('#sbc-own-words'); input.value = 'We sing it now'; input.emit('input');
+  s.find('#sbc-phrase-1').emit('click');
+  s.find('#sbc-phrase-0').emit('click');
+  assert.equal(s.find('#sbc-own-words').value, 'We sing it now');
+  s.window.SongbirdComposer.render(writableScore());
+  assert.equal(s.find('#sbc-own-words').value, 'We sing it now');
+  s.clickText('Use these words');
+  assert.equal(s.commits.at(-1).path, 'line.verse:wire.0');
+  assert.equal(s.commits.at(-1).value.notes.length, 4);
+});
+test('drawing into a rest and copying notes to another phrase does not alter the source', () => {
+  const v = writableScore(); v.composition.sections[1].phrases[0].notes[1].duration = 0.5;
+  const s = setup(v);
+  s.find('[data-note="1"]').emit('click'); s.clickText('Add note');
+  assert.equal(s.phrase().notes.length, 6);
+  assert.equal(s.phrase().notes[2].onset, 0.5);
+  assert.equal(s.commits.length, 0, 'words and notes wait to be saved together');
+  s.clickText('Copy notes'); s.clickText('Cancel');
+  s.find('#sbc-phrase-1').emit('click'); s.clickText('Paste notes');
+  assert.equal(s.root.querySelectorAll('.sbc-note').length, 6);
+  assert.equal(s.phrase().notes.length, 5);
+});
+test('writing words first fits their rhythm and chromatic edits use the existing own-line format', () => {
+  const s = setup(writableScore());
+  s.clickText('Write line');
+  const input = s.find('#sbc-own-words'); input.value = 'We sing now'; input.emit('input');
+  s.clickText('Fit notes to words');
+  assert.equal(s.phrase().notes.length, 3);
+  s.clickText('Use these words');
+  assert.equal(s.commits.at(-1).value.words, 'We sing now');
+  assert.equal(s.commits.at(-1).value.notes.length, 3);
+  const m = setup(writableScore());
+  m.find('[data-note="1"]').emit('click');
+  m.find('#sbc-note-alter').emit('change', { target: { value: '-1' } });
+  assert.equal(m.commits.at(-1).path, 'line.verse:wire.0');
+  assert.equal(m.commits.at(-1).value.notes[1].alter, -1);
 });

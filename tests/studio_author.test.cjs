@@ -19,7 +19,7 @@ function setup() {
   const parent = new Element('root');
   const doc = {activeElement: null, createElement: (tag) => new Element(tag), querySelector: () => ({content: 'token'})};
   let revision = 0, edits = {}, pending, requests = 0;
-  const win = {StudioBridge: {
+  const win = {SongbirdModel: require('../songbird/studio/model.js'), StudioBridge: {
     snapshot: () => ({revision, edits: JSON.parse(JSON.stringify(edits))}),
     replaceEdits: (next) => { edits = next; revision++; }, toast() {},
   }};
@@ -181,4 +181,21 @@ test('a say of the person\'s own that is no sense shows as theirs', () => {
   s.type('The bass{base} is a heart-beat that no-bo-dy wrote');
   assert.equal(shown(s), 'low note fish');
   assert.equal(s.all().find((x) => x.className === 'say-own').textContent, 'your way: {base}');
+});
+
+test('fitting new words stores their notes atomically, and later words preserve the custom melody', async () => {
+  const s = setup(), v = s.view();
+  const p = v.composition.sections[0].phrases[0];
+  Object.assign(p, { own_path: 'line.verse:wire.0', duration_beats: 4, pickup_beats: 0,
+    bounds: { min_onset: 0, max_end: 4, max_final_onset: 3.75, min_duration: 0.25 },
+    notes: [1, 3, 5, 1].map((degree, i) => ({ degree, onset: i, duration: 1 })) });
+  s.render(v); s.type('We sing now');
+  s.all().find((x) => x.textContent === 'Fit notes to words').listeners.click();
+  s.answer(); await s.flush();
+  const entry = s.edits['line.verse:wire.0'];
+  assert.equal(entry.words, 'We sing now'); assert.equal(entry.notes.length, 3);
+  Object.assign(p, { own: 'verse:wire.0', lyric_text: entry.words, syllable_count: 3, notes: entry.notes });
+  s.render(v); s.type('We sing here'); s.save(); s.answer(); await s.flush();
+  assert.equal(s.edits['line.verse:wire.0'].words, 'We sing here');
+  assert.deepEqual(s.edits['line.verse:wire.0'].notes, entry.notes);
 });

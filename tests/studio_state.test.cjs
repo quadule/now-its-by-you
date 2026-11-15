@@ -343,3 +343,25 @@ test('the masthead counts the padlocks a person sees: a cell\'s lock is one, not
   assert.equal(run('lockCount(["arrange.verse:0.synthpad.level", "arrange.refrain:1.synthpad.level"])'), 2);
   assert.equal(run('lockCount([])'), 0);
 });
+
+test('a checked paste is atomic and explicit releases also override inherited parts', async () => {
+  const s = studio(); let sent;
+  s.context.fetch = async (_, options) => { sent = JSON.parse(options.body); return { ok: true, json: async () => ({ problems: [] }) }; };
+  await s.run('applyPatch({"part.guitar.verse:0.0": null, "lyrics.verse:wire.0": "We sing now"}, "Paste phrase")');
+  assert.equal(sent.edits['part.guitar.verse:0.0'], null);
+  assert.equal(s.run('state.undo.length'), 1);
+  s.run('travelHistory("undo")');
+  assert.deepEqual(plain(s.run('state.edits')), {});
+  s.context.fetch = async () => ({ ok: true, json: async () => ({ problems: [{ path: 'lyrics.verse:wire.0', why: 'unknown word' }] }) });
+  await assert.rejects(s.run('applyPatch({"lyrics.verse:wire.0":"invalid", tempo: 90})'), /unknown word/);
+  assert.deepEqual(plain(s.run('state.edits')), {});
+});
+test('a slow paste cannot overwrite a newer edit', async () => {
+  const s = studio(); let resolve;
+  s.context.fetch = () => new Promise((r) => { resolve = r; });
+  const pending = s.run('applyPatch({tempo: 80}, "Paste")');
+  s.run('setEdit("tempo", 100)');
+  resolve({ ok: true, json: async () => ({ problems: [] }) });
+  await assert.rejects(pending, /song changed/);
+  assert.equal(s.run('state.edits.tempo'), 100);
+});

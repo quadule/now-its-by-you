@@ -151,6 +151,7 @@
     row.count.classList.toggle("is-valid", n === row.phrase.syllable_count);
     row.input.setAttribute("aria-invalid", String(n !== row.phrase.syllable_count));
     row.input.classList.toggle("is-dirty", row.input.value !== row.base);
+    if (row.fit) row.fit.hidden = n === row.phrase.syllable_count;
     says(row);
   }
   // `row`: one line used on its own (the score's column): its refusal, its status and what follows are its own.
@@ -184,10 +185,10 @@
       if (problems.length) throw new Error(problems.map((p) => `Line ${Number(p.path.split(".").at(-1)) + 1}: ${p.why}`).join(" "));
       if (bridge().snapshot().revision !== snapshot.revision) throw new Error("The song changed while this was checked: use it again.");
       bridge().replaceEdits(next, `Write ${section.label.toLowerCase()}`);
-      for (const row of section.rows.values()) if (paths.has(row.phrase.lyric_path)) {
+      for (const row of section.rows.values()) if (paths.has(row.phrase.lyric_path) || paths.has(row.phrase.own_path)) {
         // Typing can continue while validation runs. Only the submitted text
         // becomes the base; newer typing must remain an unapplied draft.
-        row.base = patch[row.phrase.lyric_path] ?? submitted.get(row.phrase.lyric_path);
+        row.base = patch[row.phrase.own_path]?.words ?? patch[row.phrase.lyric_path] ?? submitted.get(row.phrase.lyric_path);
       }
       status.textContent = row ? "In your song." : "In your song. Hear the section to listen.";
       bridge().toast(row ? "Your line is in the song. Undo takes it back." : "Your words are in the song. Undo takes them back.");
@@ -214,14 +215,21 @@
         wrong[0].input.focus();
         return;
       }
-      apply(section, Object.fromEntries(changed.map((row) => [row.phrase.lyric_path, row.input.value])));
+      apply(section, Object.assign({}, ...changed.map((row) => linePatch(row))));
     });
+    const fit = button("Fit notes to words", () => {
+      const changed = [...section.rows.values()].filter((row) => row.input.value !== row.base);
+      if (!changed.length) { status.textContent = "Write your new words first."; return; }
+      try { apply(section, Object.assign({}, ...changed.map((row) => linePatch(row, syllables(row.input.value) !== row.phrase.syllable_count)))); }
+      catch (error) { status.textContent = error.message; }
+    });
+    fit.title = "Keep each line's melodic contour and fit a new rhythm to its words. Undo restores both.";
     const discard = button("Discard typing", () => {
       for (const row of section.rows.values()) { row.input.value = row.base; count(row); }
       status.textContent = "";
     });
     const actions = node("div", "author-actions");
-    actions.append(section.save, discard);
+    actions.append(section.save, fit, discard);
     details.append(summary, hint, lines, actions, status);
     section.hint = hint;  // kept: the score's line state moves it out of the details
     // how a line is written, shown beside the fields (the score's Page): an example of each mark and what it does
@@ -278,6 +286,10 @@
   }
   // A line's own Use and Discard, for the score's column: one line at a time, as the column is (a draft typed in
   // another line stays a draft there, and a refusal of this one refuses only this one)
+  function linePatch(row, fit = false) {
+    return window.SongbirdModel?.lyricPatch ? window.SongbirdModel.lyricPatch(row.phrase, row.input.value, fit)
+      : { [row.phrase.lyric_path]: row.input.value };
+  }
   function lineActions(section, row, options) {
     if (!row.use) {
       row.use = button("Use this line", () => {
@@ -288,12 +300,18 @@
           row.input.focus();
           return;
         }
-        apply(section, {[row.phrase.lyric_path]: text}, row, () => row.next?.());
+        apply(section, linePatch(row), row, () => row.next?.());
       });
       row.use.className = "btn";
       const discard = button("Discard typing", () => { row.input.value = row.base; count(row); row.status.textContent = ""; });
       row.actions = node("div", "author-actions");
-      row.actions.append(row.use, discard);
+      row.fit = button("Fit notes to words", () => {
+        try { apply(section, linePatch(row, true), row, () => row.next?.()); }
+        catch (error) { row.status.textContent = error.message; }
+      });
+      row.fit.title = "Fit the melody's contour to this line's syllables, as a new rhythm.";
+      row.fit.hidden = syllables(row.input.value) === row.phrase.syllable_count;
+      row.actions.append(row.use, row.fit, discard);
       row.status = node("p", "author-status");
       row.status.setAttribute("role", "status");
       row.input.addEventListener("input", () => { row.status.textContent = "Not in the song until you use it."; });

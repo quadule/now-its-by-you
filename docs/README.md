@@ -39,6 +39,7 @@ part, and decided by ear.
 6. [The look](IDENTITY.md): the palette, type and shared pieces every page uses.
 7. [The tools](../tools/README.md): what made and checks the song, none of it needed to run it.
 8. Notes: [performance](notes/PERFORMANCE.md), [rendering in the browser](notes/BROWSER-RENDER.md),
+   [composing beyond the seed](notes/STUDIO-COMPOSITION.md),
    [portability](notes/PORTABILITY.md), [the studio's redesign](notes/STUDIO-REDESIGN.md),
    [open questions](notes/open-questions.md).
 

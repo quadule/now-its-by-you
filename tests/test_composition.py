@@ -501,7 +501,6 @@ def five(notes):  # "song" over five notes: its own and four slurred on
 @pytest.mark.parametrize("change,why", [
     (five, "at most 4 notes"),
     (lambda n: n[4].update(onset=3.25, duration=0.25), "starts where note 4 ends"),
-    (lambda n: n[5].update(degree=9), "a fifth at most"),
     (lambda n: n[5].update(duration=0.2), "at least a quarter beat"),
 ])
 def test_a_melisma_keeps_its_fences(change, why):
@@ -576,4 +575,30 @@ def test_an_ending_off_its_home_note_is_kept_and_said():
     assert not next(p for s in C.view(G, choose_params(G), None)["sections"] for p in s["phrases"]
                     if p["id"] == "r4")["advice"]
     bounds = C.bounds(G, G.phrases["r4"])
-    assert (bounds["min_degree"], bounds["max_degree"]) == (-5, 9)  # three steps past the song's own notes
+    assert (bounds["min_degree"], bounds["max_degree"]) == (-12, 16)  # a wide register for authored music
+
+
+def test_authored_music_can_use_wide_leaps_without_changing_generation():
+    base = choose_params(G)
+    before = base.to_dict()
+    notes = C.phrase_value(G, base, "v1")
+    notes[1]["degree"] = C.bounds(G, G.phrases["v1"])["max_degree"]
+    clean, problems = E.check(G, {"tune.verse:0.0": notes})
+    assert not problems
+    changed = choose_params(G, base, overrides=clean)
+    returned = C.view(G, changed, None)
+    verse = next(s for s in returned["sections"] if s["id"] == "verse:0")
+    assert verse["phrases"][0]["notes"][1]["degree"] == notes[1]["degree"]
+    assert base.to_dict() == before
+    replayed = Params.from_dict(json.loads(json.dumps(changed.to_dict())))
+    assert realize(G, replayed) == realize(G, changed)
+
+
+def test_the_view_exposes_exact_saved_instrument_notes_including_a_rest():
+    mine = {"part.guitar.verse:0.0": [[0, 96, 0, 80], [0, 96, 4, 110]], "part.bass.verse:0.0": []}
+    result = E.resolve(G, None, ADA, DAY, mine)
+    assert not result.problems
+    view = C.view(G, result.params, result.lyrics)
+    p = next(s for s in view["sections"] if s["id"] == "verse:0")["phrases"][0]
+    assert p["part_notes"] == {"guitar": mine["part.guitar.verse:0.0"], "bass": []}
+    assert view["part_seed_tonic"] == G.seed_params["tonic"]

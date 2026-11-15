@@ -116,7 +116,7 @@ test("the scope switch: everywhere first, here only, and the last one however ma
   assert.deepEqual(opts.map((o) => o.id), ["line", "place", "last"]);
   assert.equal(opts[0].label, "everywhere it's sung (4)");
   assert.equal(opts[2].label, "the last refrain, however many");
-  assert.equal(M.scopeStart(p, "tune"), "line");
+  assert.equal(M.scopeStart(p, "tune"), "place");
   assert.equal(M.scopeStart(p, "chords"), "last");
   assert.deepEqual(M.scopeOptions({ place: "intro:0.0", appearances: 1 }, { name: "intro", label: "Intro" }).map((o) => o.id), ["line", "place"]);
   assert.deepEqual(M.scopeOptions({}, {}), []);
@@ -181,4 +181,34 @@ test("a moved region is one a person moved, not every one whose place a move shi
   const far = ["verse:0", "refrain:0", "verse:1", "refrain:1", "bridge:0", "refrain:2", "tag:0", "outro:0", "intro:0"];
   assert.deepEqual([...M.movedIds(program, far)], ["intro:0"]);  // the intro to the end: only it
   assert.equal(M.movedIds(undefined, now).size, 0);  // no order of the person's: nothing moved
+});
+
+test("new words can establish their own rhythm without changing the source", () => {
+  const phrase = { duration_beats: 8, pickup_beats: 0.5,
+    bounds: { min_onset: -0.5, max_end: 8, max_final_onset: 7.25, min_duration: 0.25 },
+    notes: [{ degree: 1, onset: -0.5, duration: 1 }, { degree: 8, alter: -1, onset: 0.5, duration: 7 }] };
+  const before = JSON.stringify(phrase), fitted = M.fitNotes(phrase, 5);
+  assert.equal(fitted.length, 5);
+  assert.equal(fitted[0].degree, 1);
+  assert.equal(fitted.at(-1).degree, 8);
+  assert.equal(fitted.at(-1).alter, -1);
+  assert(fitted.every((n, i) => n.duration >= 0.25 && (!i || n.onset >= fitted[i - 1].onset + fitted[i - 1].duration)));
+  assert.equal(JSON.stringify(phrase), before);
+  assert.throws(() => M.fitNotes(phrase, 33), /32/);
+  assert.throws(() => M.fitNotes({ ...phrase, duration_beats: 1, bounds: { ...phrase.bounds, max_end: 1 } }, 20), /more room/);
+});
+
+test("phrase contents copy as portable local edits, including rests and inherited-part release", () => {
+  const p = { duration_beats: 4, pickup_beats: 0, bounds: { min_onset: 0, max_final_onset: 3.75, min_degree: -12, max_degree: 16 },
+    notes: [{ degree: 3, onset: 0, duration: 2 }, { degree: 7, onset: 2, duration: 2 }], lyric_text: "Sing now", chords: [["I"], ["V"]],
+    part_notes: { guitar: [[0, 96, 0, 100]], bass: [] } };
+  const q = { ...p, own_path: "line.verse:wire.0", place: "verse:0.0", part_key: "verse:0.0", part_notes: { fiddle: [[0, 96, 0, 90]] } };
+  const patch = M.phrasePatch(p, q);
+  assert.equal(patch['line.verse:wire.0'].words, "Sing now");
+  assert.deepEqual(patch['chords.verse:0.0'], [["I"], ["V"]]);
+  assert.deepEqual(patch['part.bass.verse:0.0'], []);
+  assert.equal(patch['part.fiddle.verse:0.0'], null);
+  patch['part.guitar.verse:0.0'][0][0] = 100;
+  assert.equal(p.part_notes.guitar[0][0], 0, "the source is immutable");
+  assert.throws(() => M.sectionPatch({ phrases: [p] }, { phrases: [q, q] }), /same number/);
 });

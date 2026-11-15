@@ -35,7 +35,7 @@ their notes are sung with them.
 Checked as one thing (`composition.check_own`):
 
 - the notes keep every fence a tune edit keeps (`composition.check_phrase`:
-  range, leaps, no overlaps, inside the line, room before the next pickup,
+  range, no overlaps, inside the line, room before the next pickup,
   melismas of up to four notes), except the count: from 1 to `OWN_MAX` (32)
   syllables, a syllable being a note not slurred onto the one before;
 - the words are checked as a written line is (`check_lyric`), against that
@@ -132,3 +132,11 @@ release is **Use the tune's line**.
   every bank verse rewritten for it;
 - a take played on the keyboard that changes the count (a take has no words);
 - carrying gestures across a count change.
+
+## Direct composition controls (November 15, 2026)
+
+The same format now supports drawing and deleting syllables, fitting a new
+rhythm to new words, chromatic syllables, and copying a whole phrase or
+section's contents. Endings and wide leaps are freely editable. Draft words
+and notes stay together while navigating, and pronunciation is checked before
+an apply replaces them. See [the studio](../STUDIO.md#instrument-notes-and-reusable-contents).

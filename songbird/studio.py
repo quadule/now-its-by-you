@@ -107,6 +107,7 @@ STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
 # the score (docs/notes/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html)
 STATIC["/renderer.js"] = ("renderer.js", "text/javascript; charset=utf-8")  # previews and recordings, one interface
 STATIC["/model.js"] = ("model.js", "text/javascript; charset=utf-8")
+STATIC["/parts.js"] = ("parts.js", "text/javascript; charset=utf-8")
 STATIC["/score.js"] = ("score.js", "text/javascript; charset=utf-8")
 STATIC["/score.css"] = ("score.css", "text/css; charset=utf-8")
 PAGES = {"": "index.html", "/index.html": "index.html"}

@@ -244,6 +244,18 @@ function setEdits(patch, label = "Edit song", group = null) {
   return commitEdits(next, label, group);
 }
 
+// Clipboard operations replace several related choices together. Check the whole
+// result before recording one undo step; explicit nulls also release inheritance.
+async function applyPatch(patch, label = "Edit song") {
+  const revision = state.editRevision, next = { ...copyEdits(), ...copyEdits(patch) };
+  const view = await api("/api/song", { edits: next });
+  const paths = new Set(Object.keys(patch));
+  const problems = (view.problems || []).filter((p) => paths.has(p.path));
+  if (problems.length) throw new Error(problems.map((p) => p.why).join(" "));
+  if (state.editRevision !== revision) throw new Error("The song changed. Paste again to use its current version.");
+  return commitEdits(next, label);
+}
+
 function clearEdits(paths, label = "Restore song choices") {
   return setEdits(Object.fromEntries(paths.map((path) => [path, null])), label);
 }
@@ -1489,7 +1501,7 @@ function showWorkspace(name, focus = false) {
 }
 
 window.StudioBridge = {
-  setEdit, setEdits, releaseEdit, clearEdits, listen, toast, pauseAudio,
+  setEdit, setEdits, applyPatch, releaseEdit, clearEdits, listen, toast, pauseAudio,
   getEdits: () => copyEdits(),
   snapshot: () => ({ start: state.start ? JSON.parse(JSON.stringify(state.start)) : null, edits: copyEdits(), revision: state.editRevision }),
   replaceEdits: (edits, label = "Load a saved draft") => commitEdits(edits, label),

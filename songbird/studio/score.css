@@ -343,6 +343,15 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .sbc-own { grid-column: 1 / -1; display: grid; gap: 5px; padding: 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--card); }
 .sbc-own-words { font-size: 13px; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--card); color: var(--ink); padding: 4px 6px; width: 100%; box-sizing: border-box; }
 .sbc-own .is-valid { color: var(--green); }
+.sbc-notes > div > .sbc-own { margin: 10px 14px; }
+.sbc-part-editor .sbc-key.is-black { background: var(--wash); font-weight: 600; }
+.sbc-part-editor .sbc-note { font-size: 10px; overflow: hidden; }
+.cell.custom { color: var(--hand); background: var(--hand-wash); }
+.custom-notes { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.sbc-part-editor .sbc-field { flex-wrap: wrap; }
+.sbc-part-editor .sbc-field input { width: 6.5em; }
+#sbc-part { max-width: 180px; }
+.sbc-notes .sbc-roll-scroll { max-height: 480px; }
 .sbc-muted { color: var(--ink-3); font-size: 11px; }
 .sbc-overline { font: 600 11px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .sbc-advice { flex-basis: 100%; color: var(--ink); }

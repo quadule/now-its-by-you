@@ -159,7 +159,7 @@
   }
 
   // ------------------------------------------------------------------ the scope of a chord or tune edit
-  // Everywhere this line is sung (the default: a line is the unit the song is made of), here only, and at the
+  // Everywhere this line is sung, here only (the default for a new edit), and at the
   // last of several times, the last one however many there are (docs/STUDIO.md, "Looser harmony and melody").
   function scopeOptions(phrase, section) {
     if (!phrase?.place) return [];
@@ -172,7 +172,7 @@
   }
   function scopeStart(phrase, kind) {  // where a place has its own, the switch starts there, so a change is heard there
     const from = phrase?.[`${kind}_scope`]?.from;
-    return from === "place" || from === "last" ? from : "line";
+    return from || (phrase?.place ? "place" : "line");
   }
 
   // ------------------------------------------------------------------ what is selected, and what plays
@@ -247,9 +247,74 @@
     return level === "out" ? `${section.label}: the ${track.label} sits out` : `${section.label}: the ${track.label} now ${level === "plays" ? "plays" : `plays ${level}`}`;
   }
 
+  // Words can establish a new rhythm. Keep the contour and span, allocate whole
+  // grid steps to each syllable, and leave the original phrase untouched.
+  function fitNotes(phrase, count) {
+    const source = (phrase.notes || []).filter((n) => !n.slur), b = phrase.bounds || {};
+    if (!Number.isInteger(count) || count < 1 || count > 32) throw new Error("Write 1 to 32 syllables for this line.");
+    if (!source.length) throw new Error("Choose a line with a melody first.");
+    const grid = b.min_duration || 0.25;
+    const start = Math.max(b.min_onset ?? -phrase.pickup_beats, source[0].onset);
+    const end = Math.min(b.max_end ?? phrase.duration_beats, Math.max(source.at(-1).onset + source.at(-1).duration, start + count * grid));
+    const step = Math.floor((end - start + 1e-8) / count / grid) * grid;
+    if (step < grid || start + (count - 1) * step > (b.max_final_onset ?? end - grid) + 1e-8)
+      throw new Error("These words need more room. Use fewer syllables in this line.");
+    return Array.from({ length: count }, (_, i) => {
+      const n = source[Math.round(i * (source.length - 1) / Math.max(1, count - 1))];
+      return { degree: n.degree, ...(n.alter ? { alter: n.alter } : {}), onset: start + i * step,
+        duration: i === count - 1 ? end - (start + i * step) : step };
+    });
+  }
+  function writtenNotes(notes) {
+    return notes.map((n) => ({ degree: n.degree, onset: n.onset, duration: n.duration,
+      ...(n.slur ? { slur: true } : n.alter ? { alter: n.alter } : {}) }));
+  }
+  function lyricPatch(phrase, text, fit = false) {
+    if (fit || phrase.own) {
+      if (!phrase.own_path) throw new Error("Choose a sung line to write new words.");
+      const count = String(text).replace(/\{[^{}]*\}/g, "").trim().split(/[\s-]+/u).filter(Boolean).length;
+      return { [phrase.own_path]: { words: text, notes: fit ? fitNotes(phrase, count) : writtenNotes(phrase.notes) } };
+    }
+    return { [phrase.lyric_path]: text };
+  }
+  function phrasePatch(source, target) {
+    const a = source.bounds?.min_onset ?? -(source.pickup_beats || 0), b = target.bounds?.min_onset ?? -(target.pickup_beats || 0);
+    const ratio = (target.duration_beats - b) / (source.duration_beats - a);
+    const notes = writtenNotes(source.notes).map((n) => ({ ...n, onset: b + (n.onset - a) * ratio, duration: n.duration * ratio }));
+    const limits = target.bounds || {}, count = notes.filter((n) => !n.slur).length;
+    if ((!count && target.tune_syllable_count !== 0) || notes.some((n) => n.duration < (limits.min_duration || 0.25) - 1e-8 ||
+      n.degree < limits.min_degree || n.degree > limits.max_degree) || notes.at(-1)?.onset > (limits.max_final_onset ?? target.duration_beats) + 1e-8)
+      throw new Error("This melody doesn't fit the destination. Choose a longer phrase or copy fewer notes.");
+    const patch = {};
+    if (target.own_path && source.lyric_text) {
+      patch[target.own_path] = { words: source.lyric_text, notes };
+    } else if (count) {
+      if (count !== target.tune_syllable_count || notes.some((n) => n.alter))
+        throw new Error("Paste these words and notes into a sung phrase.");
+      patch[target.place ? `tune.${target.place}` : target.path] = notes;
+    }
+    const bars = target.chords?.length || 0;
+    if (bars && source.chords?.length) patch[target.place ? `chords.${target.place}` : target.chords_path] =
+      Array.from({ length: bars }, (_, i) => [...source.chords[Math.floor(i * source.chords.length / bars)]]);
+    // Custom instrumental notes are optional: absence restores procedural playing
+    // at the destination; an empty array deliberately keeps a rest.
+    for (const player of new Set([...Object.keys(source.part_notes || {}), ...Object.keys(target.part_notes || {})])) {
+      const held = source.part_notes?.[player];
+      patch[`part.${player}.${target.part_key}`] = held ? held.map(([onset, duration, pitch, velocity]) =>
+        [Math.round((b + (onset / 96 - a) * ratio) * 96), Math.max(1, Math.round(duration * ratio)), pitch, velocity]) : null;
+    }
+    return patch;
+  }
+  function sectionPatch(source, target) {
+    if (!source?.phrases?.length || source.phrases.length !== target.phrases?.length)
+      throw new Error("Choose a section with the same number of phrases to paste these contents.");
+    return Object.assign({}, ...source.phrases.map((p, i) => phrasePatch(p, target.phrases[i])));
+  }
+
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
-    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, saidCell };
+    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, saidCell, fitNotes, writtenNotes, lyricPatch,
+    phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;
 })();

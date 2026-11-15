@@ -1,8 +1,9 @@
 """Small, portable arrangements and phrase edits, carried in rendition parameters.
 
 The editor speaks beats; the record stores scale degrees and grid units. A phrase
-keeps its syllable count, bar length and cadence so its words, harmony and future
-renditions still fit. Empty composition data leaves old renditions unchanged.
+keeps its bar length so harmony and future renditions still fit. A written
+line owns its words and syllable count; authored pitches and endings are free.
+Empty composition data leaves old renditions unchanged.
 
 A person's own lyric lines ("lines") are kept by the words they replace, not by
 where those words fall in the form: a verse's lines under the verse it sings
@@ -52,9 +53,8 @@ from .theory import MODES, SEVENTHS, chord_bass, chord_name, chord_tones, degree
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
 MELISMA = 4  # notes a syllable may be sung over: its own and three more, slurred (docs/STUDIO.md, "A freer melody")
-MELISMA_STEP = 4  # scale steps a melisma may move from one of its notes to the next (a fifth)
 OWN_MAX = 32  # syllables a line of its own may sing (docs/notes/OWN-COUNT-LINES.md)
-RANGE = 3  # scale steps a person's tune may go past the song's own lowest and highest notes
+RANGE = 10  # authored melodies may explore well beyond the seed's register
 MAX_SECTIONS = 48
 LYRIC_PATH = re.compile(r"lyrics\.([A-Za-z][A-Za-z0-9_-]*):([A-Za-z0-9_-]+)\.(\d+)")
 LAST = "last"  # the last refrain's round, which the bank's rules always sing the same way
@@ -337,7 +337,7 @@ def bounds(genome, phrase) -> dict:
             "min_onset": -phrase.pickup / genome.meter.beat,
             "max_end": end, "max_final_onset": max(last, end - pickup - GRID),
             "min_duration": GRID, "grid": GRID, "cadence_degree": phrase.sung[-1].degree if phrase.sung else None,
-            "max_leap": 7, "melisma": MELISMA, "melisma_step": MELISMA_STEP}
+            "max_leap": high - low, "melisma": MELISMA, "melisma_step": high - low}
 
 
 def _finite(value) -> float:
@@ -380,7 +380,7 @@ def check_phrase(genome, pid: str, value, free: bool = False) -> list[dict] | No
         raise ValueError(f"this line needs {want} notes, one for each syllable (and any more slurred onto them)")
     limits = bounds(genome, phrase)
     result = []
-    k, run = -1, 0  # the syllable each note sings, and how many notes it has so far
+    run = 0  # how many continuations this syllable has so far
     for i, item in enumerate(value):
         if not isinstance(item, dict) or not {"degree", "onset", "duration"} <= set(item) <= {
                 "degree", "onset", "duration", "slur"} | ({"alter"} if free else set()):
@@ -406,13 +406,8 @@ def check_phrase(genome, pid: str, value, free: bool = False) -> list[dict] | No
                 raise ValueError(f"a syllable is sung over at most {MELISMA} notes")
             if abs(onset - (result[-1]["onset"] + result[-1]["duration"])) > 1e-8:
                 raise ValueError(f"note {i + 1} is slurred, so it starts where note {i} ends: the vowel goes on")
-            if abs(degree - result[-1]["degree"]) > MELISMA_STEP:
-                raise ValueError(f"a melisma moves a fifth at most; note {i + 1} leaps further")
         else:
-            k, run = k + 1, 0
-            own_leap = abs(phrase.sung[k].degree - phrase.sung[k - 1].degree) if 0 < k < want and not free else 0
-            if result and abs(degree - result[-1]["degree"]) > max(7, own_leap):
-                raise ValueError(f"the leap into note {i + 1} is wider than an octave")
+            run = 0
         alter = item.get("alter", 0)  # a line of its own's note a half step off its degree (a tune line's keeps its own)
         if isinstance(alter, bool) or alter not in (-1, 0, 1):
             raise ValueError(f"note {i + 1} is a half step off its degree at most: alter -1, 0 or 1")
@@ -1046,7 +1041,10 @@ def view(genome, params, lyrics) -> dict:
                                     else "", str(at) in patches[index]),
                             # a person's own notes played in for a player here (notes in)
                             "part_key": f"{identity}.{j}",
-                            "parts": sorted(p for p, held in in_parts.items() if f"{identity}.{j}" in held)})
+                            "part_editable": j < len(section.phrases),
+                            "parts": sorted(p for p, held in in_parts.items() if f"{identity}.{j}" in held),
+                            "part_notes": {p: held[f"{identity}.{j}"] for p, held in in_parts.items()
+                                           if f"{identity}.{j}" in held}})
             cursor += phrase.bars * meter.bar
         nth = int(identity.rsplit(":", 1)[1])
         label = name.replace("bridge2", "Bridge 2").title()
@@ -1067,13 +1065,13 @@ def view(genome, params, lyrics) -> dict:
                               for kind in ("tune", "chords")},
             "edited_chords": sorted(p for p in chorded if p in song.phrases), "chords_per_bar": chords_per_bar(song),
             "chord_choices": chord_choices(params),
-            "players": playable(params), "performed": {p: sorted(held) for p, held in in_parts.items()},
+            "players": playable(params), "part_seed_tonic": int(song.seed_params["tonic"]),
+            "performed": {p: sorted(held) for p, held in in_parts.items()},
             "arranged": bool(params.composition.get("order")),
             # the words said two ways, and the rules that choose (songbird.heteronyms): the words editor's toggles
             "say": _say_table(),
-            "guidance":"Notes stay in the song's range. Keep one note per syllable and the final home note. "
-                        "A tune line changes everywhere it appears, or only in one place. Repeated sections keep "
-                        "their story order."}
+            "guidance": "Draw, move, copy or delete notes. Words and notes travel together when the syllable "
+                        "count changes. Choose whether a tune edit applies here or to every repeat."}
 
 
 # ---------------------------------------------------------------- a player's notes, played in (notes in)

@@ -11,10 +11,9 @@
     locrian: [0, 1, 3, 5, 6, 8, 10],
   };
   const state = {
-    view: null, section: -1, phrase: 0, note: null, snap: 0.25, zoom: 1,
+    view: null, section: -1, phrase: 0, note: null, snap: 0.25, zoom: 1, player: "voice",
     loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true, chord: null,
     where: { tune: null, chords: null }, // one place or everywhere: "line", "place" or "last" (null: as the line has it)
-    freeEnding: false, // the ending may leave its home note (the program keeps it, and says so)
     // a line whose count of syllables changed, waiting for its words (docs/notes/OWN-COUNT-LINES.md):
     // { path: its line. path, notes, was: the line's notes before }
     draft: null,
@@ -32,6 +31,12 @@
   const section = () => sections()[state.section];
   const phrase = () => section()?.phrases?.[state.phrase];
   const note = () => phrase()?.notes?.[state.note];
+  const drafts = new Map();
+  let clipboard = null, phraseClipboard = null;
+  Object.defineProperty(state, "draft", {
+    get: () => drafts.get(phrase()?.own_path) || null,
+    set: (value) => { const key = value?.path || phrase()?.own_path; if (value) drafts.set(key, value); else drafts.delete(key); },
+  });
   const round = (n) => Math.round(n * 10000) / 10000;
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
   const fmt = (n) => Number.isInteger(n) ? String(n) : String(round(n));
@@ -124,7 +129,7 @@
   // time its section comes, however many there are (tune.<section>:last.<line>). Starts on where the place's own
   // come from; the choice is the person's, never made for them.
   function where(kind, p = phrase()) {
-    const chosen = state.where[kind] || p?.[`${kind}_scope`]?.from || "line";
+    const chosen = state.where[kind] || p?.[`${kind}_scope`]?.from || (p?.place ? "place" : "line");
     return chosen === "last" && !p?.place_last ? "place" : chosen === "place" && !p?.place ? "line" : chosen;
   }
   function scopedPath(kind, p = phrase()) {
@@ -140,7 +145,7 @@
   }
   function scopeChoice(kind) {
     const p = phrase(), s = section();
-    if (!p?.place || (kind === "tune" && p.own)) return null;  // a line of its own is sung with its verse's words alone
+    if (!p?.place || (kind === "tune" && (p.own || state.draft))) return null;
     const count = p.appearances || 1, name = s.name.replace("bridge2", "second bridge");
     const options = [["line", count > 1 ? `Everywhere it's sung (${count} places)` : "Everywhere it's sung"],
       ["place", `Only here (${s.label})`]];
@@ -193,7 +198,7 @@
     const unit = Math.abs(n.duration * 3 - Math.round(n.duration * 3)) < 1e-6 && Math.abs(n.duration * 4 - Math.round(n.duration * 4)) > 1e-6 ? 1 / 3 : b.grid;
     const half = clamp(Math.round(n.duration / 2 / unit) * unit, b.min_duration, n.duration - b.min_duration);
     const notes = p.notes.map((x) => ({ ...x }));
-    notes.splice(i, 1, { ...n, duration: half }, { ...n, onset: n.onset + half, duration: n.duration - half, slur: true, syllable: "", pitch: n.pitch });
+    notes.splice(i, 1, { ...n, duration: half }, { ...n, onset: n.onset + half, duration: n.duration - half, slur: true, syllable: "", alter: 0, pitch: n.pitch - (n.alter || 0) });
     state.note = i + 1;
     commitNotes(notes, "Note split: the second half is sung on the same syllable. Move it to make a melisma.");
   }
@@ -227,22 +232,119 @@
     const p = phrase(), d = state.draft;
     if (!p || !d || d.path !== p.own_path) return null;
     const want = d.notes.filter((n) => !n.slur).length;
-    const input = el("input", { type: "text", class: "sbc-own-words", value: p.lyric_text || "", "aria-label": `The line's words, ${want} syllables`, id: "sbc-own-words" });
+    const input = el("input", { type: "text", class: "sbc-own-words", value: d.words ?? p.lyric_text ?? "", "aria-label": `The line's words, ${want} syllables`, id: "sbc-own-words" });
     const count = el("span", { class: "sbc-muted" }, "");
     const shown = () => { const n = sylls(input.value); count.textContent = `${n} / ${want} syllables`; count.classList.toggle("is-valid", n === want); };
-    input.addEventListener("input", shown);
+    input.addEventListener("input", () => { d.words = input.value; shown(); });
     shown();
     return el("div", { class: "sbc-own" },
-      el("strong", {}, want === p.tune_syllable_count ? `${want} syllables, as the tune's line has` : `${want} syllables; the tune's line has ${p.tune_syllable_count}`),
+      el("strong", {}, "Write this line"),
       el("p", { class: "sbc-muted" }, "One syllable a note; split longer words with hyphens (car-ry)."),
-      input, count,
+      el("p", { class: "sbc-muted" }, "Words and melody replace this lyric line wherever it occurs."),
+      input, count, d.error ? el("p", { role: "alert", class: "problem" }, d.error) : null,
       el("div", { class: "sbc-button-group" },
         button("Use these words", () => {
           if (sylls(input.value) !== want) { bridge().toast?.(`This line needs ${want} syllables; it has ${sylls(input.value)}.`); return; }
-          state.draft = null;
-          commit(p.own_path, { words: input.value.trim(), notes: serializeNotes(d.notes, true) });
-        }),
+          d.words = input.value.trim(); applyDraft(p, d);
+        }, { disabled: !!d.busy }),
+        button("Fit notes to words", () => {
+          try {
+            d.words = input.value;
+            const notes = window.SongbirdModel.fitNotes({ ...p, notes: d.notes }, sylls(input.value));
+            d.notes = notes.map((n) => ({ ...n, pitch: (composition()?.tonic || 60) + scaleOffset(n.degree) + (n.alter || 0), edited: true }));
+            p.notes = d.notes; state.note = null; d.error = null; paint(); told();
+          } catch (error) { d.words = input.value; d.error = error.message; paint(); told(); }
+        }, { disabled: !!d.busy }),
         button("Cancel", () => { p.notes = d.was; state.draft = null; state.note = null; paint(); told(); }, { class: "sbc-button sbc-quiet" })));
+  }
+  async function applyDraft(p, d) {
+    const value = { words: d.words, notes: serializeNotes(d.notes, true) }, snapshot = bridge().snapshot?.();
+    if (!snapshot) { state.draft = null; commit(p.own_path, value); return; }
+    d.busy = true; d.error = null; paint(); told();
+    try {
+      const edits = { ...snapshot.edits, [p.own_path]: value };
+      const response = await fetch("/api/song", { method: "POST", headers: { "Content-Type": "application/json",
+        "X-Studio": document.querySelector('meta[name="studio-token"]').content }, body: JSON.stringify({ edits }) });
+      const view = await response.json();
+      if (!response.ok) throw new Error(view.error || "Couldn't check this line. Try again.");
+      const problem = view.problems?.find((x) => x.path === p.own_path);
+      if (problem) throw new Error(problem.why);
+      if (drafts.get(p.own_path) !== d) return; // cancelled while pronunciation was checked
+      if (bridge().snapshot().revision !== snapshot.revision) throw new Error("The song changed. Use these words again.");
+      if (d.words === value.words && JSON.stringify(serializeNotes(d.notes, true)) === JSON.stringify(value.notes)) drafts.delete(p.own_path);
+      bridge().replaceEdits(edits, "Write a line and its melody");
+    } catch (error) { d.error = error.message; }
+    finally { d.busy = false; paint(); told(); }
+  }
+  function writeLine() {
+    const p = phrase();
+    if (!p?.own_path || state.draft) return;
+    state.draft = { path: p.own_path, notes: p.notes.map((n) => ({ ...n })), was: p.notes, words: p.lyric_text || "" };
+    paint(); told();
+  }
+  function addNote(onset = null, degree = null) {
+    const p = phrase(), b = bounds(p);
+    if (!p?.own_path) return;
+    const notes = p.notes.map((n) => ({ ...n })), length = Math.max(b.min_duration, state.snap);
+    const gaps = [b.min_onset, ...notes.map((n) => n.onset + n.duration)];
+    if (onset === null) onset = gaps.find((t) => t >= (note()?.onset ?? b.min_onset) &&
+      t + length <= b.max_end && !notes.some((n) => n.onset < t + length - 1e-8 && n.onset + n.duration > t + 1e-8));
+    if (!Number.isFinite(onset)) { bridge().toast?.("Make room by shortening or deleting a note, then add a note in the gap."); return; }
+    onset = Math.max(b.min_onset, Math.round(onset / state.snap) * state.snap);
+    const next = notes.find((n) => n.onset >= onset), duration = Math.min(length, (next?.onset ?? b.max_end) - onset);
+    if (duration < b.min_duration || notes.some((n) => n.onset <= onset && n.onset + n.duration > onset + 1e-8) ||
+      (!next && onset > b.max_final_onset)) { bridge().toast?.("Draw in an empty space with room for a syllable."); return; }
+    const newNote = { degree: clamp(degree ?? note()?.degree ?? 1, b.min_degree, b.max_degree), onset, duration, syllable: "?", alter: 0 };
+    notes.push(newNote); notes.sort((a, z) => a.onset - z.onset); state.note = notes.indexOf(newNote);
+    commitNotes(notes, "Note added. Write the words for this line.");
+  }
+  function deleteNote() {
+    const p = phrase(), i = state.note, n = note();
+    if (!n) return;
+    if (n.slur) { joinNote(); return; }
+    if (!p.own_path || p.notes.filter((x) => !x.slur).length < 2) {
+      bridge().toast?.("Keep one syllable in a sung line. The section's Singer control can make the section instrumental."); return;
+    }
+    let end = i + 1;
+    while (p.notes[end]?.slur) end++;
+    const notes = p.notes.filter((_, k) => k < i || k >= end).map((x) => ({ ...x }));
+    state.note = Math.min(i, notes.length - 1); commitNotes(notes, "Note deleted; the gap is a rest.");
+  }
+  function copyNotes() {
+    const p = phrase(); if (!p?.notes?.length) return;
+    clipboard = { notes: serializeNotes(p.notes, true), start: bounds(p).min_onset, end: bounds(p).max_end };
+    paint(); bridge().toast?.("Notes copied. Choose another phrase and paste.");
+  }
+  function pasteNotes() {
+    const p = phrase(); if (!clipboard || !p) return;
+    const b = bounds(p), scale = (b.max_end - b.min_onset) / (clipboard.end - clipboard.start);
+    const notes = clipboard.notes.map((n) => ({ ...n, onset: b.min_onset + (n.onset - clipboard.start) * scale, duration: n.duration * scale }));
+    if (notes.some((n) => n.duration < b.min_duration || n.degree < b.min_degree || n.degree > b.max_degree) || notes.at(-1).onset > b.max_final_onset) {
+      bridge().toast?.("These notes don't fit this phrase. Paste into a longer phrase or use fewer notes."); return;
+    }
+    if (!p.own_path && (notes.filter((n) => !n.slur).length !== p.notes.filter((n) => !n.slur).length || notes.some((n) => n.alter))) {
+      bridge().toast?.("Choose a sung line to paste a different syllable count or chromatic notes."); return;
+    }
+    state.note = 0; commitNotes(notes, "Notes pasted. Undo restores the phrase."); told();
+  }
+  function editTools() {
+    const p = phrase();
+    return el("div", { class: "sbc-tools notes-foot", role: "group", "aria-label": "Edit phrase" },
+      button("Add note", () => addNote(), { disabled: !p?.own_path }),
+      button("Delete note", deleteNote, { disabled: state.note === null }),
+      button("Copy notes", copyNotes), button("Paste notes", pasteNotes, { disabled: !clipboard }),
+      button("Write line", writeLine, { disabled: !p?.own_path || !!state.draft }),
+      el("details", { class: "sbc-phrase-actions" }, el("summary", {}, "Phrase"),
+        button("Copy phrase", () => {
+          if (state.draft) { bridge().toast?.("Apply or cancel this line's draft before copying the phrase."); return; }
+          phraseClipboard = JSON.parse(JSON.stringify(p)); paint(); bridge().toast?.("Phrase copied: words, melody, chords and custom instrumental notes.");
+        }),
+        button("Paste phrase", async () => {
+          try {
+            if (state.draft) throw new Error("Apply or cancel this line's draft before pasting.");
+            await bridge().applyPatch(window.SongbirdModel.phrasePatch(phraseClipboard, p), "Paste phrase");
+          } catch (error) { bridge().toast?.(error.message); }
+        }, { disabled: !phraseClipboard })));
   }
   function joinNote() {
     const p = phrase(), i = state.note, n = note();
@@ -257,28 +359,22 @@
     const p = phrase();
     if (!p || !notes.length) return;
     const shape = notes.length === p.notes.length && notes.every((n, index) => !n.slur === !p.notes[index].slur);
-    if (shape && notes.every((n, index) => n.degree === p.notes[index].degree && n.onset === p.notes[index].onset && n.duration === p.notes[index].duration)) {
+    if (shape && notes.every((n, index) => n.degree === p.notes[index].degree && (n.alter || 0) === (p.notes[index].alter || 0) && n.onset === p.notes[index].onset && n.duration === p.notes[index].duration)) {
       // A guarded drag or nudge can end exactly where it started. Pinning that
       // untouched phrase would unnecessarily stop its inherited evolution.
       paint();
       if (message) announce(message);
       return;
     }
-    if (notes.some((n, index) => index && !n.slur && Math.abs(n.degree - notes[index - 1].degree) > Math.max(bounds(p).max_leap || 7, shape ? Math.abs(p.notes[index].degree - p.notes[index - 1].degree) : 0))) {
-      bridge().toast?.("That would make a leap wider than an octave. Try moving the neighboring note first."); return;
-    }
-    if (notes.some((n, index) => n.slur && Math.abs(n.degree - notes[index - 1].degree) > (bounds(p).melisma_step || 4))) {
-      bridge().toast?.("A melisma moves a fifth at most from one of its notes to the next."); return;
-    }
-    const ref = p.notes[0];
-    const updated = notes.map((n, index) => ({ ...n, pitch: pitchFor(shape ? p.notes[index] : ref, n.degree) }));
+    const updated = notes.map((n) => ({ ...n, pitch: (composition()?.tonic || 60) + scaleOffset(n.degree) + (n.alter || 0) }));
     // a line of its own, or one whose count now differs from its tune line's: its words and notes go together
     const count = updated.filter((n) => !n.slur).length;
-    if (p.own_path && (p.own || count !== p.tune_syllable_count || state.draft?.path === p.own_path)) {
-      if (count === p.syllable_count && p.own && state.draft?.path !== p.own_path) {
+    const chromatic = notes.some((n, i) => (n.alter || 0) !== (p.notes[i]?.alter || 0));
+    if (p.own_path && (p.own || chromatic || count !== p.tune_syllable_count || state.draft?.path === p.own_path)) {
+      if (count === p.syllable_count && (p.own || chromatic) && state.draft?.path !== p.own_path) {
         commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated, true) });
       } else {  // its words wait to be written for the new count (ownCard)
-        state.draft = { path: p.own_path, notes: updated, was: state.draft?.path === p.own_path ? state.draft.was : p.notes };
+        state.draft = { ...state.draft, path: p.own_path, notes: updated, was: state.draft?.was || p.notes };
         p.notes = updated.map((n, index) => ({ ...n, index, edited: true }));
       }
       paint();
@@ -310,24 +406,7 @@
       : index ? p.notes[index - 1].onset + p.notes[index - 1].duration : b.min_onset;
     const followingStart = index < p.notes.length - 1 ? p.notes[index + 1].onset : b.max_end;
     if ("degree" in changes) {
-      const leap = b.max_leap || 7;
-      const before = index ? p.notes[index - 1].degree : null;
-      const after = index < p.notes.length - 1 ? p.notes[index + 1].degree : null;
-      const low = Math.max(b.min_degree, before === null ? b.min_degree : before - Math.max(leap, Math.abs(original.degree - before)), after === null ? b.min_degree : after - Math.max(leap, Math.abs(original.degree - after)));
-      const high = Math.min(b.max_degree, before === null ? b.max_degree : before + Math.max(leap, Math.abs(original.degree - before)), after === null ? b.max_degree : after + Math.max(leap, Math.abs(original.degree - after)));
-      next.degree = clamp(Math.round(next.degree), low, high);
-      if (original.slur) { // a melisma moves a fifth at most from the note before
-        const step = b.melisma_step || 4, prev = p.notes[index - 1].degree;
-        next.degree = clamp(next.degree, Math.max(low, prev - step), Math.min(high, prev + step));
-      }
-      // Cadences identify a phrase as it evolves. Its ending may move octaves,
-      // but stays on the inherited scale-degree class, unless the person frees it (the program keeps any
-      // ending, and says what it does).
-      if (index === p.notes.length - 1 && !state.freeEnding) {
-        const octaves = Math.round((next.degree - original.degree) / 7);
-        const degree = original.degree + 7 * octaves;
-        next.degree = degree >= low && degree <= high ? degree : original.degree;
-      }
+      next.degree = clamp(Math.round(next.degree), b.min_degree, b.max_degree);
       next.pitch = pitchFor(original, next.degree); // named from its new degree, not the one it was dragged from
     }
     const latestOnset = Math.min(original.slur ? original.onset + original.duration - b.min_duration : followingStart - original.duration,
@@ -348,14 +427,11 @@
   function transpose(steps) {
     const p = phrase(), b = bounds();
     if (!p) return;
-    const notes = p.notes.map((n, index) => {
-      const shift = index === p.notes.length - 1 && Math.abs(steps) < 7 ? 0 : steps;
-      return { ...n, degree: n.degree + shift };
-    });
+    const notes = p.notes.map((n) => ({ ...n, degree: n.degree + steps }));
     if (notes.some((n) => n.degree < b.min_degree || n.degree > b.max_degree)) {
       bridge().toast?.("That would go beyond this melody’s singing range."); return;
     }
-    commitNotes(notes, Math.abs(steps) < 7 ? "Melody moved; phrase ending preserved." : "Phrase moved an octave.");
+    commitNotes(notes, Math.abs(steps) < 7 ? "Phrase transposed." : "Phrase moved an octave.");
   }
   // The grid a phrase's rhythm lives on: halves of a beat where every note sits on them, thirds where they sit
   // on thirds (a six feel, a triplet lilt), quarters otherwise; each with the finer grids of its kind after it.
@@ -513,7 +589,7 @@
     const words = p.notes.map((n) => displayWords(n.syllable)).filter(Boolean).join(" ");
     return el("button", { type: "button", id: `sbc-phrase-${index}`, class: `sbc-phrase${index === state.phrase ? " is-selected" : ""}`,
       "aria-pressed": index === state.phrase ? "true" : "false", onclick: () => selectedPhrase(index) },
-    el("span", { class: "sbc-phrase-label" }, `Phrase ${index + 1}`, composition().edited_phrases?.includes(p.id) ? el("span", { class: "sbc-edited-dot", title: "Your melody" }, "•") : null),
+    el("span", { class: "sbc-phrase-label" }, `Phrase ${index + 1}${drafts.has(p.own_path) ? " · draft" : ""}`, composition().edited_phrases?.includes(p.id) ? el("span", { class: "sbc-edited-dot", title: "Your melody" }, "•") : null),
     el("span", { class: "sbc-phrase-words" }, words || "Instrumental melody"));
   }
   function gridGeometry(p) {
@@ -546,6 +622,10 @@
     const plot = el("div", { class: "sbc-grid", style: { left: `${g.left}px`, top: `${g.ruler}px`, width: `${g.width - g.left}px`, height: `${g.height - g.ruler}px`,
       backgroundSize: `${g.unit * state.snap}px ${g.row}px` } });
     roll.append(plot);
+    plot.addEventListener("dblclick", (event) => {
+      const rect = plot.getBoundingClientRect();
+      addNote(g.start + (event.clientX - rect.left) / g.unit, g.high - Math.floor((event.clientY - rect.top) / g.row));
+    });
     for (let degree = g.high; degree >= g.low; degree--) {
       const y = g.ruler + (g.high - degree) * g.row;
       const tonic = ((degree - 1) % 7 + 7) % 7 === 0;
@@ -634,12 +714,15 @@
     target.addEventListener("pointermove", move); target.addEventListener("pointerup", finish); target.addEventListener("pointercancel", cancel);
   }
   function noteKey(event, index) {
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault(); event.stopPropagation?.(); state.note = index; deleteNote(); return;
+    }
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
     event.preventDefault(); state.note = index;
-    const n = note(), last = index === phrase().notes.length - 1;
+    const n = note();
     if (event.key === "ArrowUp" || event.key === "ArrowDown") {
       const direction = event.key === "ArrowUp" ? 1 : -1;
-      changeNote({ degree: n.degree + direction * (last || event.altKey ? 7 : 1) });
+      changeNote({ degree: n.degree + direction * (event.altKey ? 7 : 1) });
     } else {
       const delta = (event.key === "ArrowRight" ? 1 : -1) * state.snap;
       changeNote(event.shiftKey ? { duration: n.duration + delta } : { onset: n.onset + delta });
@@ -783,7 +866,7 @@
     const last = index === p.notes.length - 1;
     const degrees = [];
     for (let degree = b.min_degree; degree <= b.max_degree; degree++) {
-      if ((!last || state.freeEnding || (degree - n.degree) % 7 === 0) && limitedNote(index, { degree }, p).degree === degree) degrees.push([degree, `${pitchName(pitchFor(n, degree))} · ${degreeName(degree)}`]);
+      if (limitedNote(index, { degree }, p).degree === degree) degrees.push([degree, `${pitchName(pitchFor(n, degree))} · ${degreeName(degree)}`]);
     }
     return el("div", { class: "sbc-inspector" },
       el("div", { class: "sbc-note-heading" }, el("span", { class: "sbc-overline" }, `Note ${index + 1} of ${p.notes.length}`),
@@ -799,8 +882,8 @@
         // a line's own count (docs/notes/OWN-COUNT-LINES.md): a syllable more, or one fewer, with words for them
         p.own_path ? button("New syllable", newSyllable, { title: "Split this note in two, the second a syllable of its own" }) : null,
         p.own_path && !n.slur && index ? button("Merge", mergeSyllable, { title: "Sing this note on the syllable before" }) : null),
-      ownCard(),
-      last ? checkbox("Free the ending", state.freeEnding, (value) => { state.freeEnding = value; paint(); }) : null);
+      p.own_path && !n.slur ? select("Accidental", n.alter || 0, [[-1, "Flat (−1)"], [0, "In scale"], [1, "Sharp (+1)"]],
+        (value) => changeNote({ alter: Number(value) }), { id: "sbc-note-alter" }) : null);
   }
   function health() {
     const p = phrase(), notes = p.notes, degrees = notes.map((n) => n.degree);
@@ -808,7 +891,7 @@
     const largest = Math.max(0, ...degrees.slice(1).map((degree, i) => Math.abs(degree - degrees[i])));
     const repeats = sections().flatMap((s) => s.phrases || []).filter((item) => item.id === p.id).length;
     return el("div", { class: "sbc-health" },
-      el("span", {}, el("span", { class: "sbc-health-dot", "aria-hidden": "true" }, "●"), `${notes.filter((n) => !n.slur).length} syllable slots preserved${notes.some((n) => n.slur) ? `, ${notes.filter((n) => n.slur).length} slurred on (a melisma)` : ""}`),
+      el("span", {}, el("span", { class: "sbc-health-dot", "aria-hidden": "true" }, "●"), `${notes.filter((n) => !n.slur).length} syllables${notes.some((n) => n.slur) ? `, ${notes.filter((n) => n.slur).length} slurred on (a melisma)` : ""}`),
       el("span", {}, `Range ${pitchName(Math.min(...pitches))}–${pitchName(Math.max(...pitches))}`),
       el("span", { class: largest > 4 ? "sbc-leap-warning" : "" }, largest > 4 ? `Wide leap: ${largest} scale steps` : "Comfortable melodic steps"),
       el("span", {}, `${repeats} shared ${repeats === 1 ? "appearance" : "appearances"}`),
@@ -822,11 +905,11 @@
         el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, where("tune") === "line" ? "Edit a phrase once; every appearance follows." : "This change stays in this place.")),
         el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, [[1, "Fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" }))),
-      phraseStrip(), scopeChoice("tune"), pianoRoll(), state.chord && state.note === null ? null : inspector(), chordCard(),
+      phraseStrip(), scopeChoice("tune"), editTools(), pianoRoll(), ownCard(), state.chord && state.note === null ? null : inspector(), chordCard(),
       el("div", { class: "sbc-tools" }, el("span", { class: "sbc-overline" }, "Shape phrase"),
-        el("div", { class: "sbc-button-group", role: "group", "aria-label": "Transpose melody; keep its ending" },
-          button("↓ Step", () => transpose(-1), { title: "Lower melody one scale step, keeping its phrase ending" }),
-          button("↑ Step", () => transpose(1), { title: "Raise melody one scale step, keeping its phrase ending" })),
+        el("div", { class: "sbc-button-group", role: "group", "aria-label": "Transpose phrase" },
+          button("↓ Step", () => transpose(-1), { title: "Transpose the whole phrase down one scale step" }),
+          button("↑ Step", () => transpose(1), { title: "Transpose the whole phrase up one scale step" })),
         button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbors, preserving the ending" }),
         button("Even rhythm", evenRhythm, { title: "Spread the existing syllables evenly across their current phrase span" }),
         button(where("tune", p) === "line" ? "Restore phrase" : "Restore phrase here", () => { state.note = null; commit(scopedPath("tune", p), null); }, { class: "sbc-button sbc-quiet", title: where("tune", p) === "line" ? "Remove your melody override and restore this song’s inherited phrase" : "Give this place back the line's own tune" })),
@@ -872,15 +955,16 @@
     if (b) setTimeout(() => { try { b.node.disconnect(); } catch (_) { /* gone */ } }, (FADE + 0.05) * 1000);
     return end;
   }
-  function tone(ctx, pitch, start, duration, click = false) {
+  function tone(ctx, pitch, start, duration, click = false, velocity = 96) {
     const oscillator = ctx.createOscillator(), gain = ctx.createGain();
     oscillator.type = click ? "sine" : "triangle";
     oscillator.frequency.value = click ? pitch : 440 * 2 ** ((pitch - 69) / 12);
     const length = Math.max(0.06, duration);
+    const level = click ? 1 : clamp(velocity / 96, 1 / 96, 127 / 96);
     gain.gain.setValueAtTime(0, start);
-    gain.gain.linearRampToValueAtTime(click ? 0.035 : 0.075, start + 0.009);
-    gain.gain.exponentialRampToValueAtTime(0.018, start + Math.min(0.12, length * 0.4));
-    gain.gain.setValueAtTime(0.018, start + Math.max(0.02, length - 0.05));
+    gain.gain.linearRampToValueAtTime(click ? 0.035 : 0.075 * level, start + 0.009);
+    gain.gain.exponentialRampToValueAtTime(0.018 * level, start + Math.min(0.12, length * 0.4));
+    gain.gain.setValueAtTime(0.018 * level, start + Math.max(0.02, length - 0.05));
     gain.gain.linearRampToValueAtTime(0.0001, start + length);
     oscillator.connect(gain); gain.connect(bus(ctx));
     state.nodes.add(oscillator);
@@ -1064,7 +1148,7 @@
   // roll; the selected note's or chord's card is drawn by the page's inspector from noteState() and chordState()
   function scopeSwitch(kind) {
     const p = phrase(), s = section();
-    if (kind === "tune" && p?.own) return null;  // a line of its own is sung with its verse's words alone
+    if (kind === "tune" && (p?.own || state.draft)) return el("span", { class: "hint" }, "Words and melody · this lyric line");
     const options = window.SongbirdModel?.scopeOptions(p, s) || [];
     if (!options.length) return null;
     const now = where(kind, p);
@@ -1074,21 +1158,34 @@
   }
   function notesPanel() {
     const s = section(), p = phrase();
+    const part = state.player !== "voice" && window.SongbirdParts;
     return el("div", { class: "sbc-notes" },
       el("div", { class: "notes-head" },
-        el("h3", { id: "notesTitle", tabindex: "-1" }, `${s.label} `, el("small", {}, where("tune") === "line"
-          ? "/ the notes. Edit a phrase once; every appearance follows." : "/ the notes. This change stays in this place.")),
-        scopeSwitch("tune"),
+        el("h3", { id: "notesTitle", tabindex: "-1" }, s.label),
+        select("Part", state.player, (composition().players || [{ name: "voice", label: "Melody" }]).map((p) =>
+          [p.name, p.name === "voice" ? "Melody" : p.label]), (value) => {
+          stop(); state.player = value; state.note = null; state.chord = null; paint(); told();
+        }, { id: "sbc-part" }),
+        part ? el("span", { class: "hint" }, "This phrase only") : scopeSwitch("tune"),
         el("span", { class: "settings" }, select("Snap", state.snap, [[0.25, "¼"], [0.5, "½"], [1, "1"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, [[1, "fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" })),
         button("Close", () => page()?.closeNotes?.(), { class: "sbc-button sbc-quiet", id: "sbc-close", title: "Close the notes (Esc)" }),
-        p?.notes?.length ? health() : null),
+        !part && p?.notes?.length ? health() : null),
       (s.phrases || []).length ? phraseStrip() : null,
+      part ? window.SongbirdParts.render(state.view, p, state.player, { snap: state.snap, zoom: state.zoom, paint,
+        hear: (notes) => {
+          stop(); bridge().pauseAudio?.(); const ctx = audioContext(); if (!ctx) return;
+          const unit = 60 / composition().tempo, origin = Math.min(0, ...notes.map((n) => n[0] / 96));
+          for (const [start, length, pitch, velocity] of notes) tone(ctx, composition().tonic + pitch,
+            ctx.currentTime + 0.03 + (start / 96 - origin) * unit, Math.min(length / 96, p.duration_beats - start / 96) * unit, false, velocity);
+        } }) : el("div", {},
+      p?.notes?.length ? editTools() : null,
       p?.notes?.length ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
+      ownCard(),
       el("p", { class: "readonly hint notes-foot" }, "Tap a note to change it in the column."),
-      el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys nudge the selected note; ⇧ ← → its length." }, "Drag a note for its pitch and place, its right edge for its length."),
+      el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys nudge the selected note; ⇧ ← → its length." }, "Drag to move or resize. Double-click empty space to add a note. Delete removes the selected note."),
         p?.notes?.length ? button("▶ Hear this phrase", () => { state.scope = "phrase"; state.playIndex = null; play(); }, { class: "sbc-button" }) : null),
-      el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
+      el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" })));
   }
   function reasons(mine, yours, theirs) { return mine ? [["you", yours]] : theirs; }
   function noteState() {
@@ -1104,15 +1201,15 @@
       body: el("div", { class: "sbc-note-state" }, (() => { const box = inspector(); box.querySelector(".sbc-audition")?.remove(); return box; })(),  // ▶ Hear it plays the note
         el("h4", {}, "The phrase"),
         el("div", { class: "sbc-chord-row" },
-          button("↓ Step", () => transpose(-1), { title: "Lower the phrase a scale step, keeping its ending" }),
-          button("↑ Step", () => transpose(1), { title: "Raise the phrase a scale step, keeping its ending" }),
+          button("↓ Step", () => transpose(-1), { title: "Transpose the whole phrase down one scale step" }),
+          button("↑ Step", () => transpose(1), { title: "Transpose the whole phrase up one scale step" }),
           scopeSwitch("tune")),
         el("details", {}, el("summary", {}, "more"),
           el("div", { class: "sbc-chord-row" },
             button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbours, keeping the ending" }),
             button("Even rhythm", evenRhythm, { title: `Even the notes on the phrase's own grid (the snap: ${fmt(state.snap)} beat)` })))),
-      why: reasons(n.edited, scope === "line" ? "yours: this line is sung this way everywhere" : "yours, in this place only",
-        [["song", "the tune as it was written, and as the versions before have sung it"], ["rule", "a phrase keeps its syllables, their order and its ending's place in the scale"]]),
+      why: reasons(n.edited, p.own ? "your words and melody, wherever this lyric line occurs" : scope === "line" ? "yours: this line is sung this way everywhere" : "yours, in this place only",
+        [["song", "the tune as it was written, and as the versions before have sung it"], ["rule", "notes and words are kept together; gaps between notes are rests"]]),
       release: p.own ? { label: "Use the tune's line", disabled: false,
         action: () => { state.note = null; state.draft = null; commit(p.own_path, null); told(); } }
         : { label: scope === "line" ? "Reset" : "Reset here", disabled: !held("tune", p),
@@ -1146,24 +1243,35 @@
     const box = root(), c = composition();
     if (!box || !c) return;
     const focused = box.contains(document.activeElement) ? document.activeElement : null;
-    const focusId = focused?.id, focusNote = focused?.dataset.note, focusAction = focused?.dataset.composerAction;
+    const focusId = focused?.id, focusNote = focused?.dataset.note, focusPart = focused?.dataset.partNote, focusAction = focused?.dataset.composerAction;
     const scroll = box.querySelector(".sbc-roll-scroll")?.scrollLeft || 0;
+    const scrollTop = box.querySelector(".sbc-roll-scroll")?.scrollTop || 0;
     const arrangeScroll = box.querySelector(".sbc-arrangement-scroll")?.scrollLeft || 0;
     box.classList.add("sbc-composer");
     if (notesMode()) box.replaceChildren(section() ? notesPanel() : "",
       el("div", { id: "sbc-status", class: "sbc-visually-hidden", role: "status", "aria-live": "polite" }));
     else box.replaceChildren(transport(), arrangement(), section() ? editor() : null,
       el("div", { id: "sbc-status", class: "sbc-visually-hidden", role: "status", "aria-live": "polite" }));
-    const roll = box.querySelector(".sbc-roll-scroll"); if (roll) roll.scrollLeft = scroll;
+    const roll = box.querySelector(".sbc-roll-scroll"); if (roll) { roll.scrollLeft = scroll; roll.scrollTop = scrollTop; }
     const arrange = box.querySelector(".sbc-arrangement-scroll"); if (arrange) arrange.scrollLeft = arrangeScroll;
-    const restore = focusNote !== undefined ? box.querySelector(`[data-note="${focusNote}"]`)
+    const restore = focusPart !== undefined ? box.querySelector(`[data-part-note="${focusPart}"]`)
+      : focusNote !== undefined ? box.querySelector(`[data-note="${focusNote}"]`)
       : focusId ? document.getElementById(focusId)
         : focusAction ? [...box.querySelectorAll("button")].find((node) => node.dataset.composerAction === focusAction) : null;
-    restore?.focus({ preventScroll: true });
+    (restore || (focused && box.querySelector('.sbc-note.is-selected')))?.focus({ preventScroll: true });
   }
   function render(view) {
-    if (state.view !== view) stop();
+    const changed = state.view !== view;
+    if (changed) stop();
     state.view = view;
+    if (state.player !== "voice" && !(composition()?.players || []).some((p) => p.name === state.player)) state.player = "voice";
+    for (const s of sections()) for (const p of s.phrases || []) {
+      const draft = drafts.get(p.own_path);
+      if (draft && changed) {
+        draft.was = p.notes;
+        p.notes = draft.notes.map((n) => ({ ...n, pitch: (composition()?.tonic || 60) + scaleOffset(n.degree) + (n.alter || 0), edited: true }));
+      }
+    }
     players()?.viewChanged?.(view);
     const box = root();
     if (!view?.composition?.sections?.length) {
@@ -1180,7 +1288,8 @@
   window.addEventListener("pagehide", stop);
   document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
   // for the score: open a section's notes, the selection's card, the sketch the transport drives
-  function open(index) {
+  function open(index, player = "voice") {
+    state.player = (composition()?.players || []).some((p) => p.name === player) ? player : "voice";
     if (index === state.section && sections()[index]) { paint(); return; }
     stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = 0; state.note = null; state.chord = null;
     state.where = { tune: null, chords: null }; paint();
@@ -1197,5 +1306,6 @@
     return { section: sections()[state.section]?.id || null, phrase: state.phrase, note: state.note, chord: state.chord };
   }
   window.SongbirdComposer = { render, stop, replay, open, deselect, sketch, options, selection, noteState, chordState,
+    hasDraft: (id) => sections().find((s) => s.id === id)?.phrases?.some((p) => drafts.has(p.own_path)) || false,
     playing: () => !!state.playback, mini: (index) => (sections()[index] ? miniNotes(sections()[index]) : null) };
 })();
