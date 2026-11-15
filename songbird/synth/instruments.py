@@ -191,7 +191,8 @@ def _strings(notes, sr: int, length: int, rng: np.random.Generator, spec: dict, 
             sr,
             rng,
             vel=note.vel,
-            brightness=spec["brightness"] * (0.85 + 0.3 * note.vel) if note.art != "mute" else 0.2,
+            brightness=(spec["brightness"] * (0.85 + 0.3 * note.vel) + (0.05 if note.art == "up" else 0.0)
+                        if note.art != "mute" else 0.2),  # an up stroke meets the strings at a brighter angle
             decay=spec["decay"],
             pick=spec["pick"] * rng.uniform(0.85, 1.15),
             hardness=spec["hardness"],
@@ -205,6 +206,47 @@ def _strings(notes, sr: int, length: int, rng: np.random.Generator, spec: dict, 
         end = min(length, start + len(y))
         force[start:end] += y[: end - start]
     return force
+
+
+# A strum's pick noise: the "chk" of the pick crossing the strings, its level against the strings' own peak.
+PICK_NOISE = {"down": 0.07, "up": 0.09, "mute": 0.16}
+
+
+def pick_noise(notes, force: np.ndarray, sr: int) -> np.ndarray:
+    """The pick crossing the strings, once a stroke (notes of a stroke start within 45 ms of its first, two or more):
+    a burst of 2 to 7 kHz noise (brighter on an up) as long as the stroke, rising as the pick meets string after
+    string and dying in a few milliseconds after the last; its level a fraction of the strings' peak there
+    (PICK_NOISE), so it follows the stroke's force. Drawn from the stroke's own notes: the same stroke, the same
+    noise."""
+    out = np.zeros(len(force))
+    strummed = sorted((n for n in notes if n.art in PICK_NOISE), key=lambda n: n.start)
+    groups: list[list] = []
+    for n in strummed:
+        if groups and n.start - groups[-1][0].start < 0.045 and n.art == groups[-1][0].art:
+            groups[-1].append(n)
+        else:
+            groups.append([n])
+    bands = {art: butter(2, [2000.0, 7000.0] if art != "up" else [2600.0, 8500.0], btype="bandpass", fs=sr, output="sos")
+             for art in PICK_NOISE}
+    for g in groups:
+        if len(g) < 2:
+            continue
+        a = int(round(g[0].start * sr))
+        across = max(g[-1].start - g[0].start, 0.003)
+        n = int((across + 0.012) * sr)
+        if a >= len(force) or n <= 0:
+            continue
+        n = min(n, len(force) - a)
+        peak = float(np.max(np.abs(force[a:min(len(force), a + n + int(0.02 * sr))])))
+        if peak <= 0.0:
+            continue
+        rng = np.random.default_rng([a, len(g), int(1000 * g[0].vel)])
+        t = np.arange(n) / sr
+        env = np.where(t < across, 0.4 + 0.6 * t / across, np.exp(-(t - across) / 0.003))
+        burst = sosfilt(bands[g[0].art], rng.standard_normal(n + 64))[64:] * env
+        rms = float(np.sqrt(np.mean(burst ** 2))) or 1.0
+        out[a:a + n] += burst / rms * peak * PICK_NOISE[g[0].art]
+    return out
 
 
 def _open_strings(tonic: int, low: int, high: int) -> list[int]:
@@ -246,6 +288,8 @@ def _model(kind: str, notes, sr: int, length: int, s: dict, rng: np.random.Gener
         # the same all song: the maker's (and the weather's) doing.
         offsets = make.normal(0.0, 0.5 + 4.0 * wear, 128)
         force = _strings(notes, sr, length, rng, spec, tuning=lambda n: offsets[int(round(n.pitch)) % 128])
+        if kind == "guitar":
+            force = force + pick_noise(notes, force, sr)
         if opens:
             force = force + pluck.sympathetic(force, sr, opens, coupling=coupling, decay=3.0, brightness=0.3)
         return with_body(force, box)
