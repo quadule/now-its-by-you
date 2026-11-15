@@ -1367,9 +1367,14 @@ def _instrumental(name: str, lead: str | None) -> str:
 
 def word_options(ctx: Context, v: Version, block: str, index: int) -> dict:
     """Every choice for one section of the words, each allowed or refused with why (arrange.options)."""
-    if v.lyrics is None:
+    lyrics = v.lyrics
+    if lyrics is None and ctx.genome.source.get("bank"):  # the song's own words (a version as it was published):
+        from .arrange import seed_lyrics                    # chosen among as a person's first choice starts from them
+
+        lyrics = seed_lyrics(ctx.genome, v.params.form)
+    if lyrics is None:
         raise ValueError("this version sings the song's own words, which can't be chosen among")
-    out = word_choices(ctx.genome, v.lyrics, block, index)
+    out = word_choices(ctx.genome, lyrics, block, index)
     out["path"] = (f"words.{block}.{index}" if block in ("verse", "refrain")
                    else "words.bridge2" if block == "bridge" and index == 1 else f"words.{block}")
     out["slots_path"] = {"verse": out["path"], "refrain": out["path"], "bridge": "words.bridge"}.get(block)

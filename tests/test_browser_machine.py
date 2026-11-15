@@ -118,3 +118,16 @@ def test_the_published_view_is_the_release_as_it_was_and_the_new_one_continues_i
     assert n.start_view()["generation"] == 1 and n.start_view().get("published_offer") is True
     assert "published" not in n.start_view() and n.context.machine_label() == "this browser"
     assert n.version({}).params.to_dict() != v.params.to_dict()
+
+
+def test_the_published_words_can_be_chosen_among(tmp_path):
+    """The published version sings the song's own words (its record keeps none): a verse's options are the bank's,
+    the one sung its own, and choosing another keeps the rest as published."""
+    D = _device()
+    config = {"song": str(LEAD), "parent": str(RECORD), "home": str(tmp_path / "a"), "released_on": "2026-09-28"}
+    s = D.Device({**config, "machine": "published"}).studio
+    assert s.version({}).lyrics is None
+    options = s.options({}, "verse", 0)
+    assert options["sung"] == "wire" and sum(c["allowed"] for c in options["choices"]) > 3
+    chosen = s.version({"words.verse.0": {"id": "box"}})
+    assert [x.id for x in chosen.lyrics.sections if x.block == "verse"] == ["box", "screen"]
