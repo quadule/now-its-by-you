@@ -206,9 +206,14 @@ function editMap(value) {
 }
 function copyEdits(edits = state.edits) { return JSON.parse(JSON.stringify(edits)); }
 
+// edits as text with their keys in order, so the same edits written in another order are the same
+function canonical(value) {
+  return JSON.stringify(value, (_, v) => (v && typeof v === "object" && !Array.isArray(v)
+    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v));
+}
 function commitEdits(next, label = "Edit song", group = null) {
   next = copyEdits(editMap(next));
-  if (JSON.stringify(next) === JSON.stringify(state.edits)) return false;
+  if (canonical(next) === canonical(state.edits)) return false;  // nothing changed: no step to undo
   if (!group || state.historyGroup !== group) {
     state.undo.push({ edits: copyEdits(), label });
     if (state.undo.length > 100) state.undo.shift();

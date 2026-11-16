@@ -6,6 +6,7 @@
   const PPB = 96;
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
   const copy = (notes) => notes.map((n) => n.slice());
+  const same = (a, b) => a.length === b.length && a.every((n, i) => n.every((v, k) => v === b[i][k]));
   const bridge = () => window.StudioBridge;
   let current = null, clipboard = null, serial = 0, lastClick = null;
   const names = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
@@ -117,11 +118,13 @@
     const s = current, x = s?.lines[pi];
     if (!x) return;
     try {
-      const clean = normalize(notes, s.player, x.bounds);
-      x.notes = clean; x.ready = true; x.mine = true; s.error = null;
-      s.focus = pi;
+      const clean = normalize(notes, s.player, x.bounds), unchanged = x.ready && same(clean, x.notes);
+      s.error = null; s.focus = pi;
       s.selected = new Set(keep.map((k) => clean.findIndex((n) => n[0] === k[0] && n[2] === k[2])).filter((i) => i >= 0));
-      bridge().setEdit(x.path, clean);
+      if (!unchanged) {  // nothing changed: no edit, no undo step (the program's notes stay the program's)
+        x.notes = clean; x.ready = true; x.mine = true;
+        bridge().setEdit(x.path, clean);
+      }
       s.paint();
     } catch (error) { s.error = error.message; s.paint(); }
   }

@@ -71,6 +71,13 @@ test('a batch of phrase and order edits is one independent, reversible transacti
   assert.equal(run('state.redo.length'), 0);
 });
 
+test('the same edits written in another order are no step to undo', () => {
+  const { run } = studio();
+  run('setEdits({tempo: 100, "line.verse:wire.0": {words: "a b", notes: [{degree: 1, onset: 0, duration: 1}]}})');
+  run('window.StudioBridge.replaceEdits({"line.verse:wire.0": {notes: [{duration: 1, onset: 0, degree: 1}], words: "a b"}, tempo: 100})');
+  assert.equal(run('state.undo.length'), 1);
+});
+
 test('no-op changes leave history intact and null clears only the requested paths', () => {
   const { run } = studio();
   run('setEdits({tempo: 100, mode: "dorian"}); setEdit("tempo", 100); clearEdits(["missing"])');

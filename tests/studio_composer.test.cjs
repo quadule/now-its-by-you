@@ -899,14 +899,14 @@ test("several notes at once: Shift-click and a rectangle select them, and a move
   item.emit("pointerdown", { clientX: rect.left + 2, clientY: 150 });
   item.emit("pointermove", { clientX: rect.left + 2, clientY: 104 });
   item.emit("pointerup", { clientX: rect.left + 2, clientY: 104 });
-  // (this page's song is as it was before the half steps: the server's answer would bring them)
+  // (the half steps are drawn at once, before the server's answer)
   const sung = (k) => (Array.isArray(s.commits[k].value) ? s.commits[k].value : s.commits[k].value.notes);
   assert.equal(s.commits.length, 2);
-  assert.deepEqual(sung(1).slice(1, 3).map((n) => [n.degree, n.alter || 0]), [[5, 0], [7, 0]], "two half steps: G and B");
+  assert.deepEqual(sung(1).slice(1, 3).map((n) => [n.degree, n.alter || 0]), [[5, 1], [8, 0]], "two half steps from F♯ and A♯: G♯ and C");
   assert.deepEqual(sung(1).map((n) => n.onset), [-0.5, 0, 1, 2, 3], "their timing kept");
   // ↑ Step transposes only the selection
   s.clickText("↑ Step");
-  assert.deepEqual(sung(2).map((n) => n.degree), [3, 6, 8, 3, 1]);
+  assert.deepEqual(sung(2).map((n) => n.degree), [3, 6, 9, 3, 1]);
   // deleted together: one draft asking for the line's words, two syllables fewer
   s.find('[data-note="1"]').emit("keydown", { key: "Delete" });
   assert.equal(s.commits.length, 3, "the words are written first");
@@ -1053,4 +1053,57 @@ test("a narrow note is moved from its middle, resized from its edge or with ⌥,
   s.window.SongbirdComposer.render(view);
   assert.equal(item().querySelector(".sbc-note-word").textContent, "", "no broken fragment");
   assert.match(item().getAttribute("aria-label"), /everlasting/, "its name still says it");
+});
+
+// the studio's own history (studio.js), its page left out: what an edit from the roll costs in undo steps
+function history() {
+  class Node {
+    constructor() { this.children = []; this.dataset = {}; this.style = {}; this.classList = { add() {}, remove() {}, toggle() {} }; this.textContent = ""; }
+    append() {} replaceChildren() {} setAttribute() {} addEventListener() {} querySelectorAll() { return []; } contains() { return false; }
+    closest() { return null; } pause() {} play() { return Promise.resolve(); }
+  }
+  const nodes = new Map(), toasts = [];
+  const document = { getElementById: (id) => { if (!nodes.has(id)) nodes.set(id, new Node()); return nodes.get(id); },
+    querySelector: (selector) => (selector.startsWith("meta") ? { content: "token" } : null), querySelectorAll: () => [],
+    addEventListener() {}, createElement: () => new Node(), createElementNS: () => new Node(), createTextNode: (text) => text };
+  const context = vm.createContext({ document, Node, console, URL, location: { hash: "" }, window: { addEventListener() {} },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} }, setTimeout: () => 1, clearTimeout() {} });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/renderer.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/studio.js"), "utf8").replace(/\nmain\(\);\s*$/, "\n"), context);
+  const run = (code) => vm.runInContext(code, context);
+  run('state.start = {title: "Song", from: "home", machine: {label: "test"}, day: "2026-09-27", song_digest: "abc123"}; toast = (m) => toasts.push(m)');
+  context.toasts = toasts;
+  return { bridge: context.window.StudioBridge, run, toasts };
+}
+test("a chromatic move of two notes is one undo step, drawn at once; the song's answer adds none, and one undo takes it back", () => {
+  const s = setup(writableScore()), h = history();
+  s.window.StudioBridge = h.bridge;
+  s.find('[data-note="1"]').emit("click");
+  s.find('[data-note="2"]').emit("click", { shiftKey: true });
+  s.find('[data-note="2"]').emit("keydown", { key: "ArrowUp" });
+  assert.equal(h.run("state.undo.length"), 1);
+  assert.deepEqual(Object.keys(clone(h.run("state.edits"))), ["line.verse:wire.0"]);
+  assert.deepEqual(s.phrase().notes.slice(1, 3).map((n) => [n.degree, n.alter]), [[4, 1], [6, 1]], "drawn before the answer");
+  assert.equal(s.phrase().notes[1].syllable, "this", "its words kept");
+  // the song's answer: the line its own, the half steps in it
+  const answer = writableScore(), line = answer.composition.sections[1].phrases[0];
+  line.own = "verse:wire.0"; line.notes[1].alter = 1; line.notes[2].alter = 1; line.notes[1].pitch++; line.notes[2].pitch++;
+  s.window.SongbirdComposer.render(answer);
+  assert.equal(h.run("state.undo.length"), 1, "a repaint is no step");
+  s.find('[data-note="2"]').emit("keydown", { key: "ArrowLeft" });  // blocked by the note before: nothing to undo
+  assert.equal(h.run("state.undo.length"), 1);
+  h.run('travelHistory("undo")');
+  assert.deepEqual(clone(h.run("state.edits")), {});
+  assert.equal(h.run("state.undo.length"), 0);
+});
+test("an instrument's notes already on the snap, quantized, are no edit: the program's part stays the program's", () => {
+  const view = writableScore(), c = view.composition, [a, b] = c.sections[1].phrases;
+  c.players = [{ name: "voice", label: "Melody" }, { name: "fiddle", label: "Fiddle", low: 55, high: 88, poly: false }];
+  Object.assign(a, { part_key: "verse:0.0", part_notes: { fiddle: [[0, 96, 0, 90]] } });
+  Object.assign(b, { part_key: "verse:0.1", part_notes: { fiddle: [[0, 192, 4, 90]] } });
+  const s = setup(view);
+  s.root.dataset.mode = "notes"; s.window.SongbirdComposer.open(1);
+  s.find("#sbc-part").emit("change", { target: { value: "fiddle" } });
+  s.clickText("Quantize");
+  assert.equal(s.commits.length, 0);
 });

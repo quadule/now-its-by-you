@@ -459,6 +459,16 @@
     state.note = i - 1;
     commitNotes(notes, "Joined into the note before.");
   }
+  // a phrase's notes as the page draws them after an edit: each syllable's words found again by syllable
+  function sung(updated, was, shape) {
+    const words = was.filter((n) => !n.slur);
+    let k = -1;
+    return updated.map((n, index) => {
+      if (!n.slur) k++;
+      const own = words[k] || {};
+      return { ...(shape ? was[index] : {}), ...n, index, syllable: n.slur ? "" : own.syllable, word: own.word, edited: true };
+    });
+  }
   function commitNotes(notes, message) {
     const p = phrase();
     if (!p || !notes.length) return;
@@ -476,6 +486,8 @@
     const chromatic = notes.some((n, i) => (n.alter || 0) !== (p.notes[i]?.alter || 0));
     if (p.own_path && (p.own || chromatic || count !== p.tune_syllable_count || state.draft?.path === p.own_path)) {
       if (count === p.syllable_count && (p.own || chromatic) && state.draft?.path !== p.own_path) {
+        // drawn at once, as a tune line's change is, wherever the lyric line is sung, its words kept by syllable
+        for (const s of sections()) for (const same of s.phrases || []) if (same.own_path === p.own_path) same.notes = sung(updated, same.notes, shape);
         commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated, true) });
       } else {  // its words wait to be written for the new count (ownCard)
         state.draft = { ...state.draft, path: p.own_path, notes: updated, was: state.draft?.was || p.notes };
@@ -486,16 +498,7 @@
       if (message) announce(message);
       return;
     }
-    for (const s of sections()) for (const shared of s.phrases || []) {
-      if (!sharesScope("tune", p, shared)) continue;
-      const words = shared.notes.filter((n) => !n.slur); // each syllable's words, found again by syllable
-      let k = -1;
-      shared.notes = updated.map((n, index) => {
-        if (!n.slur) k++;
-        const own = words[k] || {};
-        return { ...(shape ? shared.notes[index] : {}), ...n, index, syllable: n.slur ? "" : own.syllable, word: own.word, edited: true };
-      });
-    }
+    for (const s of sections()) for (const shared of s.phrases || []) if (sharesScope("tune", p, shared)) shared.notes = sung(updated, shared.notes, shape);
     commit(scopedPath("tune", p), serializeNotes(updated));
     paint();
     if (message) announce(message);
