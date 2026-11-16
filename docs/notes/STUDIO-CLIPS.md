@@ -156,8 +156,9 @@ A child inherits the arrangement with the rest of the composition: the same
 source form, clips and order, the authored layer as written. The generated
 layer under it still evolves: the bank's words for the source form, the tune's
 variants, the band, the style, the machine's tempo and key. `clips: null`
-gives the song its form back; anything kept by a clip id then waits, unheard,
-as an edit for a section the version doesn't sing does.
+gives the song its form back: what the record keeps by a clip id waits,
+unheard, and an edit that still names a clip is refused ("there is no section
+called verse112").
 
 ## For the editor
 

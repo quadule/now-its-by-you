@@ -321,3 +321,14 @@ def test_the_design_note_s_new_song_is_what_the_operations_make_and_is_sung():
     r, problems = version(example)
     assert not problems
     assert sung(r)[1] == ["here", "is", "a", "new", "song"]
+
+
+def test_with_clips_the_shape_is_theirs_and_null_gives_the_song_its_form_back():
+    edits, (_, verse, _) = new_song()
+    r, problems = version({**edits, "form.verses": 3, "form.order": None})
+    assert {"path": "form.verses", "why": E.CLIPPED} in problems and {"path": "form.order", "why": E.CLIPPED} in problems
+    r, problems = version({**edits, "clips": None})
+    assert "clips" not in r.params.composition and r.params.form == E.song_params(G).form
+    assert {"path": f"line.{verse}:0.0", "why": f"there is no section called {verse}"} in problems
+    score, _ = sung(r)
+    assert score.sections[0][0] == "intro"
