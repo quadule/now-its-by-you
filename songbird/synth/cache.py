@@ -124,27 +124,56 @@ class Cached:
         return self.cache.make(key, lambda: treat(self.make()), part=self.part)
 
 
+def _band_of(band: dict, name: str, players: set) -> dict:
+    """The band's settings as one instrument's maker reads them (instruments.render_part, render_other): all of
+    them but another player's level (settings[other]) and gain in the lineup (gains[other])."""
+    out = {k: v for k, v in band.items() if k == name or k not in players}
+    if isinstance(band.get("gains"), dict):
+        out["gains"] = {name: band["gains"][name]} if name in band["gains"] else {}
+    return out
+
+
+def _sound_of(sound, name: str) -> dict:
+    """A person's sound design as one instrument's maker reads it: its own player's sound
+    (instruments.band_parts: players.get(name)), or nothing."""
+    players = (sound or {}).get("players") or {}
+    return {"players": {name: players[name]}} if name in players else {}
+
+
+def _vocal(name: str) -> bool:
+    return name in ("voice", "chop") or name.startswith("choir")
+
+
 def keys(score, sr, seed, voice, ancestors, names):
     """Hash the realized inputs a dry maker reads, independently of mix/master choices.
 
     Choir assignment and round placement read other choir parts, so vocal keys deliberately
-    include the complete choir context. Band keys omit lyrics and vocal notes, allowing a word
-    edit to keep the same instruments. Section timing and length come from the cut score itself.
+    include the complete choir context; of the band's settings a singer reads only whether the
+    voices sing alone (band["parts"], synth.matched). Band keys omit lyrics and vocal notes, allowing
+    a word edit to keep the same instruments, and another player's level and sound, allowing a level,
+    a pan or a patch to make only that player again. Section timing and length come from the cut
+    score itself.
     """
+    from .instruments import INSTRUMENTS
+
     notes = {}
     for note in score.notes:
         notes.setdefault(note.part, []).append(asdict(note))
     common = {"sr": sr, "seed": seed, "length": int(np.ceil(score.duration * sr))}
     choir = {name: part for name, part in notes.items() if name.startswith("choir")}
+    band = score.band or {}
     vocal = {"voice": asdict(voice), "ancestors": [asdict(v) for v in ancestors or []],
-             "lexicon": score.lexicon, "choir": choir, "band": score.band}
+             "lexicon": score.lexicon, "choir": choir, "band": {"parts": band.get("parts")}}
+    players = set(INSTRUMENTS) | {n for n in [*notes, *names] if not _vocal(n) and n != "fx"}
     out = {}
     for name in names:
         data = {**common, "name": name, "notes": notes.get(name, [])}
-        if name in ("voice", "chop") or name.startswith("choir"):
+        if _vocal(name):
             data.update(vocal)
+        elif name == "fx":
+            data.update(band=band, sound=score.sound)
         else:
-            data.update(band=score.band, sound=score.sound)
+            data.update(band=_band_of(band, name, players), sound=_sound_of(score.sound, name))
         try:
             encoded = json.dumps(data, sort_keys=True, separators=(",", ":"),
                                  default=lambda value: value.item() if isinstance(value, np.generic) else asdict(value))
