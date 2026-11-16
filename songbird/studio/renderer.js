@@ -33,7 +33,7 @@
 "use strict";
 
 (() => {
-  const POLL = { preview: 450, record: 600 };  // ms between asking how a job is going
+  const POLL = { preview: 450, record: 600, quick: 150 };  // ms between asking how a job is going
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const MODES = ["auto", "browser", "server"];
   const SETTING = "songbird-make-where";  // this browser's choice (a convenience: auto if it's lost)
@@ -491,7 +491,7 @@
           if (task.cancelled) return job;
           if (job.state === "done" || job.state === "failed") return Object.assign(job, { where: "server" });
           onProgress?.(job);
-          await pause(POLL[task.kind]);
+          await pause(task.poll || POLL[task.kind]);
           if (task.cancelled) return job;
           job = await ask(`/api/job/${job.id}`);
         }
@@ -545,8 +545,12 @@
       const file = !options.blob && typeof Blob === "function" ? new Blob([out.flac], { type: "audio/flac" }) : null;
       const url = file ? URL.createObjectURL(file) : blob(out.flac);
       const clock = answer.bar_seconds ? { bar_seconds: answer.bar_seconds } : {};  // a whole song's, as the server's job ends
+      // (a section's loop, as the server's job ends: studio.loop_of; its file kept, for live.js to decode, since a
+      // page's policy may not let it fetch a blob: address)
+      const loop = out.loop ? { loop: out.loop, key: answer.key } : {};
       const job = { state: "done", progress: 1, url, key: answer.key, label, where: "browser", id: out.id, size,
-        seconds: out.seconds, heap: out.heap, bytes: out.flac.byteLength, result: { duration: out.duration, ...clock } };
+        seconds: out.seconds, heap: out.heap, bytes: out.flac.byteLength, result: { duration: out.duration, ...clock, ...loop },
+        ...(file ? { blob: file } : {}) };
       if (size === "whole" && out.record) {
         const n = answer.name || {};
         const name = `${n.song || "song"}.${(out.record.rendered_at || n.day || "").slice(0, 10)}.${out.id.slice(0, 6)}.flac`;
@@ -654,8 +658,8 @@
       return task;
     }
 
-    function run(kind, path, body, size, onProgress) {
-      const task = { kind, size, job: null, cancelled: false, where: null };
+    function run(kind, path, body, size, onProgress, poll = null) {
+      const task = { kind, size, job: null, cancelled: false, where: null, poll };
       const server = async (instead = false) => {
         // after the browser couldn't, what the server is doing says it's the server's doing
         const hear = instead && onProgress
@@ -707,8 +711,10 @@
 
     return {
       get where() { return modeOf(storage); },
-      preview: ({ edits, who = "you", section = null }, onProgress) =>
-        run("preview", "/api/listen", { edits, who, section }, section === null ? "whole" : "section", onProgress),
+      // quick: asked after more often (a looped section kept up to date: live.js)
+      preview: ({ edits, who = "you", section = null, quick = false }, onProgress) =>
+        run("preview", "/api/listen", { edits, who, section }, section === null ? "whole" : "section", onProgress,
+          quick ? POLL.quick : null),
       record: ({ edits }, onProgress) => run("record", "/api/record", { edits, who: "you", section: null }, "whole", onProgress),
       stems,
       cancel(task) {

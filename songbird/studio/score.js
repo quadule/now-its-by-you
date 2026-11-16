@@ -14,6 +14,7 @@
   const S = {
     view: "page", sel: null, how: "sung", howSet: false, open: null, arr: null, sound: null, grid: null, serial: 0,
     keyed: false, about: false, playhead: null, sketch: false, recording: null, why: {}, tall: false, pop: null,
+    loop: false, looping: false,  // the transport's loop (the sketch's and the sung section's); a sung loop playing
     lastOptions: {}, dragged: new Set(), moved: new Set(), movedKey: null,
     fresh: { ...M.NEW_SECTION }, want: null, wantFocus: null,  // what + adds; what a clip operation leaves selected
   };
@@ -245,8 +246,8 @@
       b.setAttribute("aria-label", label); b.title = label;
     }
   }
-  const making = () => ["queued", "running"].includes(state.playing?.job?.state) && !state.playing?.task?.cancelled;
-  const sounding = () => !!C()?.playing?.() || !$("audio").paused;
+  const making = () => (["queued", "running"].includes(state.playing?.job?.state) && !state.playing?.task?.cancelled) || !!live.keeper;
+  const sounding = () => !!C()?.playing?.() || !$("audio").paused || liveLooping();
   function stopAll() { C()?.stop?.(); pauseAudio(); paintPlay(); idle(); }
   // the whole song sung, from the playhead as the sketch is: the bar of the ruler it's at (none: from the start)
   const hearSong = () => listen("you", null, S.playhead !== null && S.grid ? M.position(S.playhead, S.grid.sections, S.grid.perBar).bar : null);
@@ -260,8 +261,9 @@
       if (t.phrase && S.open) C().sketch({ scope: "phrase", index: compIndex(S.open) });
       else if (s) C().sketch({ scope: "section", index: compIndex(s.id) });
       else C().sketch({ scope: "song", from: M.sketchFrom(S.playhead, S.grid, state.view.composition) });
-    } else if (t.section === null) hearSong();
-    else listen("you", t.section);
+    } else if (t.section === null) { $("audio").loop = S.loop; hearSong(); }
+    else if (S.loop) loopSection(t.section);  // looped with the real sound, kept up to date (live.js)
+    else { $("audio").loop = false; listen("you", t.section); }
     paintPlay();
   }
   function paintPlay() {
@@ -302,7 +304,7 @@
     head.style.left = `${cell.offsetLeft + cell.offsetWidth * Math.min(1, Math.max(0, (beat - s.startBeat) / s.beats))}px`;
   }
   function idle() {  // the position field when nothing is being made or heard: where the selection is, the length
-    if (S.sketch || S.recording || making() || !$("audio").paused) return;
+    if (S.sketch || S.recording || S.looping || making() || !$("audio").paused) return;
     const s = S.sel?.id ? sectionAt(S.sel.id) : S.sel?.section ? sectionAt(S.sel.section) : null;
     const g = S.grid, total = state.view?.composition?.duration;
     const at = S.playhead !== null && g ? M.position(S.playhead, g.sections, g.perBar) : null;
@@ -312,6 +314,26 @@
     $("barFill").style.width = "0";
     $("bar").classList.remove("making");
     $("position").classList.remove("stale");
+  }
+  // studio.js's live loop, as it plays (null when it stops): the section, where round it is, and whether what it
+  // plays is the edits shown ("looping") or catching up ("updating", the bar in the colour of something being made)
+  function loopTick(t) {
+    if (!t) {
+      S.looping = false;
+      if ($("gridHead") && S.playhead === null) $("gridHead").hidden = true;
+      paintPlay(); idle();
+      return;
+    }
+    S.looping = true;
+    $("nowTitle").textContent = t.label;
+    $("nowSub").textContent = t.words;
+    $("nowTime").textContent = t.length ? `${fmtTime(t.fraction * t.length)} / ${fmtTime(t.length)}` : "";
+    $("bar").classList.toggle("making", t.state === "making" || t.state === "updating");
+    $("barFill").style.width = `${Math.round((t.state === "making" ? t.progress : t.fraction) * 1000) / 10}%`;
+    $("position").classList.toggle("stale", t.state === "earlier" || t.state === "failed");
+    const s = S.grid?.sections.find((x) => x.id === t.id);
+    if (s && t.state !== "making") placeHead(s.startBeat + t.fraction * s.beats);
+    paintPlay();
   }
   function playerChanged(title, sub, busy) {  // studio.js's player: a preview being made, or playing
     $("position").classList.toggle("stale", /^Earlier version/.test($("nowSub").textContent));
@@ -1622,6 +1644,12 @@
 
   // ------------------------------------------------------------------ the keyboard (docs/notes/STUDIO-REDESIGN.md's table)
   function key(e) {
+    if (e.key === "l" || e.key === "L") {  // loop (keyAction leaves L to the transport)
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !M.inField(e.target) && !document.querySelector("dialog[open]")) {
+        e.preventDefault(); toggle("tLoop");
+      }
+      return;
+    }
     // Enter or Space on a control of the page's is a keyboard selection: the inspector's heading takes the focus
     if (e.key === "Enter" && e.target.closest?.("#grid [role=gridcell], #grid .region, #grid .name, #page .rub, #mix .nm, .door")) {
       S.keyed = true;
@@ -1674,7 +1702,14 @@
     const b = $(id), on = b.getAttribute("aria-pressed") !== "true";
     b.setAttribute("aria-pressed", String(on));
     if (id === "tClick") { C()?.options?.({ metronome: on }); $("popClick").checked = on; }
-    say(`Click ${on ? "on" : "off"}`);
+    if (id === "tLoop") {  // one loop: the sketch's and the sung section's
+      S.loop = on;
+      C()?.options?.({ loop: on }); $("popLoop").checked = on;
+      if (!on && liveLooping()) live.looper.finish();  // the time round playing plays out
+      else if (!on && live.keeper) { pauseAudio(); paintPlay(); }  // not begun: nothing to play out
+      if (!$("audio").paused && state.playing?.section === null) $("audio").loop = on;
+    }
+    say(`${id === "tLoop" ? "Loop" : "Click"} ${on ? "on" : "off"}`);
   }
 
   // ------------------------------------------------------------------ wiring
@@ -1694,6 +1729,9 @@
     $("tPlay").addEventListener("click", () => play());
     $("tClick").addEventListener("click", () => toggle("tClick"));
     $("popClick").addEventListener("change", () => toggle("tClick"));
+    $("tLoop").addEventListener("click", () => toggle("tLoop"));
+    $("popLoop").addEventListener("change", () => toggle("tLoop"));
+    $("liveKeep").addEventListener("change", (e) => setLiveKeep(e.target.checked));
     $("sketchChords").addEventListener("change", (e) => C()?.options?.({ chords: e.target.checked }));
     $("sketchBass").addEventListener("change", (e) => C()?.options?.({ bass: e.target.checked }));
     $("howMore").addEventListener("click", () => togglePop("howPop"));
@@ -1746,6 +1784,7 @@
   }
   function started(start, hash) {
     S.start = start;  // (the published version's, for the short header)
+    $("liveKeep").checked = liveAuto();  // on by itself on this computer; asked for on the device and in an open studio
     const p = start.public;
     $("toolsWhere").textContent = start.device ? ""  // the page's foot says where
       : p ? `An open studio: ${p.records} whole songs and ${p.previews} sections an hour each, made one at a time.`
@@ -1778,7 +1817,8 @@
     if (hash.panel === "time") openTime(true);
   }
   window.SongbirdScore = {
-    render, renderPage, renderInspector, started, reveal, recording, playerChanged, tick, composerSelected, closeNotes, narrow, partChosen,
+    render, renderPage, renderInspector, started, reveal, recording, playerChanged, tick, loopTick, say, composerSelected, closeNotes, narrow, partChosen,
+    loop: () => S.loop,
     showView, view: () => S.view,
     playersChanged: () => { if (S.sel?.kind === "player" || S.sel?.kind === "choir") renderInspector(); renderGrid(); },
     _state: S,

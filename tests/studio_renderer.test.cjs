@@ -42,3 +42,16 @@ test("cancelling drops a job still waiting its turn, and stops asking", async ()
   assert.equal(job.state, "queued");
   assert.deepEqual(asked.map((a) => a[0]), ["/api/listen", "/api/cancel"]);
 });
+
+test("a looped section kept up to date is asked after more often; its body is the preview's as ever", async () => {
+  const { ask, asked } = server([{ id: "j1", state: "running" }, { id: "j1", state: "done", url: "/audio/a.flac", key: "k" }]);
+  const waited = [];
+  const job = await create(ask, { wait: async (ms) => { waited.push(ms); } }).preview({ edits: {}, section: 1, quick: true }).done;
+  assert.equal(job.key, "k");
+  assert.deepEqual(waited, [150]);
+  assert.deepEqual(asked[0], ["/api/listen", { edits: {}, who: "you", section: 1 }]);
+  const slow = server([{ id: "j2", state: "running" }, { id: "j2", state: "done", url: "/audio/b.flac" }]);
+  const plain = [];
+  await create(slow.ask, { wait: async (ms) => { plain.push(ms); } }).preview({ edits: {}, section: 1 }).done;
+  assert.deepEqual(plain, [450]);
+});

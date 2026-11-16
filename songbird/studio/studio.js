@@ -13,7 +13,7 @@ const score = () => window.SongbirdScore;
 const state = {
   start: null, view: null, timeline: null, edits: {}, open: {}, choose: null, options: null,
   names: [], compare: null, busy: 0, playing: null, poll: null, recordJob: null,
-  optionsByKey: {}, optionsFailed: false, undo: [], redo: [], editRevision: 0, refreshSerial: 0,
+  optionsByKey: {}, optionsFailed: false, undo: [], redo: [], editRevision: 0, viewRevision: -1, refreshSerial: 0,
   historyGroup: null, workspace: "words", saveStatus: "Saved", playerSub: "",
   solo: null, mutedLevels: {},
 };
@@ -318,10 +318,12 @@ async function refresh() {
     const view = await api("/api/song", { edits });
     if (revision !== state.editRevision || serial !== state.refreshSerial) return;
     state.view = view;
+    state.viewRevision = revision;  // the edits this view was made from (a looped section's audio is checked against it)
     state.options = null;
     state.optionsByKey = {};
     state.optionsFailed = false;
     render();
+    liveChanged();
     loadCompare();
     // Safe word alternates belong to the rendered words, so load them without an extra "change" step.
     const sections = view.words.filter((w) => w.sung && w.changeable);
@@ -1169,6 +1171,7 @@ const renderer = () => window.SongbirdRenderer.create((path, body) => api(path, 
 // bar: the whole song from a bar of the score's ruler (its playhead's), not its start
 async function listen(who = "you", section = null, bar = null) {
   window.SongbirdComposer?.stop();
+  stopLive();
   if (state.playing?.task) renderer().cancel(state.playing.task);  // one still waiting its turn is dropped
   quietPause();
   const label = section === null ? "The whole song" : (state.view.composition?.sections?.[section] || state.view.words.find((w) => w.index === section))?.label || "Song section";
@@ -1198,7 +1201,128 @@ async function listen(who = "you", section = null, bar = null) {
   }
 }
 
+// ------------------------------------------------------------------ a section looped with the real sound (live.js)
+// The section is followed by its id; what it plays is the preview whose key is the view's for it, made from the edits
+// there are now (docs/notes/STUDIO-LIVE-SOUND.md). The transport says "updating" whenever the audio isn't that.
+const live = { ctx: null, looper: null, keeper: null, id: null, label: "", frame: null, said: null, keep: null };
+const LIVE_KEEP = "songbird-live-keep";  // this browser's choice to keep the loop up to date where it isn't by default
+function liveWhere() { return { device: !!state.start?.device, public: !!state.start?.public, shared: !!state.start?.shared }; }
+function liveAuto() {
+  if (live.keep === null) {
+    let saved = null;
+    try { saved = localStorage.getItem(LIVE_KEEP); } catch (e) { /* a convenience */ }
+    live.keep = saved === null ? window.SongbirdLive.mayRenderAhead(liveWhere()).auto : saved === "1";
+  }
+  return live.keep;
+}
+function setLiveKeep(on) {
+  live.keep = !!on;
+  try { localStorage.setItem(LIVE_KEEP, on ? "1" : "0"); } catch (e) { /* this visit only */ }
+  if (live.keeper) { live.keeper.auto = live.keep; if (live.keep) liveChanged(); }
+}
+function liveContext() {
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!Context) return null;
+  if (!live.ctx || live.ctx.state === "closed") live.ctx = new Context();
+  if (live.ctx.state === "suspended") live.ctx.resume().catch(() => {});
+  return live.ctx;
+}
+const liveLooping = () => !!live.looper?.playing;
+// the looped section's preview key in the view made from the edits there are now (null while that view is on its way)
+function liveTarget() {
+  if (!live.id || !state.view || state.viewRevision !== state.editRevision) return null;
+  const s = (state.view.composition?.sections || []).find((x) => x.id === live.id);
+  if (!s) return { gone: true };
+  const key = state.view.listen?.sections?.[s.index];
+  return key ? { key, index: s.index, label: s.label, edits: copyEdits() } : null;
+}
+async function liveBytes(job) {
+  if (job.blob) return job.blob.arrayBuffer();  // made in this browser: its own file
+  const r = await fetch(job.url, { headers: { "X-Studio": TOKEN } });
+  if (!r.ok) throw new Error(r.statusText);
+  return r.arrayBuffer();
+}
+// a render landed whose key is the one wanted: decoded, and taken at the next bar line (or played, the first)
+async function liveOffer(job, target) {
+  try {
+    const bytes = await liveBytes(job), ctx = liveContext();
+    if (!ctx || live.keeper?.wanted?.key !== target.key) return;
+    const buffer = await ctx.decodeAudioData(bytes);
+    if (!live.looper || live.keeper?.wanted?.key !== target.key) return;  // edited again, or stopped, meanwhile
+    const loop = job.result?.loop || null;
+    if (live.looper.playing) live.looper.swap(buffer, loop, target.key);
+    else { live.looper.play(buffer, loop, target.key); liveFrame(); }
+  } catch (e) {  // (a browser that can't decode the file plays it as ever, once)
+    if (live.looper && !live.looper.playing && live.keeper?.wanted?.key === target.key) { listen("you", target.index); return; }
+    toast(`Couldn't play it: ${e.message}`);
+  }
+}
+function loopSection(index) {
+  window.SongbirdComposer?.stop();
+  stopLive();
+  if (state.playing?.task) renderer().cancel(state.playing.task);
+  quietPause();
+  const s = (state.view?.composition?.sections || []).find((x) => x.index === index);
+  const ctx = liveContext();
+  if (!s || !ctx) { listen("you", index); return; }
+  state.playing = null;
+  live.id = s.id; live.label = s.label; live.said = null;
+  live.looper = window.SongbirdLive.looper(ctx, { ended: () => stopLive() });  // (loop off: its last time round played out)
+  live.keeper = window.SongbirdLive.keeper({
+    auto: liveAuto(),
+    // (asked after often on this computer; an open studio's queue is everyone's, asked after as ever)
+    start: (target) => renderer().preview({ edits: target.edits, who: "you", section: target.index, quick: !state.start?.public },
+      (job) => { live.progress = job.progress || 0; liveFrame(true); }),
+    cancel: (task) => renderer().cancel(task),
+    offer: liveOffer,
+    changed: () => liveFrame(true),
+  });
+  showPlayer(s.label, "getting it ready…", 0, true);
+  liveChanged();  // what it wants: the section's audio for the edits there are (once the view for them has come)
+  live.keeper.begin();
+}
+// the view came for the latest edits (render): the loop wants its audio
+function liveChanged() {
+  if (!live.keeper) return;
+  const target = liveTarget();
+  if (target?.gone) { stopLive(); showPlayer("The section", "gone", 0, false); return; }
+  if (target) live.keeper.want(target);
+  liveFrame(true);
+}
+function stopLive() {
+  if (!live.keeper && !live.looper) return;
+  live.keeper?.stop();
+  live.looper?.stop();
+  live.keeper = null; live.looper = null; live.id = null;
+  if (live.frame) cancelAnimationFrame(live.frame);
+  live.frame = null;
+  score()?.loopTick?.(null);
+}
+// what the transport shows while the loop plays: where round it is, and whether what it plays is the edits there are
+function liveState() {
+  if (!live.keeper) return null;
+  const status = live.keeper.status(), target = liveTarget();
+  const behind = !target || live.looper?.key !== target.key;
+  if (!live.looper?.playing) return status === "failed" ? "failed" : "making";
+  if (status === "failed" && behind) return "failed";
+  if (!behind) return "current";
+  return live.keeper.auto || status === "updating" ? "updating" : "earlier";
+}
+const LIVE_WORDS = { current: "looping", updating: "updating", earlier: "earlier version", failed: "couldn't make it", making: "getting it ready…" };
+function liveFrame(once = false) {
+  if (!live.keeper) return;
+  const now = liveState(), where = live.looper?.where();
+  if (now !== live.said) {
+    if (live.said !== null && (now === "updating" || now === "current")) score()?.say?.(now === "current" ? "Up to date" : "Updating");
+    live.said = now;
+  }
+  score()?.loopTick?.({ id: live.id, label: live.label, words: LIVE_WORDS[now], state: now, fraction: where?.fraction ?? 0,
+    length: where?.length ?? 0, progress: live.progress || 0 });
+  if (!once || !live.frame) live.frame = live.looper?.playing ? requestAnimationFrame(() => liveFrame()) : null;
+}
+
 function pauseAudio() {
+  stopLive();
   const playing = state.playing;
   quietPause();
   if (!playing) return;
@@ -1543,6 +1667,11 @@ function showWorkspace(name, focus = false) {
 
 window.StudioBridge = {
   setEdit, setEdits, applyPatch, releaseEdit, clearEdits, listen, toast, pauseAudio,
+  // the live loop (live.js): a section looped sung, whether one plays, whether it keeps up with edits by itself
+  loopSection, liveLooping, liveAuto: () => liveAuto(), setLiveKeep,
+  // a note in the player's own sound (true), or nothing here yet (false: the caller sounds the sketch's tone)
+  note: (player, pitch, velocity) => !!live.samples?.play(player, pitch, velocity),
+  prefetch: (player, pitches, velocity) => live.samples?.prefetch(player, pitches, velocity),
   getEdits: () => copyEdits(),
   snapshot: () => ({ start: state.start ? JSON.parse(JSON.stringify(state.start)) : null, edits: copyEdits(), revision: state.editRevision }),
   replaceEdits: (edits, label = "Load a saved draft") => commitEdits(edits, label),
@@ -1569,6 +1698,11 @@ async function main() {
   }
   const s = state.start;
   state.names = s.names.slice();
+  if (window.SongbirdLive) {  // single notes in a player's own sound, where the studio makes them at once (live.js)
+    live.samples = window.SongbirdLive.samples({ ask: api, context: liveContext, edits: () => copyEdits(),
+      bytes: (url) => fetch(url).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.statusText)))),
+      allowed: () => window.SongbirdLive.mayRenderAhead(liveWhere()).notes, revision: () => state.editRevision });
+  }
   state.edits = restore();
   const hash = readHash();
   if (hash.e) {

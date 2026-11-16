@@ -561,6 +561,16 @@ bar, a pickup sung just before its bar line isn't heard; the audio is silent
 until it sounds there, then comes up over 24 ms. A selected section is
 previewed from its own start.
 
+**Loop** (L) is one switch for the sketch and the sung section. Sung, a section looped plays its preview round
+on the section's own clock (each time round from its pickup), and an edit to the song makes it again in the
+background: the new audio takes over at the next bar line, and until then the transport says **updating**. The
+edit itself is heard at once in the sketch's voice (a note moved, a note or a stroke written, a key or a drum's
+row pressed: in the instrument's own sound where the studio has made that note, `/api/note`), over the loop. Only
+the part changed is made again (each part's stem is kept by what its maker reads), so on this computer a band
+player's notes, level or pan take about 0.75 s and a sung note about 1.1 s for H's verse. On the device and in a
+shared or open studio nothing is made unasked: **Keep the sung loop up to date** (under ▾) turns it on, and off,
+the loop says *earlier version* after an edit. docs/notes/STUDIO-LIVE-SOUND.md has the design and the times.
+
 One renderer works at a time: exports first, then the newest preview (a
 preview still waiting is dropped when another is asked for). Every render is
 cached by what it depends on (the parameters, the words, the phrasing, the

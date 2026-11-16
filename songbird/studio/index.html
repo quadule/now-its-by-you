@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/score.css">
 <link rel="stylesheet" href="/drums.css">
 <script src="/renderer.js" defer></script>
+<script src="/live.js" defer></script>
 <script src="/model.js" defer></script>
 <script src="/parts.js" defer></script>
 <script src="/drums.js" defer></script>
@@ -61,6 +62,7 @@
   </div>
   <span class="sep wide"></span>
   <div class="group wide">
+    <button class="tbtn" id="tLoop" type="button" aria-pressed="false" aria-label="Loop (L)" title="Loop (L)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 9.5V8a3 3 0 0 1 3-3h8"/><path d="M12.5 2.5 15 5l-2.5 2.5"/><path d="M16 10.5V12a3 3 0 0 1-3 3H5"/><path d="M7.5 17.5 5 15l2.5-2.5"/></svg></button>
     <button class="tbtn" id="tClick" type="button" aria-pressed="false" aria-label="Click (K)" title="Click (K)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 3h5l3 14h-11z"/><path d="M10 13l4.5-7.5"/><path d="M6.2 13h7.6"/></svg></button>
   </div>
   <div class="position" id="position">
@@ -89,8 +91,10 @@
       <span class="switch" role="group" aria-label="Sketch or sung" id="howPhone">
         <button type="button" data-how="sketch" aria-pressed="true">Sketch</button><button type="button" data-how="sung" aria-pressed="false">Sung</button>
       </span>
+      <label class="check"><input type="checkbox" id="popLoop"> Loop</label>
       <label class="check"><input type="checkbox" id="popClick"> Click</label>
     </div>
+    <label class="check" title="An edit makes the looped section again, sung, and it takes over at the next bar line"><input type="checkbox" id="liveKeep"> Keep the sung loop up to date</label>
     <label class="check"><input type="checkbox" id="sketchChords" checked> the sketch's chords</label>
     <label class="check"><input type="checkbox" id="sketchBass" checked> the sketch's bass</label>
   </div>
@@ -274,7 +278,7 @@
   <details class="keys"><summary>The keyboard</summary>
     <table>
       <tr><th>Space · Shift+Space</th><td>play or stop the sketch · the sung version, of what is selected</td></tr>
-      <tr><th>K</th><td>click</td></tr>
+      <tr><th>L · K</th><td>loop · click</td></tr>
       <tr><th>⌘/Ctrl Z · ⌘/Ctrl Shift Z</th><td>undo · redo</td></tr>
       <tr><th id="viewKeys">1 · 2 · 3</th><td id="viewNames">Page · Arrange · Mix</td></tr>
       <tr><th>← →</th><td>the section before or after; in the notes, move the selected notes (Shift: a note's length)</td></tr>

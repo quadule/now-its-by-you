@@ -109,6 +109,7 @@ STATIC["/learn.js"] = ("learn.js", "text/javascript; charset=utf-8")
 # the score (docs/notes/STUDIO-REDESIGN.md): one page, three views, one inspector (index.html)
 STATIC["/renderer.js"] = ("renderer.js", "text/javascript; charset=utf-8")  # previews and recordings, one interface
 STATIC["/model.js"] = ("model.js", "text/javascript; charset=utf-8")
+STATIC["/live.js"] = ("live.js", "text/javascript; charset=utf-8")  # a section looped with the real sound, single notes
 STATIC["/parts.js"] = ("parts.js", "text/javascript; charset=utf-8")
 STATIC["/drums.js"] = ("drums.js", "text/javascript; charset=utf-8")  # a percussion player's step grid
 STATIC["/drums.css"] = ("drums.css", "text/css; charset=utf-8")

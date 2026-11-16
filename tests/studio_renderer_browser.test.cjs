@@ -33,7 +33,7 @@ function fakeWorkers(script = {}) {
           if (fate === "crash") return setImmediate(() => w.onerror?.({ message: "the worker crashed" }));
           say({ kind: "progress", progress: 0.5, stage: "singing" });
           say({ kind: "done", made: what.kind, key: what.key, id: `id-${what.key}`, duration: 9.2, seconds: 4.8,
-            heap: script.heap,
+            heap: script.heap, loop: what.kind === "section" ? { start: 1.1, length: 8, head: 0.3, bars: [0, 2, 4, 6] } : null,
             flac: new ArrayBuffer(8),
             record: what.kind === "whole" ? { generation: 1, rendered_at: "2026-09-30T12:00:00+00:00", yours: 3, program_sha256: "p" } : null });
         }
@@ -356,4 +356,13 @@ test("chosen: the server; a studio without the bundle; a phone: the server's que
     assert.equal(fake.made.length, 0);
     assert.ok(!server.asked.some((a) => a[0] === "/api/render/spec"));
   }
+});
+
+test("a section made here ends with its loop and key, as the server's job does (live.js loops it)", async () => {
+  const { r } = browser({});
+  const job = await r.preview({ edits: { tempo: 95 }, section: 1 }).done;
+  assert.deepEqual(job.result.loop, { start: 1.1, length: 8, head: 0.3, bars: [0, 2, 4, 6] });
+  assert.equal(job.result.key, "s1-95");
+  assert.equal(job.key, "s1-95");
+  assert.equal((await r.preview({ edits: { tempo: 95 }, section: null }).done).result.loop, undefined);
 });
