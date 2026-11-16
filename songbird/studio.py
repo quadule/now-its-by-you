@@ -2225,15 +2225,17 @@ class Handler(BaseHTTPRequestHandler):
                                        "connection.")
             answer = studio.receive(path, timeout=left)
         except received.Refused as e:
-            return self.fail(422, str(e))
+            answer = e
         except (TimeoutError, ConnectionError):
-            return None  # the sender went quiet, or away: no one to answer
-        finally:
+            answer = None  # the sender went quiet, or away: no one to answer
+        finally:  # its reader's place and its address given back before it is answered, so the next file finds them
             shutil.rmtree(folder, ignore_errors=True)
             studio.reading.release()
             with studio._arriving_lock:
                 studio.arriving.discard(where)
-        return self.send_json(answer)
+        if isinstance(answer, received.Refused):
+            return self.fail(422, str(answer))
+        return None if answer is None else self.send_json(answer)
 
     def _may_open(self, length: int, count: bool) -> Callable[[], None] | None:
         """Why a file of `length` bytes can't be brought now, as the reply that says so; None if it can. `count`:

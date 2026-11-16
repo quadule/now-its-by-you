@@ -413,6 +413,24 @@ def test_the_pages_guards_come_before_a_byte_is_read(public, parent):
     assert not list(studio.incoming.iterdir())
 
 
+def test_a_file_refused_gives_its_reader_and_its_address_back_before_it_is_answered(public):
+    """The next file from the same address, sent the moment the answer comes, finds them free, however slowly the
+    studio gives them back (a loaded machine)."""
+    studio, port, _ = public
+
+    class Slow(set):
+        def discard(self, where):
+            time.sleep(0.5)
+            super().discard(where)
+
+    studio.arriving = Slow()
+    assert send(port, b"not a flac at all", studio.token)[0] == 422
+    assert send(port, b"nor this", studio.token)[0] == 422
+    assert not studio.arriving and studio.reading.acquire(blocking=False) and studio.reading.acquire(blocking=False)
+    studio.reading.release()
+    studio.reading.release()
+
+
 def test_a_file_brought_is_answered_within_a_proxys_patience(public, parent, monkeypatch):
     """Cloudflare gives up on an answer after 100 s: a file brought is never left waiting for a reader (both busy:
     "send it again in a minute", at once, and the page asking first hears so too), and its reader is given what is
