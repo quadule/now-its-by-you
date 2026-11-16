@@ -277,6 +277,10 @@ def from_file(genome, params, score, file_bytes: bytes, assign: dict | None = No
                                   "download the MIDI again, and bring that back")
     # its tracks, matched with ours by name (or as the page was told)
     ours_by_name = {t["name"]: t for t in ours["tracks"][1:] if t["name"]}
+    # a track named as an older file named it (Drummachine for Drum machine): the same player
+    named = {midi.part_name(p): p for p in {n.part for n in score.notes}}
+    older = {midi.older_part_name(part).lower(): name for name, part in named.items()
+             if name in ours_by_name and midi.older_part_name(part) != name}
     channel_names = {n[2]: t["name"] for t in ours["tracks"][1:] for n in t["notes"][:1]}
     assign = {str(k): v for k, v in (assign or {}).items()}
     matched: dict[str, dict] = {}
@@ -293,7 +297,8 @@ def from_file(genome, params, score, file_bytes: bytes, assign: dict | None = No
                 raise ValueError(f"this version has no track called {chosen}")
             name = chosen
         else:
-            name = next((n for n in ours_by_name if name and n.lower() == name.strip().lower()), None)
+            name = next((n for n in ours_by_name if name and n.lower() == name.strip().lower()), None) or older.get(
+                (name or "").strip().lower())
         if name is None:
             unmatched.append({"track": str(t["index"]), "name": t["name"] or f"channel {t.get('channel', 0) + 1}",
                               "notes": len(t["notes"])})

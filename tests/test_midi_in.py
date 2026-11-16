@@ -179,7 +179,7 @@ def test_what_cant_be_taken_is_said():
         return notes + [[a + 240, a + 480, 15, 50, 64]] if name == "Chords" else notes
 
     def drums_and_choir(name, notes):
-        if name == "Drum":
+        if name == "Frame drum":
             return notes[1:]
         return notes
 
@@ -275,3 +275,14 @@ def test_a_take_on_the_tune_keeps_its_fences():
     assert r["changes"][0]["value"][3]["degree"] == written[3]["degree"] + 1
     r = notesin.take(G, params, "voice", sung[:-2], [ln["key"]])
     assert not r["changes"] and "needs 11 notes" in r["refused"][0]["why"]
+
+
+def test_a_file_written_with_the_older_track_names_is_still_read(monkeypatch):
+    params = seed()
+    assert midi.part_name("drum") == "Frame drum" and midi.part_name("drummachine") == "Drum machine"
+    with monkeypatch.context() as m:
+        m.setattr(midi, "part_name", midi.older_part_name)  # as the file was written before: Drum, Drummachine
+        data = export(params)
+    assert b"Frame drum" not in data and b"Drum" in data
+    r = notesin.from_file(G, params, score_of(params), data)
+    assert r["changes"] == [] and r["refused"] == [] and r["unmatched"] == []

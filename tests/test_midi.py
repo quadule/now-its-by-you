@@ -115,7 +115,7 @@ def test_a_compound_meter_and_drums_on_channel_ten():
         [top, bottom.bit_length() - 1])
     for track, name in zip(read["tracks"][1:-1], names[1:-1]):
         channels = {e["channel"] for _, e in track if e.get("status") == 0x90}
-        assert channels == ({9} if name == "Drum" else channels - {9}) and channels
+        assert channels == ({9} if name == "Frame drum" else channels - {9}) and channels
 
 
 def test_long_lengths_are_written_as_midi_counts_them():

@@ -400,12 +400,23 @@ def percussive(part: str) -> bool:
 
 
 def part_name(part: str) -> str:
+    """A part as a person names it, capitalized (Drum machine, Synth bass, Frame drum): the arrangement's own name
+    for a player (explain.PLAYERS), else its own name; the MIDI file's track name and the studio's Part menu."""
     if part == "voice":
         return "Voice"
     if part.startswith("choir"):
         return f"Lineage voice {part[5:]}"
     if part == "chop":
         return "Vocal chop"
+    from .explain import PLAYERS
+
+    name = PLAYERS.get(part) or part.replace("-", " ")
+    return name[:1].upper() + name[1:]
+
+
+def older_part_name(part: str) -> str:
+    """A player's track name in a MIDI file this program wrote before part_name named it as the arrangement does
+    (Drummachine, Kit): a file brought back by that name is still read."""
     return part.replace("-", " ").capitalize()
 
 

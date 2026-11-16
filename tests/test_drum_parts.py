@@ -79,7 +79,7 @@ def test_the_players_say_their_pieces_and_a_pitched_player_its_range():
                                         for k, (a, label) in enumerate(C.DRUM_PIECES["drum"])]
     assert "low" not in players["drum"] and "drums" not in players["fiddle"] and players["fiddle"]["low"] == 55
     kit = next(p for p in C.playable(country()) if p["name"] == "kit")
-    assert [d["name"] for d in kit["drums"]][:3] == ["kick", "snare", "rim"] and kit["label"] == "Kit"
+    assert [d["name"] for d in kit["drums"]][:3] == ["kick", "snare", "rim"] and kit["label"] == "Drum kit"
     with pytest.raises(ValueError, match="strokes"):
         C.part_player("chip-drums")  # its strokes aren't written yet
 
@@ -224,7 +224,7 @@ def test_the_midi_file_writes_the_strokes_on_channel_ten():
     score = realize(G, mine)
     data, _ = midi.from_score(G, mine, score)
     read = midi.parse(data)
-    kit = next(t for t in read["tracks"] if t["name"] == "Kit")
+    kit = next(t for t in read["tracks"] if t["name"] == "Drum kit")
     w0, w1, _ = window(mine, "verse:0.0")
     written = [n for n in score.part("kit") if w0 - 1e-6 <= n.start < w1]
     keys = {n[3] for n in kit["notes"]}

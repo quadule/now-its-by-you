@@ -904,7 +904,7 @@ with each note's pitch naming one of that player's pieces:
 
 The piece is a place in the player's list (`composition.DRUM_PIECES`), which
 only ever grows at its end. The view's player has its pieces
-(`{"name": "kit", "label": "Kit", "drums": [{"index": 0, "name": "kick",
+(`{"name": "kit", "label": "Drum kit", "drums": [{"index": 0, "name": "kick",
 "label": "Kick"}, ...]}`), so the editor needs no list of its own.
 
 | Player | Pieces |
