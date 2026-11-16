@@ -72,8 +72,10 @@
   // one before left, so two quick presses do two things.
   const clipsView = () => state.view?.composition?.clips || null;
   const clipOrder = () => state.edits.clips?.order || clipsView()?.value?.order || [];
-  // a section's place in the order: its instance's (verse102:1), or, before the song has clips stored, its index
-  const placeOf = (id) => (clipsView()?.stored || state.edits.clips ? M.instanceIds(clipOrder()).indexOf(id) : (S.grid?.sections || []).findIndex((s) => s.id === id));
+  // a section's instance in the order (verse102:1), named when an action is taken: the same name before and after
+  // the song's clips are stored, so an operation that waits for another finds its section
+  const keyOf = (id) => { const at = M.clipAt(clipsView(), sectionAt(id)?.index); return at ? `${at.clip.id}:${at.instance}` : id; };
+  const placeOf = (key) => M.instanceIds(clipOrder()).indexOf(key);
   const sentence = (text) => { const t = String(text || "").trim(); return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? "" : "."}` : ""; };
   let clipChain = Promise.resolve();
   function clipOp(make, label, { focus = false } = {}) {
@@ -93,25 +95,28 @@
   }
   const can = (s, what) => (s?.can?.[what] === undefined || s.can[what] === true ? null : sentence(s.can[what]));
   function newSection(after = null, spec = S.fresh) {
-    const name = M.ROLE_NAMES[spec.role] || spec.role;
+    const name = M.ROLE_NAMES[spec.role] || spec.role, afterKey = after ? keyOf(after) : null;
     return clipOp(() => ({ op: "blank", role: spec.role, sung: !!spec.sung, bars: spec.bars, lines: spec.lines,
-      at: after ? placeOf(after) + 1 : clipOrder().length }), `New ${name.toLowerCase()}${after ? ` after ${sectionAt(after)?.label || ""}` : ""}`.trim(), { focus: true });
+      at: afterKey ? placeOf(afterKey) + 1 : clipOrder().length }), `New ${name.toLowerCase()}${after ? ` after ${sectionAt(after)?.label || ""}` : ""}`.trim(), { focus: true });
   }
   function duplicateSection(id, focus = false) {
     const s = sectionAt(id);
     if (!s?.clip || can(s, "duplicate")) { if (s) toast(can(s, "duplicate")); return null; }
-    return clipOp(() => (placeOf(id) < 0 ? null : { op: "duplicate", clip: s.clip, at: placeOf(id) + 1 }), `Duplicate ${s.label}`, { focus });
+    const key = keyOf(id);
+    return clipOp(() => (placeOf(key) < 0 ? null : { op: "duplicate", clip: s.clip, at: placeOf(key) + 1 }), `Duplicate ${s.label}`, { focus });
   }
   function repeatSection(id) {
     const s = sectionAt(id);
     if (!s?.clip || can(s, "repeat")) { if (s) toast(can(s, "repeat")); return null; }
-    return clipOp(() => (placeOf(id) < 0 ? null : { op: "repeat", clip: s.clip, at: placeOf(id) + 1 }), `Repeat ${s.label}`);
+    const key = keyOf(id);
+    return clipOp(() => (placeOf(key) < 0 ? null : { op: "repeat", clip: s.clip, at: placeOf(key) + 1 }), `Repeat ${s.label}`);
   }
   function deleteSection(id, focus = false) {
     const s = sectionAt(id);
     if (!s?.clip || can(s, "delete")) { if (s) toast(can(s, "delete")); return null; }
     say(`${s.label} deleted`);
-    return clipOp(() => (placeOf(id) < 0 ? null : { op: "delete", at: placeOf(id) }), `Delete ${s.label}`, { focus });
+    const key = keyOf(id);
+    return clipOp(() => (placeOf(key) < 0 ? null : { op: "delete", at: placeOf(key) }), `Delete ${s.label}`, { focus });
   }
   async function emptySong() {
     $("emptyConfirm").hidden = true; $("emptySong").setAttribute("aria-expanded", "false");
@@ -691,9 +696,10 @@
       }
       if (from === to || to < 0 || to >= list.length || !clipsView()) return;
     }
+    const key = keyOf(id), ontoKey = where.onto === undefined ? null : keyOf(where.onto);
     clipOp(() => {
-      const ids = M.instanceIds(clipOrder()), from = placeOf(id);
-      const to = where.step !== undefined ? from + where.step : placeOf(where.onto);
+      const ids = M.instanceIds(clipOrder()), from = placeOf(key);
+      const to = where.step !== undefined ? from + where.step : placeOf(ontoKey);
       const r = M.moveOp(ids, from, to);
       if (r.error || from < 0) return null;
       say(`${label} moved to place ${to + 1}`);

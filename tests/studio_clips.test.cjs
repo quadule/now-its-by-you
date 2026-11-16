@@ -190,7 +190,7 @@ test("Duplicate, Repeat and Delete in the column; Ctrl/⌘ D and Delete on a sec
 // score.js clipOp: an operation asked for while the song's first (the one that stores its clips) is still on its way
 // names its section by the id the grid gave then ("intro:0"); run after the first, placeOf looks that id up among the
 // stored clips' instances ("intro101:0"), finds nothing, and the operation is dropped without a word.
-test("an operation asked for while the first on a song without clips is on its way is done after it", { todo: "score.js placeOf: the id is resolved when the operation runs, not when it is asked for" }, async () => {
+test("an operation asked for while the first on a song without clips is on its way is done after it", async () => {
   const page = studio();
   await page.open();
   let land;
