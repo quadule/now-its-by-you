@@ -1108,3 +1108,26 @@ test("an instrument's notes already on the snap, quantized, are no edit: the pro
   s.clickText("Quantize");
   assert.equal(s.commits.length, 0);
 });
+
+test("a section in a six feel opens on the ⅓ snap: a nudge and Quantize keep its thirds exact; an instrument's roll offers ⅙", () => {
+  const s = setup(score({ compound: true }));
+  s.find('[data-section="1"]').emit("click");
+  assert.equal(Number(s.find("#sbc-snap").children.find((o) => o.getAttribute("selected") !== null).value), 1 / 3);
+  s.find('[data-note="1"]').emit("click");
+  s.find('[data-note="1"]').emit("keydown", { key: "ArrowRight", shiftKey: true });  // a third longer: up to the next note? it is taken
+  s.find('[data-note="4"]').emit("click");
+  s.find('[data-note="4"]').emit("keydown", { key: "ArrowLeft", shiftKey: true });
+  const notes = s.commits.at(-1).value;
+  assert.deepEqual(notes.map((n) => [n.onset, n.duration]).at(-1), [4 / 3, 1 / 3], "a third shorter, exactly");
+  s.clickText("Quantize");
+  assert.equal(s.commits.length, 1, "already on thirds: nothing to quantize");
+  const v = writableScore(), c = v.composition;
+  c.players = [{ name: "voice", label: "Melody" }, { name: "fiddle", label: "Fiddle", low: 55, high: 88, poly: false }];
+  Object.assign(c.sections[1].phrases[0], { part_key: "verse:0.0", part_notes: { fiddle: [] } });
+  Object.assign(c.sections[1].phrases[1], { part_key: "verse:0.1", part_notes: { fiddle: [] } });
+  const t = setup(v);
+  t.root.dataset.mode = "notes"; t.window.SongbirdComposer.open(1);
+  assert(!t.find("#sbc-snap").children.some((o) => o.textContent === "⅙"), "a melody's notes are a quarter beat at least");
+  t.find("#sbc-part").emit("change", { target: { value: "fiddle" } });
+  assert(t.find("#sbc-snap").children.some((o) => o.textContent === "⅙"));
+});

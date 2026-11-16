@@ -333,3 +333,20 @@ test("a note's resize handle is a quarter of it, 4 to 9 pixels, and none on a na
   assert.equal(M.labelFits("sunlight", 21), false);
   assert.equal(M.labelFits("", 100), false);
 });
+
+test("triplet snaps: ⅓ for a melody, ⅙ too for an instrument; thirds kept exact; a six feel opens on ⅓", () => {
+  assert.deepEqual(M.SNAPS.map(([, n]) => n), ["¼", "⅓", "½", "1"]);
+  assert.deepEqual(M.PART_SNAPS.map(([, n]) => n), ["⅙", "¼", "⅓", "½", "1"]);
+  assert.equal(M.onGrid(0.34, 1 / 3), 1 / 3);
+  assert.equal(M.onGrid(0.65, 1 / 3), 2 / 3);
+  assert.equal(M.onGrid(0.65, 1 / 3) + 1 / 3, 1, "two thirds and a third meet a beat exactly");
+  assert.equal(M.onGrid(0.3, 0.25), 0.25);
+  const six = [-1 / 3, 1 / 3, 0, 1 / 3, 1 / 3, 2 / 3, 1, 1 / 3];
+  assert.equal(M.feelSnap(six, 0.25), 1 / 3);
+  assert.equal(M.feelSnap(six, 1 / 6), 1 / 6, "a snap of thirds already is kept");
+  assert.equal(M.feelSnap([0, 0.5, 0.5, 0.5, 1, 1], 0.25), 0.25, "a straight tune keeps the snap");
+  assert.equal(M.feelSnap([0, 1, 1, 1], 0.25), 0.25, "whole beats are no six feel");
+  assert.equal(M.feelSnap([0, 1 / 3], 1 / 3), 1 / 3);
+  assert.equal(M.snapFor(1 / 6, M.SNAPS), 0.25, "no ⅙ for the melody: the nearest");
+  assert.equal(M.snapFor(1 / 3, M.SNAPS), 1 / 3);
+});

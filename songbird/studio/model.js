@@ -262,6 +262,30 @@
     return n > 0 && n * char + pad <= width + 1e-9;
   }
 
+  // ------------------------------------------------------------------ the snap
+  // The snaps a roll offers: the melody's ¼, ⅓, ½ and a beat (a sung note is a quarter beat at least, so no ⅙); an
+  // instrument's and a drum's ⅙ too (16 and 32 of the 96ths a beat its notes are kept in).
+  const SNAPS = [[0.25, "¼"], [1 / 3, "⅓"], [0.5, "½"], [1, "1"]];
+  const PART_SNAPS = [[1 / 6, "⅙"], ...SNAPS];
+  // a time put on the snap's grid: a third's multiples exact as k / 3 (never 0.3333), so a third stays the third the
+  // server keeps and two notes on thirds meet exactly
+  function onGrid(value, grid) {
+    const parts = Math.round(1 / grid);
+    if (Math.abs(parts * grid - 1) < 1e-9) return Math.round(value * parts) / parts;
+    return Math.round(Math.round(value / grid) * grid * 1e9) / 1e9;
+  }
+  // The snap a section opens on: ⅓ where its tune sits on thirds and not on halves (a six feel, a triplet lilt),
+  // unless the snap is one of thirds already; otherwise the snap as it was. `times`: its notes' onsets and lengths.
+  function feelSnap(times, snap) {
+    const on = (parts) => times.length > 0 && times.every((t) => Math.abs(t * parts - Math.round(t * parts)) < 1e-6);
+    const thirds = Math.abs(snap * 6 - Math.round(snap * 6)) < 1e-9 && Math.abs(snap * 4 - Math.round(snap * 4)) > 1e-9;
+    return on(3) && !on(2) && !thirds ? 1 / 3 : snap;
+  }
+  // a snap the roll offers: one it hasn't (⅙ for the melody) gives way to the nearest it has
+  function snapFor(snap, offered) {
+    return offered.reduce((best, [s]) => (Math.abs(s - snap) < Math.abs(best - snap) - 1e-12 ? s : best), offered[0][0]);
+  }
+
   // ------------------------------------------------------------------ the section's roll (composer.js)
   // The phrase a time of the section's roll belongs to. spans: each phrase's { off: its bar line, start: its earliest
   // note, end: its latest, final: its last note's latest start }, in beats from the section's start. Where the next
@@ -323,7 +347,7 @@
   function shiftLimit(notes, indices, dt, b, grid, anchor = indices[0]) {
     const set = new Set(indices), a = notes[anchor];
     if (!set.size || !a || !dt) return 0;
-    const want = Math.round((a.onset + dt) / grid) * grid - a.onset;
+    const want = onGrid(a.onset + dt, grid) - a.onset;
     let lo = -Infinity, hi = Infinity;
     for (let i = 0; i < notes.length; i++) {
       if (!set.has(i) || set.has(i - 1)) continue;
@@ -335,7 +359,9 @@
       hi = Math.min(hi, after - (notes[j].onset + notes[j].duration));
       if (j === notes.length - 1) hi = Math.min(hi, (b.max_final_onset ?? b.max_end) - notes[j].onset);
     }
-    return lo > hi + 1e-9 ? 0 : Math.round(Math.min(hi, Math.max(lo, want)) * 1e9) / 1e9;
+    if (lo > hi + 1e-9) return 0;
+    const v = Math.min(hi, Math.max(lo, want)), twelfths = Math.round(v * 12);  // a quarter's, a third's, a sixth's: exact
+    return Math.abs(v * 12 - twelfths) < 1e-6 ? twelfths / 12 : Math.round(v * 1e9) / 1e9;
   }
   // The chosen notes taken out: a syllable with its melisma; a slurred note alone joins the note before.
   function deleteNotes(notes, indices) {
@@ -384,11 +410,11 @@
   // note still starts where the one before ends, no note overlaps the next, and the line's last note leaves the next
   // line's pickup its room. Returns the notes, or throws where they can't all go on the grid.
   function quantizeNotes(notes, indices, grid, b) {
-    const set = new Set(indices), at = (t) => Math.round(Math.round(t / grid) * grid * 1e9) / 1e9;
+    const set = new Set(indices), at = (t) => onGrid(t, grid);
     const out = notes.map((n, i) => {
       if (!set.has(i)) return { ...n };
       const onset = at(n.onset), end = Math.max(at(n.onset + n.duration), onset + grid);
-      return { ...n, onset, duration: end - onset };
+      return { ...n, onset, duration: at(end - onset) };
     });
     for (let i = 0; i < out.length; i++) {
       const n = out[i], prev = out[i - 1], next = out[i + 1];
@@ -534,6 +560,7 @@
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
     neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, ROLL_BEAT, rollUnit, zoomOf, grip, labelFits,
+    SNAPS, PART_SNAPS, onGrid, feelSnap, snapFor,
     phraseAt, semitone, spell, moveRows,
     withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, quantizeNotes, rollKey, saidCell, fitNotes, writtenNotes, lyricPatch,
     lyricTargets, lyricSheet, parseLyricSheet, lyricSheetPatch, phrasePatch, sectionPatch };

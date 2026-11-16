@@ -135,7 +135,7 @@
   }
   function selectedSection(index) {
     stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null; state.cursor = null;
-    state.where = { tune: null, chords: null }; paint(); told();
+    state.where = { tune: null, chords: null }; feel(); paint(); told();
   }
   function selectedPhrase(index) {
     stop(); state.phrase = index; state.note = null; state.chord = null; state.where = { tune: null, chords: null }; state.reveal = true; paint(); told();
@@ -309,7 +309,7 @@
     if (onset === null) onset = gaps.find((t) => t >= (note()?.onset ?? b.min_onset) &&
       t + length <= b.max_end && !notes.some((n) => n.onset < t + length - 1e-8 && n.onset + n.duration > t + 1e-8));
     if (!Number.isFinite(onset)) { bridge().toast?.("Make room by shortening or deleting a note, then add a note in the gap."); return; }
-    onset = Math.max(b.min_onset, Math.round(onset / state.snap) * state.snap);
+    onset = Math.max(b.min_onset, M().onGrid(onset, state.snap));
     const next = notes.find((n) => n.onset >= onset), duration = Math.min(length, (next?.onset ?? b.max_end) - onset);
     if (duration < b.min_duration || notes.some((n) => n.onset <= onset && n.onset + n.duration > onset + 1e-8) ||
       (!next && onset > b.max_final_onset)) { bridge().toast?.("Draw in an empty space with room for a syllable."); return; }
@@ -403,7 +403,7 @@
     try {
       const notes = window.SongbirdModel.quantizeNotes(p.notes, all, state.snap, bounds(p));
       if (chosen.length) pick(state.note, chosen);
-      commitNotes(notes, `${chosen.length > 1 ? `${chosen.length} notes` : chosen.length ? "The note" : "The phrase"} on the ${fmt(round(state.snap))}-beat grid.`, "Quantize");
+      commitNotes(notes, `${chosen.length > 1 ? `${chosen.length} notes` : chosen.length ? "The note" : "The phrase"} on the ${snapName()}-beat grid.`, "Quantize");
     } catch (error) { bridge().toast?.(error.message); }
   }
   function cutNotes() {
@@ -509,7 +509,7 @@
     const original = p.notes[index], b = bounds(p);
     const next = { ...original, ...changes };
     const grid = Math.max(b.grid, snap);
-    const quantize = (value) => round(Math.round(value / grid) * grid);
+    const quantize = (value) => M().onGrid(value, grid);
     // a slurred note's start is the boundary with the note before: it moves between the two, each keeping a quarter beat
     const previousEnd = original.slur ? p.notes[index - 1].onset + b.min_duration
       : index ? p.notes[index - 1].onset + p.notes[index - 1].duration : b.min_onset;
@@ -835,7 +835,7 @@
     const at = (x, y) => ({ beat: g.start + (x - rect.left) / g.unit, semi: g.high - Math.floor((y - rect.top) / g.row) });
     const down = at(x0, y0), pi = window.SongbirdModel.phraseAt(g.spans, down.beat);
     const drawing = !event.shiftKey && pi !== null && !!g.spans[pi].p.own_path;
-    const snapped = (beat) => Math.round(beat / state.snap) * state.snap;
+    const snapped = (beat) => M().onGrid(beat, state.snap);
     const drawn = (beat) => {  // the note a drag draws: from where it began to where it is, on the snap
       const a = snapped(Math.min(down.beat, beat)), z = Math.max(snapped(Math.max(down.beat, beat)), a + state.snap);
       return { onset: a - g.spans[pi].off, duration: z - a };
@@ -866,7 +866,7 @@
       focusPhrase(pi);
       if (twice) { addNote(down.beat - g.spans[pi].off, M().spell(down.semi, scale())); return; }
       state.note = null; state.chord = null;
-      state.cursor = { phrase: pi, beat: clamp(Math.round((down.beat - g.spans[pi].off) / state.snap) * state.snap, g.spans[pi].b.min_onset, g.spans[pi].b.max_end) };
+      state.cursor = { phrase: pi, beat: clamp(M().onGrid(down.beat - g.spans[pi].off, state.snap), g.spans[pi].b.min_onset, g.spans[pi].b.max_end) };
       paint(); told();
       root()?.querySelector("#sbc-roll-scroll")?.focus({ preventScroll: true });
     };
@@ -1168,12 +1168,13 @@
       ...(p.advice || []).map((text) => el("span", { class: "sbc-advice" }, text))); // a freed ending, said
   }
   function editor() {
+    state.snap = M().snapFor(state.snap, M().SNAPS);
     const p = phrase();
     if (!p?.notes?.length) return el("p", { class: "sbc-muted" }, "This section has no editable melody.");
     return el("div", { class: "sbc-editor" },
       el("div", { class: "sbc-row sbc-editor-heading" },
         el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, where("tune") === "line" ? "Edit a phrase once; every appearance follows." : "This change stays in this place.")),
-        el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
+        el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, M().SNAPS.map(([v, name]) => [v, `${name} beat`]), (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, ZOOMS, (value) => { state.zoom = M().zoomOf(value); paint(); }, { id: "sbc-zoom" }))),
       phraseStrip(), scopeChoice("tune"), editTools(), pianoRoll(), ownCard(), state.chord && state.note === null ? null : inspector(), chordCard(),
       el("div", { class: "sbc-tools" }, el("span", { class: "sbc-overline" }, "Shape phrase"),
@@ -1427,7 +1428,15 @@
         onclick: () => { state.where[kind] = o.id; paint(); told(); } }, o.label)));
   }
   const scrollTo = (x) => { state.scrollTo = x; };  // where the roll is scrolled to once it is drawn
+  // the snaps this roll offers (an instrument's and a drum's ⅙ too), and the snap kept to one of them
+  const snaps = () => (state.player === "voice" ? M().SNAPS : M().PART_SNAPS);
+  const snapName = () => (M().PART_SNAPS.find(([v]) => Math.abs(v - state.snap) < 1e-9)?.[1] ?? fmt(state.snap));
+  // a section in a six feel opens on a snap of thirds (model.js feelSnap)
+  function feel(s = section()) {
+    state.snap = M().feelSnap((s?.phrases || []).flatMap((p) => (p.notes || []).flatMap((n) => [n.onset, n.duration])), state.snap);
+  }
   function notesPanel() {
+    state.snap = M().snapFor(state.snap, snaps());
     const s = section(), p = phrase();
     const part = state.player !== "voice" && window.SongbirdParts;
     const drummer = part ? (composition().players || []).find((x) => x.name === state.player && x.drums) : null;
@@ -1440,7 +1449,7 @@
           window.SongbirdParts?.reset?.(); window.SongbirdDrums?.reset?.(); paint(); told();
         }, { id: "sbc-part" }),
         part ? el("span", { class: "hint" }, "This section only") : scopeSwitch("tune"),
-        el("span", { class: "settings" }, select("Snap", state.snap, [[0.25, "¼"], [0.5, "½"], [1, "1"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
+        el("span", { class: "settings" }, select("Snap", state.snap, snaps(), (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, ZOOMS, (value) => { state.zoom = M().zoomOf(value); paint(); }, { id: "sbc-zoom" })),
         button("Close", () => page()?.closeNotes?.(), { class: "sbc-button sbc-quiet", id: "sbc-close", title: "Close the notes (Esc)" }),
         !part && p?.notes?.length ? health() : null),
@@ -1489,7 +1498,7 @@
         el("details", {}, el("summary", {}, "more"),
           el("div", { class: "sbc-chord-row" },
             button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbours, keeping the ending" }),
-            button("Even rhythm", evenRhythm, { title: `Even the notes on the phrase's own grid (the snap: ${fmt(state.snap)} beat)` })))),
+            button("Even rhythm", evenRhythm, { title: `Even the notes on the phrase's own grid (the snap: ${snapName()} beat)` })))),
       why: reasons(n.edited, p.own ? "your words and melody, wherever this lyric line occurs" : scope === "line" ? "yours: this line is sung this way everywhere" : "yours, in this place only",
         [["song", "the tune as it was written, and as the versions before have sung it"], ["rule", "notes and words are kept together; gaps between notes are rests"]]),
       release: p.own ? { label: "Use the tune's line", disabled: false,
@@ -1566,7 +1575,7 @@
       if (box) box.replaceChildren(el("p", { class: "sbc-muted" }, "The arrangement will appear when the song is ready."));
       return;
     }
-    if (state.section < 0) state.section = Math.max(0, sections().findIndex((s) => s.phrases?.some((p) => p.notes?.length)));
+    if (state.section < 0) { state.section = Math.max(0, sections().findIndex((s) => s.phrases?.some((p) => p.notes?.length))); feel(sections()[state.section]); }
     state.section = clamp(state.section, 0, sections().length - 1);
     state.phrase = clamp(state.phrase, 0, Math.max(0, (section().phrases?.length || 0) - 1));
     if (!phrase()?.notes?.length) state.phrase = Math.max(0, (section().phrases || []).findIndex((p) => p.notes?.length));  // a played line first
@@ -1585,7 +1594,7 @@
     state.player = (composition()?.players || []).some((p) => p.name === player) ? player : "voice";
     if (index === state.section && sections()[index]) { paint(); return; }
     stop(); state.section = clamp(index, 0, sections().length - 1); state.phrase = firstSung(); state.note = null; state.chord = null; state.cursor = null;
-    state.where = { tune: null, chords: null }; paint();
+    state.where = { tune: null, chords: null }; feel(); paint();
   }
   function deselect() { if (state.note !== null || state.chord) { state.note = null; state.chord = null; paint(); } }
   function sketch({ scope = "section", index = null, from = null } = {}) {

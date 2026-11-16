@@ -169,9 +169,12 @@ ones between shaded. Drag up/down for pitch, left/right for timing, or the
 right edge for length (its handle a quarter of the note; a note too narrow
 for one moves from anywhere on it, and ⌥-drag changes its length). Select a
 note for exact pitch, start and duration controls. Arrow keys nudge notes;
-Shift+Left/Right changes duration. Snap and zoom set the editing grid: zoom
-starts at 100%, where an eighth note's syllable can be read, the roll
-scrolling; **Fit** puts the whole section in the width. A syllable too long
+Shift+Left/Right changes duration. Snap and zoom set the editing grid. The
+snap is ¼, ⅓, ½ or a beat (an instrument's roll and the step grid add ⅙; a
+sung note is a quarter beat at least); a section whose tune sits on thirds (a
+six feel, a triplet lilt) opens on ⅓, and a third stays an exact third when
+moved or quantized. Zoom starts at 100%, where an eighth note's syllable can
+be read, the roll scrolling; **Fit** puts the whole section in the width. A syllable too long
 for its note isn't drawn; the note's name says it.
 
 Several notes: Shift-click adds a note to the selection or takes it away;
