@@ -1,14 +1,17 @@
 """A take sung over a version with a line of its own, for tests/test_singing_after_rewriting.py (run as a script, in
 a process of its own: it loads the measuring tools).
 
-    python tests/_singing_rewritten_take.py KIT OUT
+    python tests/_singing_rewritten_take.py KIT OUT [standins]
 
 KIT gets the lead song and a guide for the version with the first verse's first line of twelve syllables (its own
 line, tests/test_own_lines.py), laid as webstudio/guide.py lays a guide at 90%, cut after the first verse; OUT gets
 result.json: webstudio/worker.py take()'s answer for the template singer singing that verse with every note of the
 line of its own LATE seconds late (the rest on time), at 48 kHz as a browser records, cut to the verse's window.
+With "standins", pyworld and librosa are hidden, so measuring runs WORLD in wasm under wasmtime and the numpy DTW
+(webstudio/standins.py).
 """
 
+import importlib.abc
 import json
 import sys
 from dataclasses import replace
@@ -25,7 +28,18 @@ from webstudio.kit import Kit  # noqa: E402
 LATE = 0.08
 
 
-def main(kit_root: str, out_root: str) -> None:
+class Hidden(importlib.abc.MetaPathFinder):
+    """pyworld and librosa as on a computer without them."""
+
+    def find_spec(self, name, path=None, target=None):
+        if name.split(".")[0] in ("pyworld", "librosa"):
+            raise ModuleNotFoundError(f"No module named {name!r}")
+        return None
+
+
+def main(kit_root: str, out_root: str, standins: bool = False) -> None:
+    if standins:
+        sys.meta_path.insert(0, Hidden())
     import io
 
     import soundfile as sf
@@ -66,11 +80,11 @@ def main(kit_root: str, out_root: str) -> None:
     sf.write(buffer, y, 48000, subtype="PCM_16", format="WAV")
     result = worker.take(tools, {"song": SONG.stem, "guide": digest, "from_s": a, "to_s": b, "earlier": [],
                                  "audio": buffer.getvalue()})
-    (out / "result.json").write_text(json.dumps({"result": result, "own": own, "tempo": g.tempo, "late": LATE,
+    (out / "result.json").write_text(json.dumps({"result": result, "pyworld": sys.modules["pyworld"].__name__, "own": own, "tempo": g.tempo, "late": LATE,
                                                  "phrases": [n.phrase for n in g.notes],
                                                  "measured": [k for k, n in enumerate(result["measurement"]["notes"])
                                                               if n["gesture"] is not None]}))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3:] == ["standins"])

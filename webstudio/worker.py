@@ -100,6 +100,10 @@ class Tools:
         os.environ["MFA"] = "off"  # tools/align.py: without the forced aligner, whatever is installed
         if "faster_whisper" not in sys.modules:
             sys.modules["faster_whisper"] = _no_whisper()
+        if "pyworld" not in sys.modules or "librosa" not in sys.modules:  # (the browser's are in place already)
+            from . import standins
+
+            standins.install()  # WORLD in wasm and a DTW in numpy, where pyworld or librosa isn't installed
         tools = str(ROOT / "tools")
         if tools not in sys.path:
             sys.path.insert(0, tools)

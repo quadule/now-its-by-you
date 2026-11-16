@@ -355,3 +355,23 @@ def test_a_take_over_a_line_of_its_own_comes_back_on_that_line(tmp_path):
     notes = told(own_line(), P.from_json(way))
     unsung = [t["how"] for t in notes if t["phrase"] not in way["phrases"] and t["line"] is None]
     assert len(unsung) > 100 and set(unsung) == {"habit"}
+
+
+def test_measuring_without_pyworld_or_librosa_gives_the_same_numbers(tmp_path):
+    """The same take measured with pyworld and librosa, and with neither (WORLD's same wasm under wasmtime, the numpy
+    DTW: webstudio/standins.py), each with a kit of its own: every number of the measurement and of the way the same."""
+    import subprocess
+
+    pytest.importorskip("pyworld")
+    pytest.importorskip("librosa")
+    pytest.importorskip("wasmtime")
+    script = str(Path(__file__).parent / "_singing_rewritten_take.py")
+    got = {}
+    for how in ("native", "standins"):
+        run = subprocess.run([sys.executable, script, str(tmp_path / how / "kit"), str(tmp_path / how / "out"),
+                              *([how] if how == "standins" else [])], capture_output=True, text=True, timeout=600)
+        assert run.returncode == 0, run.stderr[-2000:]
+        got[how] = json.loads((tmp_path / how / "out" / "result.json").read_text())
+    assert got["native"]["pyworld"] == "pyworld" and got["standins"]["pyworld"] == "webstudio.world_wasmtime"
+    a, b = got["native"]["result"], got["standins"]["result"]
+    assert a["measurement"] == b["measurement"] and a["phrasing"] == b["phrasing"] and a["portrait"] == b["portrait"]
