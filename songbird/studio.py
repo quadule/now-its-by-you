@@ -252,6 +252,23 @@ def bar_seconds(genome, params: Params) -> list[float]:
     return [round(clock.seconds(clock.lead + k * bar), 3) for k in range((clock.end - clock.lead) // bar + 1)]
 
 
+def _split_words(notes, t1: float) -> set[int]:
+    """The sung notes (by id) of a word begun before t1 that goes on past it: a word is sung whole or not at all."""
+    sung: dict[str, list] = {}
+    for n in notes:
+        if n.part in ("voice", "chop") or n.part.startswith("choir"):
+            sung.setdefault(n.part, []).append(n)
+    out: set[int] = set()
+    for part in sung.values():
+        i = 0
+        while i < len(part):
+            word = part[i:i + max(1, part[i].word_len)]
+            if word[0].start < t1 <= word[-1].start:
+                out.update(id(n) for n in word)
+            i += len(word)
+    return out
+
+
 def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
     """The notes sounding between t0 and t1, moved so that t0 - before is zero: an instrument's note already
     ringing starts at zero (held that much shorter), so the second of lead-in gives it time to settle before
@@ -260,8 +277,9 @@ def cut(score, t0: float, t1: float, before: float = 1.0, tail: float = 2.5):
 
     start = max(0.0, t0 - before)
     notes = []
+    split = _split_words(score.notes, t1)
     for n in score.notes:
-        if n.start >= t1 or n.start + n.dur <= start:
+        if n.start >= t1 or n.start + n.dur <= start or id(n) in split:
             continue
         if (n.part in ("voice", "chop") or n.part.startswith("choir")) and n.start < t0:  # (a chop sung too)
             continue
