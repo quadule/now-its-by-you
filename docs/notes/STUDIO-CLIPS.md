@@ -166,7 +166,7 @@ Read (`/api/song`, `composition`):
 
 - `clips`: `{"value": <the arrangement as stored, implicit or not>, "stored":
   bool, "clips": [{"id", "label", "role", "source" (a source section id or
-  null), "sung", "bars", "lines", "instances" (indexes in sections),
+  null), "sung", "bars", "lines" (each `{"phrase", "of", "bars"}`), "instances" (indexes in sections),
   "authored" (bool: the clip has words, notes, chords, parts or arrangement of
   a person's), "can": {"delete", "duplicate", "repeat", "lines"}: true, or why
   not}], "roles": [...], "bounds": {...}}`.
@@ -190,6 +190,10 @@ Write:
     is true by default for a verse, refrain, bridge or tag)
   - `{"op": "move", "from": 4, "to": 1}`
   - `{"op": "lines", "clip": "refrain103", "lines": [{"of": 0}, {"bars": 2}]}`
+    (`"lines": null`: a clip from a section sings that section's own lines again)
+  - `{"op": "label", "clip": "verse102", "label": "The wire"}` (a name of its own; empty or null: its role's)
+  - `{"op": "empty", "role": "verse", "sung": true, "bars": 8, "lines": 4}` (the song this one blank clip:
+    every other clip goes, with the edits that name it; the rest of the record stays)
 
 The first operation on a song without clips stores its implicit clips with the
 change, and the edits that named the form's places name their clips (the
@@ -216,6 +220,39 @@ it is written by hand):
                                      {"degree": 1, "onset": 4, "duration": 2}]},
      "chords.verse112-0": [["I"], ["IV"]],
      "part.harp.intro111:0.0": [[0, 96, 0, 100], [192, 96, 4, 90]]}
+
+## In the studio
+
+What the score (`songbird/studio/score.js`, its pure parts in `model.js`) does with the above:
+
+- **Arrange's header row** is the clips in order: each section's label from the view, a linked repeat's instances
+  with a chain mark and a colour of their own, a person's clips (blank, copied, repeated, moved: `model.js`
+  `clipsYours`) in the second ink. **+** after the last section adds a blank section after the one selected (at the
+  end when none is): an 8-bar sung verse of 4 lines, or what the column's **New section** says (role, sung or played,
+  bars, lines).
+- **The section's column** has **Duplicate**, **Repeat** and **Delete** (disabled, the engine's `can.*` sentence as
+  the tooltip, where refused), **Lines** (each line's bars; a blank line's with − +; **+ line** adds a blank 2-bar
+  line, **− line** takes the last away; **Reset** gives a clip from a section its own lines), **Name** (`op label`),
+  and **Length**: a blank clip's is its lines' (`op lines`, the bars shared evenly over them, `model.js` `evenBars`,
+  as op blank shares them); any other section's is the arrangement's `arrange.<id>.bars`, unchanged (a blank clip's
+  tune has no sung notes, so `takeover.fit` gives it no other length: the two never apply to one section).
+- **Keys** on a focused section header: ⌘/Ctrl D duplicates, Delete or Backspace deletes (never with a note, a cell
+  or a field focused); ⌘/Ctrl ← → and Earlier / Later move.
+- **A move** is one function, however it is made: without stored clips, the shape's `form.order` as before; where
+  that order is refused (a verse past another) or the song has clips, `op move`.
+- **Each operation** is one request (they run one after another, each on the edits the one before left) and one step
+  of the history, labelled in words ("Duplicate Verse 2"); what it made, or moved, is selected, and keeps the keys
+  when the keys made it.
+- **A blank sung line** opens empty in the melody roll: a note drawn into it, or **Write words**, starts its draft;
+  words written first get notes (`model.js` `blankTune`: a syllable a beat where there's room, from the third up to
+  the fifth and home to the tonic). On the Page it is an empty field; its words take their notes with them
+  (`line.`). The Page and its lyric sheet are the clips in order (`model.js` `pageWords`), a linked repeat written
+  once; a clip that sings its source's lines as they are keeps the bank's choices of words.
+- **Tools → Empty song** (`op empty`), once confirmed: one blank verse of 8 bars and 4 lines; key, tempo, style and
+  band as they were.
+- **The Shape** with clips says the sections are Arrange's; its Reset is `clips: null`.
+- **Section contents** paste only into a section of as many lines (refused, saying how many); a blank line's
+  contents are its chords and players' notes.
 
 ## Not changed by clips
 

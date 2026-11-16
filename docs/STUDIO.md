@@ -195,9 +195,10 @@ all appearances, including instrumental echoes. Existing edits open at the
 scope they already use ("This place only, or everywhere", below).
 
 Sections can be rearranged by dragging or with Earlier/Later. The backend
-checks the arrangement before accepting it. Repeated verses and refrains keep
-their story order (the lyric bank's rules depend on it) but can move around
-other kinds of section.
+checks the arrangement before accepting it. In the song's own form repeated
+verses and refrains keep their story order (the lyric bank's rules depend on
+it); a move that order refuses makes the song's sections clips, which move
+freely ("Independent clips", below).
 
 **Add note**, a drag on the empty grid (a note as long as the drag) or a
 double-click (a note the snap's length) draws; **Delete note** (or Delete
@@ -1296,6 +1297,25 @@ descendant. With clips, `form.*` and `form.order` are refused, and so is a path
 that names a section of the source form by its place (the operations rewrite
 those). The design, the stored format, bounds and the editor's fields:
 [docs/notes/STUDIO-CLIPS.md](notes/STUDIO-CLIPS.md).
+
+In Arrange the header row is the clips: **+** after the last section adds a
+blank one (an 8-bar sung verse of 4 lines unless the column's **New section**
+says otherwise) after the section selected; the section's column has
+**Duplicate**, **Repeat** (linked: a chain mark and a shared colour on every
+instance), **Delete**, its **Lines** (each line's bars), a **Name**, and its
+**Length** (a blank section's is its lines'); ⌘/Ctrl D and Delete on a focused
+section header duplicate and delete it. A refused operation is disabled, the
+engine's reason its tooltip. Every operation is one undo step. A blank sung
+line opens empty in the melody roll, to draw into or to write its words first
+(notes fitted to them), and is an empty field on the Page. **Tools → Empty
+song** replaces the form with one blank verse, the key, tempo, style and band
+kept. What each does: [the note's "In the studio"](notes/STUDIO-CLIPS.md#in-the-studio).
+
+The grid is one selection: a section selected, by its header or any cell, is
+the section the column and the notes show; a cell opens its track's editor
+there (the singer's row the melody, a player's its roll or step grid, the
+Chords row the melody's harmony strip), and the notes' Part menu selects its
+row. ▶ plays the selected section, a cell's included.
 
 ## Arrangement control
 
