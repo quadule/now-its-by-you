@@ -187,6 +187,9 @@
       }
       s.error = null;
       if (clean.size) {
+        // a stroke struck (or its level changed) is heard at once: the first few, together
+        const struck = [...clean].flatMap(([pi, kept]) => kept.filter((n) => !(s.lines[pi].notes || []).some((o) => same([o], [n]))));
+        if (struck.length && struck.length <= 4) s.sound?.(struck.map((n) => [0, n[1], n[2], n[3]]));
         for (const [pi, kept] of clean) Object.assign(s.lines[pi], { notes: kept, ready: true, mine: true });
         if (clean.size === 1) bridge().setEdit(Object.keys(patch)[0], Object.values(patch)[0], label);
         else bridge().setEdits(patch, label);
@@ -300,7 +303,7 @@
           t % bar === 0 && t >= 0 ? t / bar + 1 : t % PPB === 0 ? "·" : "");
       }));
     const rows = pieces.map((piece, row) => el("div", { class: "sbc-drum-row", role: "row", style },
-      el("span", { role: "rowheader", class: "sbc-drum-head" }, button(piece.label, () => s.hear([[0, step, row, LEVELS[level].velocity]]),
+      el("span", { role: "rowheader", class: "sbc-drum-head" }, button(piece.label, () => (s.sound || s.hear)([[0, step, row, LEVELS[level].velocity]]),
         { class: "sbc-drum-piece", "aria-label": `Hear ${piece.label}` })),
       cols.map((c, col) => {
         const x = s.lines[c.pi], n = hits.get(`${row}:${col}`), focused = s.focus.row === row && s.focus.col === col;
@@ -336,6 +339,7 @@
       if (current.loading) load(current);
     }
     const s = current; Object.assign(s, options);
+    if (!s.fetched) { s.fetched = true; s.ready?.(); }  // its pieces, asked ahead
     ({ local: s.local, cols: s.cols } = sectionColumns(s.lines, s.snap));
     // the strip's phrase: the focus goes to its first column, unless the focus is in it
     const strip = phrases[options.phrase] ? options.phrase : null;

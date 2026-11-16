@@ -126,6 +126,8 @@
       s.error = null; s.focus = pi;
       s.selected = new Set(keep.map((k) => clean.findIndex((n) => n[0] === k[0] && n[2] === k[2])).filter((i) => i >= 0));
       if (!unchanged) {  // nothing changed: no edit, no undo step (the program's notes stay the program's)
+        const added = clean.filter((n) => !x.notes.some((o) => same([o], [n])));  // drawn, moved, changed: heard at once
+        if (added.length && added.length <= 4) s.sound?.(added);
         x.notes = clean; x.ready = true; x.mine = true;
         bridge().setEdit(x.path, clean, label);
       }
@@ -217,7 +219,7 @@
     if (s.drag?.moved) return;
     const other = focusLine(pi);
     if (e.shiftKey && !other) { if (s.selected.has(index)) s.selected.delete(index); else s.selected.add(index); }
-    else s.selected = new Set([index]);
+    else { s.selected = new Set([index]); s.sound?.([s.lines[pi].notes[index]]); }  // a note chosen is heard
     s.cursor = null; s.focusNote = true; s.paint();
   }
   function drag(e, pi, index, g) {
@@ -314,7 +316,7 @@
     if (s.cursor && lines[s.cursor.pi]) box.append(el("div", { class: "sbc-cursor", "aria-hidden": "true", style: { left: `${g.left + (lines[s.cursor.pi].off + s.cursor.t / PPB - start) * g.unit}px`, top: `${g.top}px`, height: `${height - g.top}px` } }));
     for (let pitch = high; pitch >= low; pitch--) {
       const key = pitch + s.tonic, y = g.top + (high - pitch) * g.row, black = [1, 3, 6, 8, 10].includes((key + 120) % 12);
-      box.append(button(pitchName(key), () => s.hear([[0, 48, pitch, 96]]), { class: `sbc-key${black ? " is-black" : ""}`,
+      box.append(button(pitchName(key), () => (s.sound || s.hear)([[0, 48, pitch, 96]]), { class: `sbc-key${black ? " is-black" : ""}`,
         "aria-label": `Hear ${pitchName(key)}`, style: { top: `${y}px`, height: `${g.row}px`, width: `${g.left - 4}px` } }));
     }
     for (let beat = Math.ceil(start); beat <= end; beat++) box.append(el("span", { class: `sbc-ruler-label${beat >= 0 && beat % s.perBar === 0 ? " is-bar" : ""}`, style: { left: `${g.left + (beat - start) * g.unit}px` } },
@@ -352,6 +354,7 @@
     if (at >= 0 && at !== s.focus) { s.focus = at; s.selected = new Set(); s.cursor = null; s.reveal = true; }
     s.focus = clamp(s.focus, 0, s.lines.length - 1);
     const x = line(), chosen = chosenOf(), n = chosen.length === 1 ? x.notes[chosen[0]] : null, ready = s.lines.every((y) => y.ready);
+    if (ready && !s.fetched) { s.fetched = true; s.ready?.(s.lines.flatMap((y) => y.notes.map((m) => m[2]))); }  // its keys, asked ahead
     const out = el("div", { class: "sbc-part-editor" },
       el("div", { class: "notes-foot", role: "group", "aria-label": "Edit instrument notes" },
         button("Add note", () => add(), { disabled: !x.ready }), button(chosen.length > 1 ? "Delete notes" : "Delete note", remove, { disabled: !chosen.length }),

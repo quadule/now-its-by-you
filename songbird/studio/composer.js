@@ -1316,11 +1316,36 @@
     oscillator.onended = () => { state.nodes.delete(oscillator); oscillator.disconnect(); if (out !== oscillator) out.disconnect(); gain.disconnect(); };
     oscillator.start(start); oscillator.stop(start + duration + 0.03);
   }
+  // a note heard alone: over a sung loop playing (live.js), which goes on; else the rendered audio stops for it
+  const quietly = () => !!bridge().liveLooping?.();
   function audition(pitch) {
-    if (bridge().pauseAudio) bridge().pauseAudio();
+    if (quietly()) { /* the loop goes on under it */ }
+    else if (bridge().pauseAudio) bridge().pauseAudio();
     else document.getElementById("audio")?.pause();
     const ctx = audioContext();
     if (ctx) tone(ctx, pitch, ctx.currentTime + 0.005, 0.3);
+  }
+  // A player's note heard alone (a key of its roll, a note chosen or just written, a drum's row): in the player's
+  // own sound where the studio has it at once (live.js samples), else the sketch's; over a sung loop, which goes on.
+  // notes: [onset, length, pitch (a drum's piece), velocity], sounded together (at most four).
+  function sounded(notes, drummer = null) {
+    if (!quietly()) bridge().pauseAudio?.();
+    const ctx = audioContext();
+    if (!ctx) return;
+    const unit = 60 / composition().tempo;
+    for (const [, length, pitch, velocity = 96] of notes.slice(0, 4)) {
+      if (bridge().note?.(state.player, pitch, velocity)) continue;
+      if (drummer) for (const node of window.SongbirdDrums.play(ctx, [[0, length, pitch, velocity]], drummer, composition().tempo, bus(ctx))) state.nodes.add(node);
+      else tone(ctx, composition().tonic + pitch, ctx.currentTime + 0.005, Math.min(0.6, Math.max(0.12, length / 96 * unit)), false, velocity);
+    }
+  }
+  // the notes the roll will likely sound next, asked of the studio once a section and player (where it makes them)
+  function prefetch(s, drummer, heard = []) {
+    const key = `${s.id}|${state.player}`;
+    if (state.prefetched === key || !bridge().prefetch) return;
+    state.prefetched = key;
+    const pitches = drummer ? (drummer.drums || []).map((_, i) => i) : window.SongbirdLive?.octaveAround(heard) || [];
+    Promise.resolve(bridge().prefetch(state.player, pitches)).catch(() => {});
   }
   function playbackSequence() {
     // the score's transport may play a section it hasn't opened (playIndex), or the song from its playhead (from)
@@ -1466,7 +1491,9 @@
         hear: (notes) => {
           stop(); bridge().pauseAudio?.(); const ctx = audioContext(); if (!ctx) return;
           for (const node of window.SongbirdDrums.play(ctx, notes, drummer, composition().tempo, bus(ctx))) state.nodes.add(node);
-        } })
+        },
+        // a row's name, or strokes just struck: at once, over the loop (live.js: the kit's own sound where it's here)
+        sound: (notes) => sounded(notes, drummer), ready: () => prefetch(s, drummer) })
       : part ? window.SongbirdParts.render(state.view, s, state.player, { snap: state.snap, zoom: state.zoom, paint, phrase: state.phrase, scrollTo,
         // a note of another phrase chosen in the instrument's roll: that phrase is the one the strip and ▶ mean
         choose: (q) => { const i = (s.phrases || []).indexOf(q); if (i >= 0) { state.phrase = i; state.note = null; state.chord = null; } },
@@ -1475,7 +1502,9 @@
           const unit = 60 / composition().tempo, origin = Math.min(0, ...notes.map((n) => n[0] / 96));
           for (const [start, length, pitch, velocity] of notes) tone(ctx, composition().tonic + pitch,
             ctx.currentTime + 0.03 + (start / 96 - origin) * unit, Math.min(length / 96, (q?.duration_beats ?? 4) - start / 96) * unit, false, velocity);
-        } }) : el("div", {},
+        },
+        // a key, a note chosen, or notes just written: at once, over the loop (the instrument's own sound where it's here)
+        sound: (notes) => sounded(notes), ready: (pitches) => prefetch(s, null, pitches) }) : el("div", {},
       p?.notes?.length ? editTools() : null,
       (s.phrases || []).some(drawable) ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
       ownCard(),
