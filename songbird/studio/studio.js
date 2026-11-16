@@ -1211,7 +1211,7 @@ function liveAuto() {
   if (live.keep === null) {
     let saved = null;
     try { saved = localStorage.getItem(LIVE_KEEP); } catch (e) { /* a convenience */ }
-    live.keep = saved === null ? window.SongbirdLive.mayRenderAhead(liveWhere()).auto : saved === "1";
+    live.keep = saved === null ? !!window.SongbirdLive?.mayRenderAhead(liveWhere()).auto : saved === "1";
   }
   return live.keep;
 }
@@ -1263,7 +1263,7 @@ function loopSection(index) {
   if (state.playing?.task) renderer().cancel(state.playing.task);
   quietPause();
   const s = (state.view?.composition?.sections || []).find((x) => x.index === index);
-  const ctx = liveContext();
+  const ctx = window.SongbirdLive ? liveContext() : null;
   if (!s || !ctx) { listen("you", index); return; }
   state.playing = null;
   live.id = s.id; live.label = s.label; live.said = null;
@@ -1271,8 +1271,14 @@ function loopSection(index) {
   live.keeper = window.SongbirdLive.keeper({
     auto: liveAuto(),
     // (asked after often on this computer; an open studio's queue is everyone's, asked after as ever)
-    start: (target) => renderer().preview({ edits: target.edits, who: "you", section: target.index, quick: !state.start?.public },
-      (job) => { live.progress = job.progress || 0; liveFrame(true); }),
+    start: (target) => {
+      const task = renderer().preview({ edits: target.edits, who: "you", section: target.index, quick: !state.start?.public },
+        (job) => { live.progress = job.progress || 0; liveFrame(true); });
+      Promise.resolve(task.done).then((job) => {  // said once, as a preview's failure is (the transport keeps "couldn't make it")
+        if (job?.state === "failed" && job.error !== "cancelled" && live.keeper && !task.cancelled) toast(`Couldn't make it: ${job.error}`);
+      }, () => {});
+      return task;
+    },
     cancel: (task) => renderer().cancel(task),
     offer: liveOffer,
     changed: () => liveFrame(true),

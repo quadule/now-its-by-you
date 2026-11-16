@@ -57,11 +57,16 @@ deleted, the loop stops.
 
 ## Coalescing
 
-`Keeper` (live.js) is the bookkeeping, pure and tested: `want(key)` says what the page wants; at most one
-render is in flight; when it ends, its audio is offered only if it is still wanted, and the newest want is
-started if it differs. A want made while a render is in flight waits for it (a server's running job can't be
-stopped; one still queued is dropped by the renderer's cancel). Stopping the loop stops starting; the job in
-flight finishes into the cache and is not played.
+`keeper` (live.js) is the bookkeeping, pure and tested (tests/studio_live.test.cjs): `want(target)` says what
+the page wants (its key and the edits it is of); a render is asked for once edits have settled for 120 ms, so a
+burst of edits (undo held down, a drag's steps) is made once; at most one render is in flight. A want made while
+one is in flight drops it if it is still waiting its turn (the renderer's cancel), else waits for it: the
+studio's one renderer makes one thing at a time anyway, and an open studio lets a visitor ask for their next
+only once theirs is made. When it ends, its audio is offered only if its key is still the one wanted and is the
+key that was asked for; else the latest is asked for. A render that fails says so ("couldn't make it") and isn't
+asked for again by itself; the next edit tries. Back to what plays (an undo) is current at once and makes
+nothing. Stopping the loop asks for nothing more; the job in flight finishes into the cache, unheard. The renderer
+is asked after every 150 ms for a looped section (`preview({ quick })`) on this computer, as ever in an open studio.
 
 ## Fast: what is made again for each kind of edit
 
@@ -69,15 +74,27 @@ flight finishes into the cache and is not played.
 `StemCache`, keyed by what that part's maker reads (`synth.cache.keys`). Measured on this computer (24 threads,
 native) for H's first verse with the learned throat, `Studio._section` alone:
 
-| edit | before | after |
-|---|---|---|
-| cold (nothing kept) | 1.89 s | |
-| the same again, the file gone | 0.66 s (one stem didn't fit) | |
-| a player's pan (`mix.guitar.pan`) | 0.94 s (every band stem made again) | |
-| a player's level (`band.guitar`) | 1.85 s (everything, the voice too) | |
-| a guitar line's notes | 0.75 s | |
-| a drum line's hits | 0.76 s | |
-| one melody note | 1.43 s | |
+| edit | before | after | what is made again, after |
+|---|---|---|---|
+| cold (nothing kept) | 1.89 s | 1.70 s | everything |
+| the same again, the file gone | 0.66 s (one stem didn't fit) | 0.53 s | nothing but the mix |
+| a player's pan (`mix.guitar.pan`) | 0.94 s (every band stem made again) | 0.73 s | the guitar |
+| a player's level (`band.guitar`) | 1.85 s (everything, the voice too) | 0.75 s | the guitar |
+| a guitar line's notes | 0.75 s | 0.75 s | the guitar |
+| a drum line's hits | 0.76 s | 0.79 s | the drum |
+| one melody note | 1.43 s | 1.13 s | the voice |
+
+(Each row's edits are on top of the row before's; the "before" column kept only what fitted in 64 MB.) Every
+preview pays the mix itself, the buses and the room, about 0.45 s, and its master and file, 0.05 s: that is the
+floor. A tempo, a key or a style changes every part (1.4 to 2.0 s, as cold).
+
+As the page has it, from the edit's `/api/listen` to the file fetched, asking after it every 150 ms, over the
+studio's own HTTP (H's first verse; its first refrain): a level or a pan 0.80 s (0.61 s), a guitar line 0.95 s
+(0.62 s), a drum line 0.80 s (0.65 s), a melody note 1.54 s (1.55 s), a tempo 2.01 s (1.40 s). Then the page
+decodes the file and the new audio takes over at the next bar line: a bar of H is 2.6 s.
+
+On the device a warm section is several seconds (docs/notes/BROWSER-RENDER.md: H's refrain 4.4 s in Chrome),
+which is why it waits to be turned on there.
 
 Two keys were wider than what the makers read: every band stem's key held the whole sound design (so a pan on
 the guitar made the harp again), and every stem's key held the whole band dict, levels included (so a level on
@@ -90,39 +107,74 @@ studio on this computer keeps 256 MB, a public one 64 MB.
 **The voice.** The singer (formant and learned throat alike) sings a part as one: one random stream through the
 whole part, the timbre drawn for its median pitch, every vowel levelled against the part's median vowel. A line
 sung alone is not the same samples as that line sung in its section. So an edited sung line sings the
-section's voice again, whole: exact, and the dearest edit (about 0.8 s of the 1.4 s above). It is not traded for
-speed.
+section's voice again, whole: exact, and the dearest edit (about 0.6 s of the 1.1 s above). It is not traded for
+speed. Exactness is tested: a verse made through the kept stems after a pan, a level, a guitar line, a drum line
+and a melody note, one after another, is the same 16-bit samples as the same edits made cold in a fresh studio,
+and each step made only its own part again (tests/test_studio_live.py); every instrument of H's verse makes the
+same stem whatever another player's level or pan.
 
 ## Immediate feedback
 
-An edit sounds at once through the sketch's voice: a melody note moved or drawn (as it did), an instrument's
-notes added or moved, a drum hit set. This plays over the loop; it no longer stops it. An overlay of the edited
-part's whole sketch for the first time round was considered and left out: at native speed the real audio is
-there within the bar or two the overlay would cover, and an overlay out of tune with the real part (the
-sketch's voicing isn't the band's) is more confusing than a short wait.
+An edit sounds at once, over whatever plays: a melody note moved or chosen (the sketch's tone, as before), an
+instrument's notes drawn, moved, pasted or changed and a note chosen (up to four at once), a drum's stroke struck
+or its level changed. An instrument's or a drum's is in its own sound where the studio has that note (below),
+else the sketch's. A melody note's tone over a sung loop leaves the loop playing; elsewhere it stops the sung
+audio as it did. An overlay of the edited part's whole sketch for the first time round was considered and left
+out: on this computer the real audio is there within a bar or so, and the sketch's part over the real band
+(its voicing and timbre aren't the band's) reads as a second, wrong band more than as the edit.
 
 ## A single note with the instrument's own sound
 
 `/api/note` (`Studio.note`): one note of a player, as its maker makes it (`instruments.render_part`, the
 version's band settings and the player's sound), dry, levelled to the velocity's class (soft, medium, firm,
-hard) and kept as a preview file. A note of H's band takes 5 to 20 ms to make (90 ms the very first, compiling);
-the page waits for the request and the decode, not the sound. The page (live.js, `Samples`) keeps decoded notes
-in an LRU of 24 MB; a key with no sample yet sounds the sketch's tone at once and asks for the sample, so the
-next press is the instrument. When the roll opens, the octave around its notes is fetched. Keys hash the
-program, the player, its band settings and sound, the seed, the pitch, the velocity class, the drum piece.
+hard) and kept as a preview file (2 s, about 100 KB). A note of H's band takes 5 to 30 ms to make (90 ms the very
+first, compiling), 27 ms asked over HTTP and fetched, 1 ms when it is made already. The page (live.js
+`samples`) keeps decoded notes in an LRU of 24 MB (a note is 0.7 MB decoded: about 34); a key with no note yet
+sounds the sketch's tone at once and asks for it, so the next press is the instrument. Once an instrument's roll
+has its notes, the octave around them is asked for, one after another; a drum's grid, every piece. The file's
+key hashes the program, the player, the note as made (its pitch, the velocity's class, a drum's piece), the
+band's settings as that player's maker reads them, its sound, the seed: a level or a patch on that player is
+another note, another player's isn't. The page asks again after each edit (a new revision), and the studio
+answers the same file where nothing that player reads changed. The melody's keys are the sketch's tone: the
+singer sings a syllable, not a note, and a sung note alone wasn't in scope.
 
 ## Where it runs on its own
 
 `mayRenderAhead(where)` (live.js) answers one question: may the page start a render nobody pressed for?
 
 - a studio on this computer (`songbird studio`): yes, and the single notes;
-- on the device (the web build): no (a section takes many seconds there and holds hundreds of megabytes);
-- a shared or public studio: no (its renders are counted and queued for everyone).
+- on the device (the web build): no, and no single notes (a section takes many seconds there and holds
+  hundreds of megabytes);
+- a studio shared by a key: no (the computer serving it is someone else's), but single notes (a few
+  milliseconds each);
+- an open studio (`--public`): no, and no single notes (its renders are counted and queued for everyone;
+  `/api/note` refuses there).
 
-Where it doesn't, the sketch options (▾ by Sketch and Sung) have **Keep the sung loop up to date**: on, an edit
-makes the looped section again as it would on this computer, through the same queue and limits; off, the loop
-says **earlier version** after an edit and ▶ makes it again. Single notes are always the sketch's tone there.
+Where it doesn't, the sketch options (▾ by Sketch and Sung) have **Keep the sung loop up to date** (kept in this
+browser): on, an edit makes the looped section again as it would on this computer, through the same queue and
+limits (each counts as a preview in an open studio); off, the loop says **earlier version** after an edit, and
+■ then ▶ makes it again. The first time round is made whenever the loop is played, everywhere. The one function
+is tested for each (tests/studio_live.test.cjs).
 
-## Measured after
+## What is where
 
-(Filled in after the work: the table above, warm and cold, with the narrower keys.)
+- live.js: `mayRenderAhead`, `keeper`, `looper` (with `shape`, `roundAt`, `offsetAt`, `swapTime`, `fraction`),
+  `samples` and `lru`; studio.js: the loop (`loopSection`, `liveChanged`, `liveState`), the setting, the notes;
+  score.js: the Loop switch (L), `loopTick` (the transport while it loops); composer.js, parts.js, drums.js: the
+  edit heard at once, the notes asked ahead; renderer.js: `quick`, and a section made in the browser ending with
+  its loop and its file.
+- studio.py: `loop_of` (and `<key>.loop.json`), a job's key, `Studio.note` and `/api/note`, `STEM_CACHE_MB`;
+  synth/cache.py: the keys; web/studio-wasm: a section made on the device ends with its loop.
+
+## The sketch
+
+The sketch stays instant and plain. A band player's own sketch (its roll's Hear phrase, its notes written, its
+part played on the page) is by its family, from its name: plucked, bowed (a swell, a slow vibrato), blown, keys
+(struck, then held lower), a round bass, a held drone. The tune, its chords and its bass are as they were.
+
+## Left as they are
+
+- The whole song looped sung is the file looped by the player, as made: it isn't made again as it is edited.
+- The Page doesn't mark the line being sung while a section loops (it follows the player's own audio).
+- An edit stops the sketch while it plays (composer.js stops on every new view): the sketch's loop isn't kept
+  going through edits.

@@ -1373,10 +1373,9 @@
     if (ctx) tone(ctx, pitch, ctx.currentTime + 0.005, 0.3);
   }
   // A player's note heard alone (a key of its roll, a note chosen or just written, a drum's row): in the player's
-  // own sound where the studio has it at once (live.js samples), else the sketch's; over a sung loop, which goes on.
+  // own sound where the studio has it at once (live.js samples), else the sketch's; over whatever plays, which goes on.
   // notes: [onset, length, pitch (a drum's piece), velocity], sounded together (at most four).
   function sounded(notes, drummer = null) {
-    if (!quietly()) bridge().pauseAudio?.();
     const ctx = audioContext();
     if (!ctx) return;
     const unit = 60 / composition().tempo;
