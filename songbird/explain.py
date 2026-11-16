@@ -799,6 +799,14 @@ def tempo_card(v: Version) -> dict:
 
 def shape_card(v: Version) -> dict:
     genome = v.context.genome
+    from . import clips as clips_mod
+
+    if clips_mod.stored(v.params) is not None:  # a person's own sections: how many, and their names in order
+        song, params, _ = clips_mod.resolved(genome, v.params)
+        named = clips_mod.labels(song, params.form) or []
+        n = len(named)
+        return _card(v, "shape", "Shape", f"{n} section{'s' if n != 1 else ''}", " · ".join(named),
+                     [{"kind": "you", "text": "your own sections"}], ["form."], parts={}, choices=[])
     parts = edits_mod.shape(genome, v.params.form)
     generated = edits_mod.shape(genome, v.generated.form) or {}
     parent = edits_mod.shape(genome, v.without("both").form) or {}
@@ -1130,6 +1138,19 @@ def words_card(v: Version) -> dict:
     lean = v.params.leanings or {}
     bank = genome.source.get("bank")
     c = variation.character(v.voice)
+    from . import clips as clips_mod
+
+    if clips_mod.stored(v.params) is not None:  # a person's own sections: the song's words in them, a person's own, or none
+        from .arrange import seed_lyrics
+        from .composition import authored
+
+        song, params, lyrics = clips_mod.resolved(genome, v.params, v.lyrics)
+        written = any(authored(song, params, lyrics if lyrics is not None else seed_lyrics(song, params.form)))
+        drawn = any(clip["sung"] and any(line["of"] is not None for line in clip["lines"])  # its section's own line
+                    for clip in clips_mod.view(genome, v.params)["clips"])
+        value = ("the song's words, with lines of yours" if drawn and written else "the song's words" if drawn
+                 else "your own words" if written else "no words")
+        return _card(v, "words", "The words", value, "", [], ["words."])
     if v.lyrics is None or not bank:
         return _card(v, "words", "The words", "the song's own words", "",
                      [{"kind": "song", "text": "this song has no store of other verses to draw from"}], [])

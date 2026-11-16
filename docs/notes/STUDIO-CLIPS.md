@@ -251,7 +251,9 @@ What the score (`songbird/studio/score.js`, its pure parts in `model.js`) does w
   lines as they are keeps the bank's choices of words.
 - **Tools → Empty song** (`op empty`), once confirmed: one blank verse of 8 bars and 4 lines; key, tempo, style and
   band as they were.
-- **The Shape** with clips says the sections are Arrange's; its Reset is `clips: null`.
+- **The Shape** with clips is how many sections and their names in order, said to be Arrange's; its Reset is
+  `clips: null`. **The words** card says whose words the sections sing: the song's, with lines of yours, your own,
+  or none.
 - **Section contents** paste only into a section of as many lines (refused, saying how many); a blank line's
   contents are its chords and players' notes.
 
