@@ -144,14 +144,17 @@
     const active = document.activeElement;
     focus = active?.dataset?.lyricPath ? {path: active.dataset.lyricPath, start: active.selectionStart, end: active.selectionEnd} : null;
   }
+  // a blank line (no notes yet): its words take notes fitted to them, as many as they have syllables
+  const blank = (p) => !!p?.own_path && !(p.notes || []).length;
+  const fits = (row, n) => (blank(row.phrase) ? n > 0 || !row.input.value.trim() : n === row.phrase.syllable_count);
   function count(row) {
     const n = syllables(row.input.value);
-    row.count.textContent = `${n} / ${row.phrase.syllable_count}`;
+    row.count.textContent = blank(row.phrase) ? `${n}` : `${n} / ${row.phrase.syllable_count}`;
     row.count.append(node("span", "unit", " syllables"));  // (the word goes where there's no room for it)
-    row.count.classList.toggle("is-valid", n === row.phrase.syllable_count);
-    row.input.setAttribute("aria-invalid", String(n !== row.phrase.syllable_count));
+    row.count.classList.toggle("is-valid", fits(row, n) && n > 0);
+    row.input.setAttribute("aria-invalid", String(!fits(row, n)));
     row.input.classList.toggle("is-dirty", row.input.value !== row.base);
-    if (row.fit) row.fit.hidden = n === row.phrase.syllable_count;
+    if (row.fit) row.fit.hidden = n === row.phrase.syllable_count || blank(row.phrase);
     says(row);
   }
   // `row`: one line used on its own (the score's column): its refusal, its status and what follows are its own.
@@ -209,13 +212,14 @@
     section.save = button("Use these lines", () => {
       const changed = [...section.rows.values()].filter((row) => row.input.value !== row.base);
       if (!changed.length) { status.textContent = "Already in your song."; return; }
-      const wrong = changed.filter((row) => syllables(row.input.value) !== row.phrase.syllable_count);
+      const wrong = changed.filter((row) => !fits(row, syllables(row.input.value)));
       if (wrong.length) {
         status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many. Split a longer word with hyphens (num-bers) so each part gets a note.";
         wrong[0].input.focus();
         return;
       }
-      apply(section, Object.assign({}, ...changed.map((row) => linePatch(row))));
+      try { apply(section, Object.assign({}, ...changed.map((row) => linePatch(row)))); }
+      catch (error) { status.textContent = error.message; }
     });
     const fit = button("Fit notes to words", () => {
       const changed = [...section.rows.values()].filter((row) => row.input.value !== row.base);
@@ -287,7 +291,8 @@
   // A line's own Use and Discard, for the score's column: one line at a time, as the column is (a draft typed in
   // another line stays a draft there, and a refusal of this one refuses only this one)
   function linePatch(row, fit = false) {
-    return window.SongbirdModel?.lyricPatch ? window.SongbirdModel.lyricPatch(row.phrase, row.input.value, fit)
+    if (blank(row.phrase) && !row.input.value.trim()) return { [row.phrase.own_path]: null };  // (an empty line stays a rest)
+    return window.SongbirdModel?.lyricPatch ? window.SongbirdModel.lyricPatch(row.phrase, row.input.value, fit || blank(row.phrase))
       : { [row.phrase.lyric_path]: row.input.value };
   }
   function lineActions(section, row, options) {
@@ -295,12 +300,13 @@
       row.use = button("Use this line", () => {
         const text = row.input.value;
         if (text === row.base) { row.status.textContent = "Already in your song."; return; }
-        if (syllables(text) !== row.phrase.syllable_count) {
+        if (!fits(row, syllables(text))) {
           row.status.textContent = `This line needs ${row.phrase.syllable_count} syllables; it has ${syllables(text)}.`;
           row.input.focus();
           return;
         }
-        apply(section, linePatch(row), row, () => row.next?.());
+        try { apply(section, linePatch(row), row, () => row.next?.()); }
+        catch (error) { row.status.textContent = error.message; }
       });
       row.use.className = "btn";
       const discard = button("Discard typing", () => { row.input.value = row.base; count(row); row.status.textContent = ""; });
@@ -376,14 +382,17 @@
   function finish(sectionId) {
     const section = sections.get(sectionId), changed = typed(section);
     if (!changed.length) return Promise.resolve(true);
-    const wrong = changed.filter((row) => syllables(row.input.value) !== row.phrase.syllable_count);
+    const wrong = changed.filter((row) => !fits(row, syllables(row.input.value)));
     if (wrong.length) {
       section.status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many. Split a longer word with hyphens (num-bers) so each part gets a note.";
       wrong[0].input.focus();
       return Promise.resolve(false);
     }
-    let used = false;
-    return Promise.resolve(apply(section, Object.fromEntries(changed.map((row) => [row.phrase.lyric_path, row.input.value])), null, () => { used = true; }))
+    let used = false, patch;
+    // a blank line's words take their notes with them (line.); any other's are the tune's words (lyrics.)
+    try { patch = Object.assign({}, ...changed.map((row) => (blank(row.phrase) ? linePatch(row) : { [row.phrase.lyric_path]: row.input.value }))); }
+    catch (error) { section.status.textContent = error.message; return Promise.resolve(false); }
+    return Promise.resolve(apply(section, patch, null, () => { used = true; }))
       .then(() => { if (used) section.status.textContent = ""; return used; });
   }
   const dirty = (sectionId) => typed(sections.get(sectionId)).length > 0;

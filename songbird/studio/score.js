@@ -63,7 +63,7 @@
       toast("Section contents pasted. Undo restores the destination.");
     } catch (error) { toast(error.message); }
   }
-  const wordsOf = (s) => state.view?.words?.find((w) => w.index === s?.index);
+  const wordsOf = (s) => M.pageWords(state.view).find((w) => w.index === s?.index);
 
   // ------------------------------------------------------------------ clips: sections added, copied, repeated, deleted,
   // moved and given lines (docs/notes/STUDIO-CLIPS.md, "For the editor"). Each is one request to /api/clips, which
@@ -174,12 +174,17 @@
   }
 
   // ------------------------------------------------------------------ what is selected
+  // One selection: the section it is in is THE section. With the notes open, they follow it (a cell's, on its track).
   function select(sel, options = {}) {
     S.sel = sel || null;
     S.about = false;
     if (sel) S.songShown = false;
     if (!sel || !["note", "chord"].includes(sel.kind)) C()?.deselect?.();
     if (!S.howSet) setHow(M.defaultHow(sel), false);
+    const id = sel && ["section", "cell", "seam", "line"].includes(sel.kind) ? sel.id : null;
+    const ed = sel?.kind === "cell" && S.grid ? M.cellEditor(S.grid.tracks.find((t) => t.id === sel.player), state.view?.composition?.players) : null;
+    const now = C()?.selection?.().player || "voice";
+    if (S.open && id && sectionAt(id) && (id !== S.open || (ed && !ed.chords && ed.player !== now))) openNotes(id, false, ed && !ed.chords ? ed.player : now);
     repaint();
     const keyed = S.keyed || options.keyboard;
     S.keyed = false;
@@ -421,7 +426,7 @@
     const v = state.view, box = $("page");
     if (!v || !box) return;
     const sheet = window.SongbirdAuthor?.sheet?.(v);  // the whole lyric at once
-    keepFocus(() => box.replaceChildren(...(sheet ? [sheet] : []), ...v.words.map(pageSection)));
+    keepFocus(() => box.replaceChildren(...(sheet ? [sheet] : []), ...M.pageWords(v).map(pageSection)));
   }
   // A section's words to choose from, as a list to read: each choice's first lines, the one sung marked. The ones
   // the song refuses here come after the rest, folded away, each with why.
@@ -476,10 +481,20 @@
       // read, the words are plain text: the ones with alternatives are swapped while editing
       for (const select of [...body.querySelectorAll("select.lyric-select")]) select.replaceWith(h("span", { class: select.classList.contains("focus") ? "focus" : null }, select.options[select.selectedIndex]?.textContent || ""));
       body.querySelector(".lyric-fallbacks")?.remove();
+      // a blank line is an empty field: a click or a key there writes it
+      const blanks = (section?.phrases || []).filter((p) => p.lyric_path || p.lyric_text).map((p) => M.isBlank(p) && !p.lyric_text);
       if (writable) [...body.querySelectorAll("p")].forEach((p, j) => {
         p.classList.add("pick");
         p.title = "Edit";
         p.addEventListener("click", () => write(sid, j));
+        if (blanks[j]) {
+          p.classList.add("blank");
+          Object.assign(p, { tabIndex: 0 });
+          p.setAttribute("role", "button");
+          p.setAttribute("aria-label", `${w.label}, line ${j + 1}: write it`);
+          p.setAttribute("data-key", `blank:${sid}:${j}`);
+          p.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); write(sid, j); } });
+        }
       });
     }
     const sec = h("div", { class: `sec${w.sung ? "" : " instrumental"}${w.mine || (!w.sung && arranged) ? " mine" : ""}${chosen ? " selected" : ""}${writing ? " is-writing" : ""}`, id: `sec-${w.index}` }, head, body);
@@ -723,7 +738,7 @@
   function cellFor(t, s) {
     const chosen = S.sel?.kind === "cell" && S.sel.id === s.id && S.sel.player === t.id;
     const common = { type: "button", role: "gridcell", "data-key": `cell:${t.id}:${s.id}`, "data-track": t.id, "data-section": s.id, tabindex: "-1",
-      onclick: () => (t.kind === "chords" ? openNotes(s.id) : select({ kind: "cell", id: s.id, player: t.id })) };
+      onclick: () => openCell(t, s) };
     if (t.kind === "singer") {
       const mine = s.by.sung === "you";
       return h("button", { ...common, ondblclick: () => editWords(s.id), class: `cell words${s.wordsMine || mine ? " you" : ""}${chosen ? " selected" : ""}`,
@@ -749,6 +764,27 @@
       title: label + (playable ? ". Double-click to edit notes." : ""),
       ondblclick: playable ? () => openNotes(s.id, false, t.id) : undefined },
       custom.length ? h("span", { class: "custom-notes" }, count ? `${count} notes` : "rests") : h("span", { class: "e" }));
+  }
+  // A cell clicked: it is selected, and its track's editor opens on its section (the singer's the melody, a player's
+  // its roll or step grid, the chords the melody's harmony strip); on a phone, where the notes are read only, it is
+  // only selected
+  function openCell(t, s) {
+    const ed = M.cellEditor(t, state.view?.composition?.players);
+    if (ed?.chords) {
+      if (S.sel?.id !== s.id) select({ kind: "section", id: s.id });
+      openNotes(s.id, false, "voice");
+      C()?.chords?.();
+      return;
+    }
+    select({ kind: "cell", id: s.id, player: t.id });
+    if (ed && !narrow()) openNotes(s.id, false, ed.player);
+  }
+  // the Part menu's choice is a row of the grid: its cell in the open section is the one selected
+  function partChosen(player) {
+    const row = S.open && S.grid ? M.rowOfPart(player, S.grid.tracks) : null;
+    if (!row) return;
+    S.sel = { kind: "cell", id: S.open, player: row.id };
+    renderGrid(); renderInspector();
   }
   function roving() {  // one cell of the grid in the tab order: the selected one, else the first
     const cells = [...document.querySelectorAll("#grid button[role=gridcell]")];
@@ -1721,7 +1757,7 @@
     if (hash.panel === "time") openTime(true);
   }
   window.SongbirdScore = {
-    render, renderPage, renderInspector, started, reveal, recording, playerChanged, tick, composerSelected, closeNotes, narrow,
+    render, renderPage, renderInspector, started, reveal, recording, playerChanged, tick, composerSelected, closeNotes, narrow, partChosen,
     showView, view: () => S.view,
     playersChanged: () => { if (S.sel?.kind === "player" || S.sel?.kind === "choir") renderInspector(); renderGrid(); },
     _state: S,

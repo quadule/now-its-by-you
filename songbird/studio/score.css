@@ -224,6 +224,8 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .lines p.pick { cursor: text; border-radius: var(--radius); }
 .lines p.pick:hover { background: color-mix(in srgb, var(--wash) 60%, transparent); }
 .lines p.selected { background: var(--hand-wash); }
+.lines p.blank { min-height: 1.5em; margin: 2px 0; border-bottom: 1.5px dashed var(--rule-strong); }
+.lines p.blank:hover, .lines p.blank:focus-visible { border-bottom-color: var(--hand); outline: none; }
 .lines .focus { text-decoration: none; }
 .sec.instrumental .lines { font-family: var(--sans); font-size: 13px; color: var(--ink-3); font-style: italic; }
 .sec.mine::before { content: ""; position: absolute; left: -14px; top: 16px; bottom: 16px; width: 2px; background: var(--hand); }

@@ -17,7 +17,7 @@
     const perBar = c.beats_per_bar || 4;
     const first = arrangement?.sections?.[0]?.start_beat || 0;
     const byId = new Map((c.sections || []).map((s) => [s.id, s]));
-    const wordsAt = new Map((view?.words || []).map((w) => [w.index, w]));
+    const wordsAt = new Map(pageWords(view).map((w) => [w.index, w]));
     const seams = new Map((sound?.boundaries || []).map((b) => [b.id, b]));
     const order = view?.edits?.["form.order"];
     const clips = c.clips, marks = linkMarks(clips), yours = clipsYours(clips);
@@ -212,6 +212,28 @@
     if (op.op === "repeat") return ids[op.at] ?? null;
     if (op.op === "delete") return ids[Math.min(op.at, ids.length - 1)] ?? null;
     return null;
+  }
+  // The Page's sections, in the song's order: the view's words cards (view.words), which describe the source form;
+  // a song in clips has a section a clip, its lines the clip's own as the composition sings them (a blank line ""),
+  // the card's choices of words where the clip sings its source section's lines as they are.
+  function pageWords(view) {
+    const words = view?.words || [], c = view?.composition, clips = c?.clips;
+    if (!clips?.stored) return words;
+    const form = clips.value?.form || [];
+    const ids = form.map((n, k) => `${n}:${form.slice(0, k).filter((x) => x === n).length}`);
+    return (c.sections || []).map((s) => {
+      const at = clipAt(clips, s.index), clip = at?.clip || null;
+      const src = clip?.source ? words.find((w) => w.index === ids.indexOf(clip.source)) || null : null;
+      const phrases = s.phrases || [], sung = clip ? !!clip.sung : !!s.sung;
+      const sungLines = phrases.filter((p) => p.lyric_path || p.lyric_text).map((p) => p.lyric_text || "");
+      const authored = phrases.flatMap((p, i) => (p.authored ? [i] : []));
+      const plain = (l) => String(l).replace(/-/g, "");  // (the composition's words are split as sung: num-bers)
+      const own = !!src && sung && !authored.length && sungLines.length === src.lines.length && sungLines.every((l, i) => plain(l) === plain(src.lines[i]));
+      const lines = own ? src.lines : sung ? sungLines : src ? src.lines : ["played"];
+      return { ...(own ? src : { how: src?.how || "", tags: src?.tags || [], note: "" }), index: s.index, name: s.name, label: s.label, sung, lines,
+        authored, mine: (own && !!src.mine) || authored.length > 0, blank: !!clip && !clip.source, clip: clip?.id || null,
+        ...(own ? {} : { block: null, nth: null, id: null, changeable: false, path: null }) };
+    });
   }
   // which editor a cell of the grid opens: the singer's row the melody, a player's its own roll or step grid, the
   // chords row the melody's chords; none for the voices before, or a player the notes don't have
@@ -552,7 +574,10 @@
   function fitNotes(phrase, count) {
     const source = (phrase.notes || []).filter((n) => !n.slur), b = phrase.bounds || {};
     if (!Number.isInteger(count) || count < 1 || count > 32) throw new Error("Write 1 to 32 syllables for this line.");
-    if (!source.length) throw new Error("Choose a line with a melody first.");
+    if (!source.length) {
+      if (!phrase.own_path) throw new Error("Choose a line with a melody first.");
+      return blankTune(phrase, count);
+    }
     const grid = b.min_duration || 0.25;
     const start = Math.max(b.min_onset ?? -phrase.pickup_beats, source[0].onset);
     const end = Math.min(b.max_end ?? phrase.duration_beats, Math.max(source.at(-1).onset + source.at(-1).duration, start + count * grid));
@@ -565,6 +590,24 @@
         duration: i === count - 1 ? end - (start + i * step) : step };
     });
   }
+  // A blank line's first notes, for words written into it: a syllable a beat where the line has room (less where it
+  // hasn't, on its grid), from its first bar line, rising from the third to the fifth and falling home to the tonic,
+  // the last held up to two beats.
+  const CONTOUR = [3, 4, 5, 5, 4, 3, 2, 1];
+  function blankTune(phrase, count) {
+    const b = phrase.bounds || {}, grid = b.min_duration || 0.25;
+    const start = Math.max(0, b.min_onset ?? 0), end = b.max_end ?? phrase.duration_beats;
+    const step = Math.min(1, Math.floor((end - start + 1e-8) / count / grid) * grid);
+    if (step < grid || start + (count - 1) * step > (b.max_final_onset ?? end - grid) + 1e-8)
+      throw new Error("These words need more room than this line has.");
+    return Array.from({ length: count }, (_, i) => {
+      const onset = start + i * step;
+      return { degree: count === 1 ? 1 : CONTOUR[Math.round(i * (CONTOUR.length - 1) / (count - 1))], onset,
+        duration: i === count - 1 ? Math.min(end - onset, Math.max(step, 2)) : step };
+    });
+  }
+  // a line with nothing in it yet: sung, its words and notes to write (a blank line, or one emptied)
+  const isBlank = (phrase) => !!phrase?.own_path && !(phrase.notes || []).length;
   function writtenNotes(notes) {
     return notes.map((n) => ({ degree: n.degree, onset: n.onset, duration: n.duration,
       ...(n.slur ? { slur: true } : n.alter ? { alter: n.alter } : {}) }));
@@ -667,11 +710,11 @@
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, ROLE_NAMES, SUNG_ROLES, NEW_SECTION, clipAt, clipsYours, linkMarks, evenBars, lineSpecs, clipLengths, clipLines, moveOp,
-    instanceIds, selectedAfter, cellEditor, rowOfPart, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
+    instanceIds, selectedAfter, pageWords, cellEditor, rowOfPart, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
     neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, ROLL_BEAT, rollUnit, zoomOf, grip, labelFits,
     SNAPS, PART_SNAPS, onGrid, feelSnap, snapFor,
     phraseAt, semitone, spell, moveRows,
-    withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, quantizeNotes, rollKey, saidCell, fitNotes, writtenNotes, lyricPatch,
+    withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, quantizeNotes, rollKey, saidCell, fitNotes, blankTune, isBlank, writtenNotes, lyricPatch,
     lyricTargets, lyricSheet, parseLyricSheet, lyricSheetPatch, phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;
   if (typeof module === "object" && module.exports) module.exports = api;

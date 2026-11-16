@@ -95,7 +95,10 @@ function studio(view = song()) {
   const audio = document.getElementById("audio");
   Object.assign(audio, { paused: true, pause() {}, play: () => Promise.resolve() });
   for (const id of ["finishPanel", "drawer", "scrim", "notes", "howPop", "keyPop"]) document.getElementById(id).hidden = true;
-  const window = { addEventListener() {}, SongbirdComposer: { stop() {}, playing: () => false, sketch() {}, deselect() {}, open() {}, selection: () => ({}) } };
+  const opened = [];
+  let player = "voice";
+  const window = { addEventListener() {}, SongbirdComposer: { stop() {}, playing: () => false, sketch() {}, deselect() {}, mini: () => null,
+    open: (index, who) => { player = who; opened.push([index, who]); }, chords: () => { opened.push("chords"); return true; }, selection: () => ({ player }) } };
   // the engine's answer: here, the edits with a mark of each operation (the page's view is the test's own)
   let answer = (body) => ({ edits: { ...body.edits, [`op${Object.keys(body.edits).length}`]: body.op }, clip: ["blank", "duplicate"].includes(body.op) ? "verse104" : null });
   const context = vm.createContext({
@@ -104,7 +107,7 @@ function studio(view = song()) {
     setTimeout: () => 1, clearTimeout() {}, requestAnimationFrame: () => 1, ResizeObserver: class { observe() {} },
     ask: async (p, body) => {
       asked.push([p, JSON.parse(JSON.stringify(body))]);
-      if (p === "/api/arrangement") return { sections: view.sections, players: [], cells: [], problems: [] };
+      if (p === "/api/arrangement") return { sections: view.sections, players: view.players || [], cells: view.cells || [], problems: [] };
       if (p === "/api/sound") return { players: [], boundaries: [] };
       if (p === "/api/clips") { const r = answer(body); if (r instanceof Error) throw r; return r; }
       if (p === "/api/song") return null;  // (the refresh after an edit: not drawn here)
@@ -121,7 +124,7 @@ function studio(view = song()) {
     state.start = {title: "Song", from: "home", machine: {label: "test"}, kinds: {}, optional: [], bounds: {}};
     state.view = {by: "a made-up machine called Ada", date: "Today", offset: 0, edits: {}, cards: [], words: [],
       listen: {whole: "w", sections: [], ready: []},
-      composition: {beats_per_bar: 4, duration: 60, clips: VIEW.clips, sections: VIEW.sections.map((s) => ({ id: s.id, index: s.index, label: s.label, start_beat: s.start_beat, duration_beats: s.duration_beats, phrases: [] }))}};`);
+      composition: {beats_per_bar: 4, duration: 60, clips: VIEW.clips, players: VIEW.players || [], sections: VIEW.sections.map((s) => ({ id: s.id, index: s.index, label: s.label, start_beat: s.start_beat, duration_beats: s.duration_beats, phrases: [] }))}};`);
   const $ = (id) => document.getElementById(id);
   const findIn = (node, test) => test(node) ? node : node.childNodes.reduce((hit, c) => hit || findIn(c, test), null);
   const key = (k) => findIn($("grid"), (n) => n.getAttribute?.("data-key") === k);
@@ -132,7 +135,7 @@ function studio(view = song()) {
     r.closest = (sel) => (/region|button/.test(sel) ? r : null);
     return r;
   };
-  return { run, $, asked, key, button, press, region, setAnswer: (fn) => { answer = fn; },
+  return { run, $, asked, opened, key, button, press, region, setAnswer: (fn) => { answer = fn; },
     clipAsks: () => asked.filter(([p]) => p === "/api/clips").map(([, b]) => { const { edits, ...op } = b; return op; }),
     async open() { run("window.SongbirdScore.render(state.view)"); await settle(); } };
 }
@@ -245,4 +248,25 @@ test("a section's lines: a blank line's bars, a line added or the last taken awa
   await settle();
   assert.deepEqual(page.clipAsks().at(-1), { op: "lines", clip: "verse102", lines: [{ of: 0 }, { of: 1 }, { bars: 2 }] });
   assert.equal(page.run("state.undo.length"), 4);
+});
+
+test("one selection: a cell opens its track's editor on its section, the notes follow the section selected, the Part menu is a row", async () => {
+  const view = song();
+  view.players = [{ name: "fiddle", label: "Fiddle", family: "bowed", plays: true, patterns: [] }];
+  view.cells = view.sections.map((s) => ({ section: s.id, player: "fiddle", plays: true, value: { level: "plays" }, program: { level: "plays" }, by: "program", paths: {}, why: [], problems: [] }));
+  const page = studio(view);
+  await page.open();
+  page.key("cell:singer:verse:0").dispatch("click");
+  assert.deepEqual(page.opened.at(-1), [1, "voice"], "the singer's row: the melody of Verse 1");
+  assert.equal(page.run("JSON.stringify(window.SongbirdScore._state.sel)"), '{"kind":"cell","id":"verse:0","player":"singer"}');
+  page.key("cell:fiddle:refrain:0").dispatch("click");
+  assert.deepEqual(page.opened.at(-1), [2, "fiddle"], "a player's row: its roll, in the Refrain");
+  page.region("intro:0").dispatch("click");
+  assert.deepEqual(page.opened.at(-1), [0, "fiddle"], "a section selected: the notes follow it, on the same part");
+  assert.equal(page.run("window.SongbirdScore._state.open"), "intro:0");
+  page.key("cell:chords:verse:0").dispatch("click");
+  assert.deepEqual(page.opened.slice(-2), [[1, "voice"], "chords"], "the chords row: the melody's harmony strip");
+  page.run("window.SongbirdScore.partChosen('fiddle')");
+  assert.equal(page.run("JSON.stringify(window.SongbirdScore._state.sel)"), '{"kind":"cell","id":"verse:0","player":"fiddle"}');
+  assert.equal(page.run("JSON.stringify(window.SongbirdModel.playTarget(window.SongbirdScore._state.sel, window.SongbirdScore._state.grid.sections))"), JSON.stringify({ section: 1, phrase: false }), "▶ plays the cell's section");
 });

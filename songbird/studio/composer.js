@@ -34,7 +34,12 @@
   const section = () => sections()[state.section];
   const phrase = () => section()?.phrases?.[state.phrase];
   const note = () => phrase()?.notes?.[state.note];
-  const firstSung = () => Math.max(0, (section()?.phrases || []).findIndex((p) => p.notes?.length));
+  // a line the melody roll draws: one with notes, or a sung line with none yet (a blank line, to draw into)
+  const drawable = (p) => !!(p?.notes?.length || p?.own_path);
+  const firstSung = () => {
+    const ps = section()?.phrases || [], k = ps.findIndex((p) => p.notes?.length);
+    return Math.max(0, k >= 0 ? k : ps.findIndex(drawable));
+  };
   const drafts = new Map();
   let clipboard = null, phraseClipboard = null;
   // the selected note; choosing one note lets go of any others chosen with it (pick() keeps them)
@@ -251,9 +256,9 @@
     const p = phrase(), d = state.draft;
     if (!p || !d || d.path !== p.own_path) return null;
     const want = d.notes.filter((n) => !n.slur).length;
-    const input = el("input", { type: "text", class: "sbc-own-words", value: d.words ?? p.lyric_text ?? "", "aria-label": `The line's words, ${want} syllables`, id: "sbc-own-words" });
+    const input = el("input", { type: "text", class: "sbc-own-words", value: d.words ?? p.lyric_text ?? "", "aria-label": want ? `The line's words, ${want} syllables` : "The line's words", id: "sbc-own-words" });
     const count = el("span", { class: "sbc-muted" }, "");
-    const shown = () => { const n = sylls(input.value); count.textContent = `${n} / ${want} syllables`; count.classList.toggle("is-valid", n === want); };
+    const shown = () => { const n = sylls(input.value); count.textContent = want ? `${n} / ${want} syllables` : `${n} syllables`; count.classList.toggle("is-valid", n === want); };
     input.addEventListener("input", () => { d.words = input.value; shown(); });
     shown();
     return el("div", { class: "sbc-own" },
@@ -261,10 +266,10 @@
       el("p", { class: "sbc-muted" }, "One syllable a note; split longer words with hyphens (car-ry)."),
       input, count, d.error ? el("p", { role: "alert", class: "problem" }, d.error) : null,
       el("div", { class: "sbc-button-group" },
-        button("Use these words", () => {
+        want ? button("Use these words", () => {
           if (sylls(input.value) !== want) { bridge().toast?.(`This line needs ${want} syllables; it has ${sylls(input.value)}.`); return; }
           d.words = input.value.trim(); applyDraft(p, d);
-        }, { disabled: !!d.busy }),
+        }, { disabled: !!d.busy }) : null,
         button("Fit notes to words", () => {
           try {
             d.words = input.value;
@@ -727,7 +732,7 @@
       (s.phrases || []).map(phraseButton));
   }
   function phraseButton(p, index) {
-    const words = p.notes.map((n) => displayWords(n.syllable)).filter(Boolean).join(" ");
+    const words = p.notes.map((n) => displayWords(n.syllable)).filter(Boolean).join(" ") || (p.own_path && !p.notes.length ? "Empty" : "");
     return el("button", { type: "button", id: `sbc-phrase-${index}`, class: `sbc-phrase${index === state.phrase ? " is-selected" : ""}`,
       "aria-pressed": index === state.phrase ? "true" : "false", onclick: () => selectedPhrase(index) },
     el("span", { class: "sbc-phrase-label" }, `Phrase ${index + 1}${drafts.has(p.own_path) ? " · draft" : ""}`, composition().edited_phrases?.includes(p.id) ? el("span", { class: "sbc-edited-dot", title: "Your melody" }, "•") : null),
@@ -742,7 +747,7 @@
       const b = bounds(p), off = offsetOf(p, s);
       return { p, i, b, off, start: off + b.min_onset, end: off + b.max_end, final: off + (b.max_final_onset ?? b.max_end) };
     });
-    const sung = spans.filter((x) => x.p.notes?.length), semis = sung.flatMap((x) => x.p.notes).map(semiOf);
+    const sung = spans.filter((x) => drawable(x.p)), semis = sung.flatMap((x) => x.p.notes).map(semiOf);
     const lowest = scaleOffset(Math.min(...sung.map((x) => x.b.min_degree))), highest = scaleOffset(Math.max(...sung.map((x) => x.b.max_degree)));
     const low = Math.max(lowest, Math.min(0, ...semis) - 3), high = Math.min(highest, Math.max(12, ...semis) + 3);
     const start = Math.min(0, ...sung.map((x) => x.start)), end = Math.max(s?.duration_beats || 0, ...sung.map((x) => x.end));
@@ -779,7 +784,7 @@
       style: { left: `${xAt(g, g.spans[state.cursor.phrase].off + state.cursor.beat)}px`, top: `${g.ruler}px`, height: `${g.height - g.ruler}px` } }));
     // the selected phrase's time, and a line where each phrase after the first begins
     const chosen = g.spans[state.phrase];
-    if (chosen?.p.notes?.length) roll.append(el("div", { class: "sbc-phrase-span", style: { left: `${xAt(g, chosen.start)}px`, top: `${g.ruler}px`,
+    if (drawable(chosen?.p)) roll.append(el("div", { class: "sbc-phrase-span", style: { left: `${xAt(g, chosen.start)}px`, top: `${g.ruler}px`,
       width: `${(chosen.end - chosen.start) * g.unit}px`, height: `${g.height - g.ruler}px` } }));
     for (const span of g.spans.slice(1)) roll.append(el("div", { class: "sbc-phrase-line", style: { left: `${xAt(g, span.off)}px`, top: "0px", height: `${g.height}px` } }));
     // a row a semitone: the scale's own tones plain (the tonic's marked), the ones between shaded
@@ -1170,7 +1175,7 @@
   function editor() {
     state.snap = M().snapFor(state.snap, M().SNAPS);
     const p = phrase();
-    if (!p?.notes?.length) return el("p", { class: "sbc-muted" }, "This section has no editable melody.");
+    if (!drawable(p)) return el("p", { class: "sbc-muted" }, "This section has no editable melody.");
     return el("div", { class: "sbc-editor" },
       el("div", { class: "sbc-row sbc-editor-heading" },
         el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, where("tune") === "line" ? "Edit a phrase once; every appearance follows." : "This change stays in this place.")),
@@ -1184,7 +1189,7 @@
         button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbors, preserving the ending" }),
         button("Even rhythm", evenRhythm, { title: "Spread the existing syllables evenly across their current phrase span" }),
         button(where("tune", p) === "line" ? "Restore phrase" : "Restore phrase here", () => { state.note = null; commit(scopedPath("tune", p), null, "Restore the phrase"); }, { class: "sbc-button sbc-quiet", title: where("tune", p) === "line" ? "Remove your melody override and restore this song’s inherited phrase" : "Give this place back the line's own tune" })),
-      health(),
+      p.notes.length ? health() : null,
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
   }
 
@@ -1447,6 +1452,7 @@
           [p.name, p.name === "voice" ? "Melody" : p.label]), (value) => {
           stop(); state.player = value; state.note = null; state.chord = null;
           window.SongbirdParts?.reset?.(); window.SongbirdDrums?.reset?.(); paint(); told();
+          page()?.partChosen?.(value);  // the grid's row follows: the Part menu is a second way to choose it
         }, { id: "sbc-part" }),
         part ? el("span", { class: "hint" }, "This section only") : scopeSwitch("tune"),
         el("span", { class: "settings" }, select("Snap", state.snap, snaps(), (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
@@ -1471,8 +1477,9 @@
             ctx.currentTime + 0.03 + (start / 96 - origin) * unit, Math.min(length / 96, (q?.duration_beats ?? 4) - start / 96) * unit, false, velocity);
         } }) : el("div", {},
       p?.notes?.length ? editTools() : null,
-      p?.notes?.length ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
+      (s.phrases || []).some(drawable) ? pianoRoll() : el("p", { class: "sbc-muted notes-foot" }, "This section has no melody to change."),
       ownCard(),
+      M().isBlank(p) && !state.draft ? el("div", { class: "notes-foot" }, button("Write words", writeLine, { class: "sbc-button", title: "Its words, with notes fitted to them" })) : null,
       el("p", { class: "readonly hint notes-foot" }, "Tap a note to change it in the column."),
       el("div", { class: "notes-foot" }, el("span", { title: "Arrow keys move the selected notes; ⇧ ← → a note's length; Delete removes; Ctrl or ⌘ with C, X, V, D, A: copy, cut, paste, duplicate, select all." }, "Drag on the grid to draw a note; Shift-drag to select."),
         p?.notes?.length ? button("▶ Hear this phrase", () => { state.scope = "phrase"; state.playIndex = null; play(); }, { class: "sbc-button" }) : null),
@@ -1575,10 +1582,10 @@
       if (box) box.replaceChildren(el("p", { class: "sbc-muted" }, "The arrangement will appear when the song is ready."));
       return;
     }
-    if (state.section < 0) { state.section = Math.max(0, sections().findIndex((s) => s.phrases?.some((p) => p.notes?.length))); feel(sections()[state.section]); }
+    if (state.section < 0) { state.section = Math.max(0, sections().findIndex((s) => s.phrases?.some(drawable))); feel(sections()[state.section]); }
     state.section = clamp(state.section, 0, sections().length - 1);
     state.phrase = clamp(state.phrase, 0, Math.max(0, (section().phrases?.length || 0) - 1));
-    if (!phrase()?.notes?.length) state.phrase = Math.max(0, (section().phrases || []).findIndex((p) => p.notes?.length));  // a played line first
+    if (!drawable(phrase())) state.phrase = firstSung();  // a sung line first (a blank one, to draw into, if that's all there is)
     if (state.note !== null && state.note >= (phrase()?.notes?.length || 0)) state.note = null;
     if (state.chord && !(phrase()?.chords?.[state.chord.bar]?.length > state.chord.slot)) state.chord = null;
     paint();
@@ -1605,9 +1612,21 @@
     replay();
   }
   function selection() {
-    return { section: sections()[state.section]?.id || null, phrase: state.phrase, note: state.note, chord: state.chord };
+    return { section: sections()[state.section]?.id || null, phrase: state.phrase, note: state.note, chord: state.chord, player: state.player };
   }
-  window.SongbirdComposer = { render, stop, replay, open, deselect, sketch, options, selection, noteState, chordState,
+  // the chords of the section open in the melody's harmony strip: its first chord chosen, its card in the column
+  function chords() {
+    const ps = section()?.phrases || [], k = Math.max(0, ps.findIndex((p) => p.chords?.length));
+    const p = ps[k];
+    if (!p?.chords?.length) return false;
+    stop(); state.player = "voice"; state.phrase = k; state.note = null;
+    const first = (p.harmony?.length ? p.harmony : [{ bar: 0, slot: 0, symbol: p.chords[0][0] }])[0];
+    state.chord = { bar: first.bar, slot: first.slot }; state.reveal = true;
+    paint(); told();
+    [...(root()?.querySelectorAll(".sbc-chord") || [])].find((node) => node.dataset.chord === `${first.bar}.${first.slot}` && node.dataset.chordPhrase === String(k))?.focus({ preventScroll: true });
+    return true;
+  }
+  window.SongbirdComposer = { render, stop, replay, open, deselect, sketch, options, selection, noteState, chordState, chords,
     hasDraft: (id) => sections().find((s) => s.id === id)?.phrases?.some((p) => drafts.has(p.own_path)) || false,
     playing: () => !!state.playback, mini: (index) => (sections()[index] ? miniNotes(sections()[index]) : null) };
 })();

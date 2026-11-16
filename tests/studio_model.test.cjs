@@ -423,3 +423,51 @@ test("a cell opens its track's editor; the Part menu's choice is a row; a sectio
   const g = M.grid(arrangement, view, sound);
   assert.deepEqual(M.playTarget({ kind: "cell", id: "verse:0", player: "guitar" }, g.sections), { section: 1, phrase: false });
 });
+
+test("a blank line's words get notes: a syllable a beat where there's room, home to the tonic; none is refused plainly", () => {
+  const blank = { own_path: "line.verse111:0.0", lyric_path: "lyrics.verse111:0.0", lyric_text: "", syllable_count: 0, tune_syllable_count: 0,
+    duration_beats: 8, pickup_beats: 0, notes: [], bounds: { min_onset: 0, max_end: 8, max_final_onset: 8, min_duration: 0.25 } };
+  assert.ok(M.isBlank(blank) && !M.isBlank({ ...blank, notes: [{}] }) && !M.isBlank({ ...blank, own_path: null }));
+  const five = M.fitNotes(blank, 5);
+  assert.deepEqual(five.map((n) => [n.degree, n.onset, n.duration]), [[3, 0, 1], [5, 1, 1], [4, 2, 1], [3, 3, 1], [1, 4, 2]]);
+  assert.deepEqual(M.fitNotes(blank, 1), [{ degree: 1, onset: 0, duration: 2 }]);
+  const tight = M.fitNotes({ ...blank, duration_beats: 2, bounds: { ...blank.bounds, max_end: 2, max_final_onset: 2 } }, 6);
+  assert.deepEqual(tight.map((n) => n.onset), [0, 0.25, 0.5, 0.75, 1, 1.25]);
+  assert.throws(() => M.fitNotes({ ...blank, duration_beats: 1, bounds: { ...blank.bounds, max_end: 1 } }, 8), /more room/);
+  assert.throws(() => M.fitNotes({ ...blank, own_path: null }, 3), /melody first/);
+  assert.deepEqual(Object.keys(M.lyricPatch(blank, "here is a new song", true)), ["line.verse111:0.0"]);
+  // the whole lyric at once: a blank verse is a paragraph like any other, its lines fitted
+  const composition = { sections: [{ id: "verse111:0", lyric_key: "verse111:0", label: "Verse 1", sung: true, phrases: [blank, { ...blank, own_path: "line.verse111:0.1", lyric_path: "lyrics.verse111:0.1" }] },
+    { id: "verse111:1", lyric_key: "verse111:0", label: "Verse 1 again", sung: true, phrases: [blank] }] };
+  const targets = M.lyricTargets(composition);
+  assert.deepEqual(targets.map((t) => t.label), ["Verse 1"], "a linked repeat is written once");
+  assert.equal(M.lyricSheet(targets), "[Verse 1]\n\n");
+  const sheet = M.lyricSheetPatch(targets, M.parseLyricSheet("here is a new song\nand a sec-ond line"), (t) => t.trim().split(/[\s-]+/).length);
+  assert.deepEqual(sheet.errors, []);
+  assert.deepEqual(Object.keys(sheet.patch), ["line.verse111:0.0", "line.verse111:0.1"]);
+  assert.equal(sheet.patch["line.verse111:0.1"].notes.length, 5);
+});
+
+test("the Page follows the clips: a section a clip, its own lines, the card's choices only where it sings its source's", () => {
+  const card = (index, name, lines, extra = {}) => ({ index, name, label: name, sung: true, block: name, nth: 0, lines, how: "handed down", tags: [], mine: false, changeable: true, path: `words.${name}.0`, ...extra });
+  const words = [{ index: 0, name: "intro", label: "Intro", sung: false, lines: ["the whistle plays"] }, card(1, "verse", ["They saved it as *numbers*", "and sent it"]), card(2, "refrain", ["Who *sang* this?"])];
+  const ph = (text, extra = {}) => ({ lyric_path: "lyrics.x", own_path: "line.x", lyric_text: text, notes: text ? [{}] : [], authored: false, ...extra });
+  const clips = { stored: true, value: { form: ["intro", "verse", "refrain"], order: ["verse104", "verse102", "intro101", "refrain103"], clips: {} },
+    clips: [{ id: "intro101", source: "intro:0", sung: false, instances: [2] }, { id: "verse102", source: "verse:0", sung: true, instances: [1] },
+      { id: "refrain103", source: "refrain:0", sung: true, instances: [3] }, { id: "verse104", source: null, sung: true, instances: [0] }] };
+  const view = { words, composition: { clips, sections: [
+    { index: 0, name: "verse104", label: "Verse 1", sung: true, phrases: [ph(""), ph("")] },
+    { index: 1, name: "verse102", label: "Verse 2", sung: true, phrases: [ph("They saved it as *num-bers*"), ph("and sent it")] },
+    { index: 2, name: "intro101", label: "Intro", sung: false, phrases: [{}] },
+    { index: 3, name: "refrain103", label: "Refrain", sung: true, phrases: [ph("Who *sang* this?", { authored: true })] }] } };
+  const page = M.pageWords(view);
+  assert.deepEqual(page.map((w) => [w.index, w.label, w.sung, w.blank]), [[0, "Verse 1", true, true], [1, "Verse 2", true, false], [2, "Intro", false, false], [3, "Refrain", true, false]]);
+  assert.deepEqual(page[0].lines, ["", ""]);
+  assert.equal(page[0].block, null, "a blank section has no bank words to choose");
+  assert.deepEqual(page[1].lines, ["They saved it as *numbers*", "and sent it"]);
+  assert.equal(page[1].block, "verse", "its source's lines as they are: the card's choices");
+  assert.deepEqual(page[2].lines, ["the whistle plays"]);
+  assert.equal(page[3].block, null, "a person's line in it: its own lines, no bank choices");
+  assert.ok(page[3].mine);
+  assert.equal(M.pageWords({ ...view, composition: { ...view.composition, clips: { ...clips, stored: false } } }), words, "without stored clips: the cards as they are");
+});

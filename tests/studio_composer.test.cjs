@@ -1131,3 +1131,53 @@ test("a section in a six feel opens on the ⅓ snap: a nudge and Quantize keep i
   t.find("#sbc-part").emit("change", { target: { value: "fiddle" } });
   assert(t.find("#sbc-snap").children.some((o) => o.textContent === "⅙"));
 });
+
+// A song's own blank verse (docs/notes/STUDIO-CLIPS.md, "A blank clip"): its lines rest, sung, with nothing in them yet
+function blankScore() {
+  const view = score();
+  const verse = view.composition.sections[1];
+  verse.id = "verse111:0"; verse.clip = "verse111"; verse.instance = 0;
+  verse.phrases = [0, 1].map((i) => ({
+    id: `verse111-${i}`, path: `tune.verse111-${i}`, start_beat: verse.start_beat + 4 * i, duration_beats: 4, pickup_beats: 0,
+    chords: [["I"]], notes: [], own: null, own_path: `line.verse111:0.${i}`, lyric_path: `lyrics.verse111:0.${i}`, lyric_text: "",
+    syllable_count: 0, tune_syllable_count: 0, place: `verse111:0.${i}`,
+    bounds: { min_degree: -12, max_degree: 16, min_onset: 0, max_end: 4, max_final_onset: 4, min_duration: 0.25, grid: 0.25, cadence_degree: null, max_leap: 28, melisma: 4 },
+  }));
+  return view;
+}
+
+test("a blank sung line opens in the roll, empty: a note drawn into it waits for its words, and words written first get notes", () => {
+  const view = blankScore(), s = setup(view);
+  s.root.dataset.mode = "notes";
+  s.window.SongbirdComposer.open(1);
+  assert.ok(s.root.querySelector(".sbc-roll"), "the roll is drawn, though the line has no notes");
+  assert.deepEqual(s.root.querySelectorAll(".sbc-phrase-words").map((n) => n.textContent), ["Empty", "Empty"]);
+  assert.equal(s.root.querySelectorAll(".sbc-note").length, 0);
+  // words first: Write words, then their notes fitted, then into the song as one line. edit
+  s.clickText("Write words");
+  const input = s.find("#sbc-own-words");
+  input.value = "here is a new song";
+  input.emit("input");
+  s.clickText("Fit notes to words");
+  assert.equal(s.root.querySelectorAll(".sbc-note").length, 5);
+  s.clickText("Use these words");
+  const line = s.commits.at(-1);
+  assert.equal(line.path, "line.verse111:0.0");
+  assert.equal(line.value.words, "here is a new song");
+  assert.deepEqual(line.value.notes.map((n) => n.onset), [0, 0.75, 1.5, 2.25, 3]);
+  assert.equal(line.value.notes.at(-1).degree, 1, "it ends home");
+});
+
+test("a note drawn into a blank line is the line's first syllable, its words to write", () => {
+  const view = blankScore(), s = setup(view);
+  s.root.dataset.mode = "notes";
+  s.window.SongbirdComposer.open(1);
+  const plot = s.find(".sbc-grid");
+  const left = parseFloat(plot.style.left);  // the roll's first beat
+  plot.emit("pointerdown", { clientX: left + 4, clientY: 100 });
+  plot.emit("pointermove", { clientX: left + 90, clientY: 100 });
+  plot.emit("pointerup", { clientX: left + 90, clientY: 100 });
+  assert.equal(view.composition.sections[1].phrases[0].notes.length, 1);
+  assert.match(s.find(".sbc-own").textContent, /\/ 1 syllables/);
+  assert.equal(s.commits.length, 0, "nothing in the song until its words are written");
+});

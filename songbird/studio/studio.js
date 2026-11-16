@@ -1171,7 +1171,7 @@ async function listen(who = "you", section = null, bar = null) {
   window.SongbirdComposer?.stop();
   if (state.playing?.task) renderer().cancel(state.playing.task);  // one still waiting its turn is dropped
   quietPause();
-  const label = section === null ? "The whole song" : state.view.words.find((w) => w.index === section)?.label || "Song section";
+  const label = section === null ? "The whole song" : (state.view.composition?.sections?.[section] || state.view.words.find((w) => w.index === section))?.label || "Song section";
   // the published version with nothing changed is its own recording: played at once, from the file as released,
   // where the site has it (nothing is made again). From a later bar, by the score's own time for that bar.
   const released = state.start?.published?.audio;
