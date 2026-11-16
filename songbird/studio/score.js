@@ -1179,22 +1179,21 @@
   // taken away. A line of the section's own tune is as long as its tune.
   function linesRow(s, clip) {
     const b = clipsView()?.bounds || {}, most = b.line_bars || 8;
-    const refusal = clip.can?.lines === true ? null : sentence(clip.can?.lines);
     const lines = clip.lines.map((l, j) => {
       const own = l.of !== null && l.of !== undefined;
       const name = `Line ${j + 1}`;
       return h("span", { class: `line-bars${own ? " own" : ""}`, title: own ? `${name}: its tune's ${l.bars} bars` : `${name}: ${l.bars} bars` },
         own ? h("output", {}, `${l.bars}`) : h("span", { class: "stepper" },
-          h("button", { type: "button", "aria-label": `${name} shorter`, disabled: !!refusal || l.bars <= 1, onclick: () => clipLinesTo(s, { line: j, bars: l.bars - 1 }, `${s.label}, line ${j + 1}: ${l.bars - 1} bars`) }, "−"),
+          h("button", { type: "button", "aria-label": `${name} shorter`, disabled: l.bars <= 1, onclick: () => clipLinesTo(s, { line: j, bars: l.bars - 1 }, `${s.label}, line ${j + 1}: ${l.bars - 1} bars`) }, "−"),
           h("output", { "aria-label": `${name}: ${l.bars} bars` }, `${l.bars}`),
-          h("button", { type: "button", "aria-label": `${name} longer`, disabled: !!refusal || l.bars >= most, onclick: () => clipLinesTo(s, { line: j, bars: l.bars + 1 }, `${s.label}, line ${j + 1}: ${l.bars + 1} bars`) }, "+")));
+          h("button", { type: "button", "aria-label": `${name} longer`, disabled: l.bars >= most, onclick: () => clipLinesTo(s, { line: j, bars: l.bars + 1 }, `${s.label}, line ${j + 1}: ${l.bars + 1} bars`) }, "+")));
     });
     const full = clip.lines.length >= (b.lines || 16);
     return h("div", { class: "row lines-row" }, h("span", { class: "label", title: "Each line's bars" }, "Lines"),
       h("span", { class: "chips" }, lines,
-        h("button", { class: "chip", type: "button", "aria-label": "Add a line", disabled: !!refusal || full, title: refusal || (full ? `A section has ${b.lines || 16} lines at most.` : "A blank line of 2 bars at the end"),
+        h("button", { class: "chip", type: "button", "aria-label": "Add a line", disabled: full, title: full ? `A section has ${b.lines || 16} lines at most.` : "A blank line of 2 bars at the end",
           onclick: () => clipLinesTo(s, { add: 2 }, `${s.label}: a line more`) }, "+ line"),
-        h("button", { class: "chip", type: "button", "aria-label": "Take away the last line", disabled: !!refusal || clip.lines.length <= 1, title: refusal || (clip.lines.length <= 1 ? "A section needs one line." : "The last line taken away"),
+        h("button", { class: "chip", type: "button", "aria-label": "Take away the last line", disabled: clip.lines.length <= 1, title: clip.lines.length <= 1 ? "A section needs one line." : "The last line taken away",
           onclick: () => clipLinesTo(s, { remove: true }, `${s.label}: a line fewer`) }, "− line"),
         clip.source && clipsView()?.value?.clips?.[clip.id]?.lines ? h("button", { class: "link small", type: "button", title: "Its section's own lines again",
           onclick: () => clipOp({ op: "lines", clip: clip.id, lines: null }, `${s.label}: its own lines`) }, "Reset") : null));

@@ -168,8 +168,8 @@ Read (`/api/song`, `composition`):
   bool, "clips": [{"id", "label", "role", "source" (a source section id or
   null), "sung", "bars", "lines" (each `{"phrase", "of", "bars"}`), "instances" (indexes in sections),
   "authored" (bool: the clip has words, notes, chords, parts or arrangement of
-  a person's), "can": {"delete", "duplicate", "repeat", "lines"}: true, or why
-  not}], "roles": [...], "bounds": {...}}`.
+  a person's), "can": {"delete", "duplicate", "repeat"}: true, or why
+  not; a clip's lines change within `bounds`}], "roles": [...], "bounds": {...}}`.
 - each section: `id` (`verse102:0`), `clip` (`verse102`), `instance` (0, 1...),
   `label`, and its phrases with the fields the editor reads already
   (`own_path`, `lyric_path`, `place`, `chords_path`, `part_key`, `bounds`,

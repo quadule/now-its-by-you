@@ -75,7 +75,7 @@ function song({ stored = false, extra = [] } = {}) {
     clips: rows.map(([name, clip, label, bars, sung], k) => ({
       id: clip, label, role: name, source: k < 3 ? `${name}:0` : null, sung, bars, instances: [k], authored: false,
       lines: k < 3 ? [{ phrase: `${name[0]}1`, of: 0, bars: bars / 2 }, { phrase: `${name[0]}2`, of: 1, bars: bars / 2 }] : [{ phrase: `${clip}-0`, of: null, bars: 2 }, { phrase: `${clip}-1`, of: null, bars: 2 }],
-      can: { delete: true, duplicate: true, repeat: true, lines: true } })),
+      can: { delete: true, duplicate: true, repeat: true } })),
   };
   return { sections, clips };
 }
@@ -189,7 +189,7 @@ test("Duplicate, Repeat and Delete in the column; Ctrl/⌘ D and Delete on a sec
 
 test("a refused operation is disabled, its reason the engine's sentence", async () => {
   const view = song();
-  view.clips.clips[1].can = { delete: "a song needs one clip", duplicate: "the song has as many clips as it can", repeat: true, lines: true };
+  view.clips.clips[1].can = { delete: "a song needs one clip", duplicate: "the song has as many clips as it can", repeat: true };
   const page = studio(view);
   await page.open();
   page.region("verse:0").dispatch("click");

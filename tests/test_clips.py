@@ -282,7 +282,7 @@ def test_the_view_says_what_each_clip_can_do():
     view = C.view(G, E.song_params(G), None)["clips"]
     assert view["clips"][0] == {**view["clips"][0], "id": "intro101", "role": "intro", "source": "intro:0",
                                 "sung": False, "instances": [0], "authored": False}
-    assert all(c["can"] == {"delete": True, "duplicate": True, "repeat": True, "lines": True} for c in view["clips"])
+    assert all(c["can"] == {"delete": True, "duplicate": True, "repeat": True} for c in view["clips"])
     edits, _ = new_song()
     while len(edits["clips"]["order"]) > 1:
         edits = op(edits, op="delete", at=1)["edits"]
