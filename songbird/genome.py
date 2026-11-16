@@ -89,6 +89,7 @@ class Section:
     phrases: tuple[str, ...]
     lyrics: str | None  # "verse", a fixed block ("refrain", "bridge", ...), or None for an instrumental section
     choir: bool = False  # voices from the lineage join in harmony here
+    clip: bool = False  # a clip of a person's arrangement (songbird.clips): its words are its own, every time it comes
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,9 @@ class Genome:
     # a line of an older song, on the song's grid in its own notation, never sung: the lead instrument may
     # play it alone before the song (style.intro "quote"); source["quote"]["about"] says what it is and why
     quote: Phrase | None = None
+    # a song made from a person's clips (songbird.clips.song): the song's own genome and the arrangement; None for
+    # the song itself
+    clips: object = None
 
     def section(self, name: str) -> Section:
         """A section of a concrete form by name. A name the genome doesn't

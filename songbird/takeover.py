@@ -1017,7 +1017,10 @@ def grid(genome, v, heard: dict) -> dict:
     from .realize import timeline
     from .style import of as style_of, voices_alone
 
-    params = v.params
+    from .clips import labels, resolved
+
+    genome, params, _ = resolved(genome, v.params)  # a person's clips, as one song (songbird.clips)
+    named = labels(genome, params.form)
     ctx = heard["ctx"]
     taken = getattr(ctx, "taken", None) or {"program": [dict(s.parts) for s in ctx.sections], "from": {},
                                             "stops": set(), "half": set(), "played": {}, "cells": set(), "build": {}}
@@ -1090,6 +1093,7 @@ def grid(genome, v, heard: dict) -> dict:
         title = name.replace("bridge2", "Bridge 2").title()
         if params.form.count(name) > 1:
             title += f" {int(sid.split(':')[1]) + 1}"
+        title = named[k] if named is not None else title
         sections.append({
             "index": k, "id": sid, "name": name, "label": title, "role": s.role, "energy": round(s.energy, 3),
             "bars": bars, "bar_options": options, "own_bars": own, "sung": sung_now, "can_play": bool(section.lyrics),

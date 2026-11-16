@@ -237,8 +237,10 @@ def prepare(genome, params, score, phrasing=None, choir=(), lyrics=None):
     from . import variation
     from .composition import section_ids
     from .realize import realize
+    from .clips import resolved
     from .takeover import staged
 
+    genome, params, lyrics = resolved(genome, params, lyrics)
     grid, ex = staged(params), exact(params)
     if not grid and not ex:
         return score
@@ -286,8 +288,10 @@ def laid(genome, params, phrasing=None, choir=(), lyrics=None):
     """A version's score as every render lays it out (the command line's, the studio's, the browser's): realized,
     laid (variation.lay), and with its stage plan where it has one (prepare())."""
     from . import variation
+    from .clips import resolved
     from .realize import realize
 
+    genome, params, lyrics = resolved(genome, params, lyrics)  # a person's clips, as one song (songbird.clips)
     score = variation.lay(realize(genome, params, phrasing=phrasing, choir=list(choir), lyrics=lyrics), params)
     return prepare(genome, params, score, phrasing=phrasing, choir=choir, lyrics=lyrics)
 

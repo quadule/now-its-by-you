@@ -428,9 +428,12 @@ def section_labels(genome, form, sections, bars=None) -> list[tuple[str, float]]
     """Each section of the form and when it starts: the score keeps a run of sections of one name as one
     (verse, verse), shared out evenly (they have the same phrases), or by their bars where a person made them
     different lengths (songbird.takeover), as the studio's previews cut them."""
+    from .clips import labels
+
     out, k = [], 0
     counts: dict[str, int] = {}
     total = {name: list(form).count(name) for name in form}
+    named = labels(genome, form)  # a song made from clips: each clip's (songbird.clips)
     for name, a, b in sections:
         run = 1
         while k + run < len(form) and form[k + run] == name:
@@ -442,6 +445,7 @@ def section_labels(genome, form, sections, bars=None) -> list[tuple[str, float]]
             label = name.replace("bridge2", "Bridge 2").title()
             if total.get(name, 1) > 1:
                 label += f" {counts[name]}"
+            label = named[k + j] if named is not None else label
             out.append((label, a + (b - a) * j / run if bars is None else a + (b - a) * done / sum(weights)))
             done += weights[j]
         k += run
@@ -536,8 +540,14 @@ def from_score(genome, params, score, title: str | None = None, lyrics="held") -
     before zero). lyrics: the words the score sang (arrange.Lyrics), for the chords under a line of its own;
     None the seed's; "held": the ones the rendition holds."""
     from . import composition, idioms, style as style_mod
+    from .clips import resolved
     from .theory import chord_name
 
+    # a person's clips, as one song (songbird.clips)
+    if isinstance(lyrics, str):
+        genome, params, _ = resolved(genome, params)
+    else:
+        genome, params, lyrics = resolved(genome, params, lyrics)
     ticks, (top, bottom), lead_in = clock_map(genome, params, score.duration)
     head: list[tuple[int, int, bytes]] = [
         (0, 0, text(0x03, title or genome.title)),

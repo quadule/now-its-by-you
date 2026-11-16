@@ -178,6 +178,25 @@ def test_a_section_from_its_spec_is_the_studios_own_byte_for_byte(public, home):
     assert post(port, studio, "/api/render/spec", {"edits": {}, "who": "someone else"})[0] == 400
 
 
+def test_a_clip_s_section_from_its_spec_is_the_studios_own_byte_for_byte(public, home):
+    """A blank clip with its own words and notes (docs/notes/STUDIO-CLIPS.md), made from its spec in the browser's
+    code, is the studio's own preview of it."""
+    studio, port = public
+    status, made = post(port, studio, "/api/clips", {"edits": {}, "op": "blank", "role": "verse", "bars": 4,
+                                                      "lines": 2, "at": 0})
+    assert status == 200
+    clip, edits = made["clip"], made["edits"]
+    edits[f"line.{clip}:0.0"] = {"words": "We sing now", "notes": [{"degree": 1, "onset": 0, "duration": 1},
+                                                                    {"degree": 3, "onset": 1, "duration": 1},
+                                                                    {"degree": 5, "onset": 2, "duration": 2}]}
+    status, answer = post(port, studio, "/api/render/spec", {"edits": edits, "who": "you", "section": 0})
+    assert status == 200 and answer["label"].startswith("Verse")
+    made = studio_render().run(answer["spec"], home / "browser", program=studio.program_digest)
+    job = S.Job(id="x", key=answer["key"], kind="preview", label="", work=None)
+    studio._section(job, studio.version(edits), answer["key"], 0)
+    assert Path(made["flac"]).read_bytes() == (studio.cache / f"{answer['key']}.flac").read_bytes()
+
+
 def test_a_recording_from_its_spec_is_the_studios_own_packet_byte_for_byte(home):
     studio = S.Studio(None, str(B), "fictional:ada", out=home / "out", public=P.Limits())
     edits = {"tempo": 70, "band.pattern": "pick", "form.verses": 2}

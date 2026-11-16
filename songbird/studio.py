@@ -69,7 +69,7 @@ from urllib.parse import parse_qs, urlsplit
 import numpy as np
 
 from . import RECORD_FORMAT, artwork, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, stage, synth
-from . import public as public_mod, received, stems as stems_mod
+from . import clips, public as public_mod, received, stems as stems_mod
 from .realize import Params
 from .synth import master
 from .synth.instruments import INSTRUMENTS
@@ -221,10 +221,15 @@ def spans(score, form, bars=None) -> list[tuple[str, float, float]]:
 def window(genome, params: Params, score, form, index: int) -> tuple[float, float]:
     """Where a section's preview starts and ends: from a breath before its first pickup (a beat of the band
     before it at least) to where the next section's pickup begins."""
+    from .clips import resolved
     from .takeover import arranged, phrase_plan
 
+    genome, params, _ = resolved(genome, params)  # a person's clips, as one song: their sections (songbird.clips)
+    if genome.clips is not None:
+        form = params.form
     lined = phrase_plan(genome, params)  # each section's lines, as long as a person made it
-    bars = [sum(genome.phrases[pid].bars for pid, _ in lines) for lines in lined] if arranged(params) else None
+    bars = [sum(genome.phrases[pid].bars for pid, _ in lines) for lines in lined] \
+        if arranged(params) or genome.clips is not None else None
     parts = spans(score, form, bars)
     _, s0, s1 = parts[index]
     unit = 60.0 / params.tempo / genome.meter.beat
@@ -682,6 +687,12 @@ class Studio:
     def options(self, edits: dict, block: str, index: int) -> dict:
         return explain.word_options(self.context, self.version(edits), block, index)
 
+    def clips(self, edits: dict, body: dict) -> dict:
+        """An operation on the version's clips (docs/notes/STUDIO-CLIPS.md, "For the editor"): the whole edits map
+        it leaves, and the clip it made."""
+        v = self.version(edits)
+        return clips.operate(self.genome, v.params, v.lyrics, edits, {k: x for k, x in body.items() if k != "edits"})
+
     def keep_words(self, edits: dict) -> dict:
         return {"edits": {**edits, **explain.keep_words(self.version(edits))}}
 
@@ -729,7 +740,7 @@ class Studio:
         return keys[section]
 
     def listen_keys(self, v: explain.Version) -> dict:
-        keys = {"whole": self.key(v, None), "sections": [self.key(v, k) for k in range(len(v.params.form))]}
+        keys = {"whole": self.key(v, None), "sections": [self.key(v, k) for k in range(len(clips.sung_form(v.params)))]}
         keys["ready"] = [k for k in [keys["whole"], *keys["sections"]] if (self.cache / f"{k}.flac").exists()]
         return keys
 
@@ -737,7 +748,7 @@ class Studio:
         """A preview (a section, or the whole song) made or on its way. `by`: the visitor and address asking,
         in a public studio, for its limits."""
         v = self.version(edits, who)
-        if section is not None and not 0 <= section < len(v.params.form):
+        if section is not None and not 0 <= section < len(clips.sung_form(v.params)):
             raise ValueError("no such section")
         key = self.key(v, section)
         label = explain.listen_label(self.context, v, section, who)
@@ -814,7 +825,8 @@ class Studio:
         """Make today's first verse while the page opens: the synthesis is compiled the first time it runs
         (10 to 15 s), so the first thing a person asks to hear doesn't wait for that, and it's ready."""
         v = self.version({})
-        first = next((k for k, name in enumerate(v.params.form) if self.genome.section(name).lyrics), 0)
+        song, sung, _ = clips.resolved(self.genome, v.params)  # (a person's clips: their sections)
+        first = next((k for k, name in enumerate(sung.form) if song.section(name).lyrics), 0)
         self.listen({}, "you", first)
 
     def _score_and_heard(self, v: explain.Version) -> tuple[object, dict]:
@@ -840,7 +852,7 @@ class Studio:
 
         job.stage = stage_words("score")
         score = self._score(v)
-        t0, t1 = window(self.genome, v.params, score, v.params.form, index)
+        t0, t1 = window(self.genome, v.params, score, v.params.form, index)  # (a person's clips: their sections)
         part, lead_in = cut(score, t0, t1)
         job.plan = stages(part)
         singer = explain.singer_of(v.params)
@@ -1429,7 +1441,7 @@ class Studio:
         so the page never reads its 64-bit seeds as floats). What this studio has made already is said instead
         ("made"): the page then asks for it as ever, and it plays at once."""
         v = self.version(edits, who)
-        if section is not None and not 0 <= section < len(v.params.form):
+        if section is not None and not 0 <= section < len(clips.sung_form(v.params)):
             raise ValueError("no such section")
         key = self.key(v, section)
         label = explain.listen_label(self.context, v, section, who)
@@ -1662,6 +1674,8 @@ def answer(studio: Studio, path: str, body: dict, by: tuple[str, str] | None = N
         return studio.options(edits, str(body.get("block", "")), int(body.get("index", 0)))
     if path == "/api/keep-words":
         return studio.keep_words(edits)
+    if path == "/api/clips":  # an operation on the song's clips, as the edits it leaves (songbird.clips)
+        return studio.clips(edits, body)
     if path == "/api/compare":
         return studio.compare(edits, list(body.get("names", [])))
     if path == "/api/listen":

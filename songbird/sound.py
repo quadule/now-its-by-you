@@ -722,7 +722,10 @@ def view(genome, params, generated, applied, problems, score) -> dict:
     the one sung, the program's (a parent's choice among it), and whether it is the person's; the choices
     and their ranges; the problems with any of them."""
     from .band import INSTRUMENTS
+    from .clips import labels, resolved
 
+    genome, params, _ = resolved(genome, params)  # a person's clips, as one song (songbird.clips)
+    named = labels(genome, params.form)
     band = params.band
     names = list(band.lineup) if band.lineup else list(INSTRUMENTS)
     sound = params.sound or {}
@@ -770,7 +773,8 @@ def view(genome, params, generated, applied, problems, score) -> dict:
         path = f"transition.{sid}"
         mine = (sound.get("transitions") or {})
         boundaries.append({**entry(path, mine[sid] if sid in mine else moves.get(sid)), "id": sid,
-                           "name": section_label(name, int(n)), "from": ids[k - 1] if k else None,
+                           "name": named[k] if named else section_label(name, int(n)),
+                           "from": ids[k - 1] if k else None,
                            "before": k > 0})
     return {"players": players, "boundaries": boundaries,
             "transition": {"bars": list(BARS[1:]), "sweep": list(SWEEP_TYPES), "kinds": list(TRANSITION_KEYS)},

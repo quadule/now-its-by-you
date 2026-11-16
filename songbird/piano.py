@@ -62,8 +62,10 @@ def lay(genome, params, phrasing=None, choir=(), lyrics=None) -> dict:
     """The rendition laid out again with this program, as `export` wants it: the score (realize, then
     variation.lay, as a render has it), the band's Context, realize()'s melody entries and clock."""
     from . import band, variation
+    from .clips import resolved
     from .realize import realize, timeline
 
+    genome, params, lyrics = resolved(genome, params, lyrics)  # a person's clips, as one song (songbird.clips)
     with band.overheard() as heard:
         score = variation.lay(realize(genome, params, phrasing=phrasing, choir=list(choir), lyrics=lyrics), params)
     if "ctx" not in heard:
