@@ -191,7 +191,7 @@
         row.base = patch[row.phrase.own_path]?.words ?? patch[row.phrase.lyric_path] ?? submitted.get(row.phrase.lyric_path);
       }
       status.textContent = row ? "In your song." : "In your song. Hear the section to listen.";
-      bridge().toast(row ? "Your line is in the song. Undo takes it back." : "Your words are in the song. Undo takes them back.");
+      bridge().toast(row ? "Your line is in the song." : "Your words are in the song.");
       done?.();
     } catch (error) { status.textContent = error.message; }
     finally { section.busy = false; save.disabled = false; }
@@ -438,7 +438,7 @@
       text.spellcheck = true;
       text.setAttribute("aria-label", "The song's words");
       text.title = STARS;
-      const hint = node("p", "hint", "A blank line between sections, in the song's order. A line in brackets names one: [Verse 2].");
+      const hint = node("p", "hint", "A paragraph a section, in the song's order; a line in brackets names one: [Verse 2].");
       const lines = node("div", "lyric-sheet-lines");
       const status = node("p", "author-status");
       status.setAttribute("role", "status");
@@ -507,7 +507,7 @@
       await bridge().applyPatch(patch, "Write the lyrics");
       st.status.textContent = "";
       close();
-      bridge().toast?.("Your words are in the song. Undo takes them back.");
+      bridge().toast?.("Your words are in the song.");
     } catch (error) {
       st.problems = new Map((error.problems || []).map((p) => [p.path, p.why]));
       st.status.textContent = st.problems.size ? "Some lines can't be sung yet: each says why." : error.message;

@@ -98,7 +98,7 @@
     next.splice(to, 0, moved);
     const was = sections.filter((s) => s.name === moved.name).map((s) => s.id);
     const now = next.filter((s) => s.name === moved.name).map((s) => s.id);
-    if (was.some((id, i) => id !== now[i])) return { error: "Repeated verses and refrains keep their story order. Move this section between other kinds of section." };
+    if (was.some((id, i) => id !== now[i])) return { error: "Repeated verses and refrains keep their story order." };
     return { order: next.map((s) => s.id) };
   }
 
@@ -363,7 +363,7 @@
     const shift = at - clip.start, most = b.melisma || 4;
     const put = clip.notes.map((n) => ({ ...n, onset: Math.round((n.onset + shift) * 1e9) / 1e9, syllable: n.slur ? "" : "?", word: "", pasted: true }));
     if (!put.length || put.some((n) => n.onset < b.min_onset - 1e-8 || n.onset + n.duration > b.max_end + 1e-8))
-      throw new Error("These notes don't fit here. Paste them earlier or into a longer phrase.");
+      throw new Error("These notes don't fit here.");
     const kept = notes.filter((n) => !put.some((m) => n.onset < m.onset + m.duration - 1e-8 && n.onset + n.duration > m.onset + 1e-8));
     const out = [...kept.map((n) => ({ ...n })), ...put].sort((x, y) => x.onset - y.onset);
     let run = 0;
@@ -375,7 +375,7 @@
       if (n.slur) n.alter = 0;
     });
     if (out.at(-1).onset > (b.max_final_onset ?? b.max_end) + 1e-8)
-      throw new Error("The last note needs room before the next line's pickup. Paste earlier.");
+      throw new Error("The last note would leave the next line's pickup no room.");
     const added = out.flatMap((n, i) => (n.pasted ? [i] : []));
     out.forEach((n) => delete n.pasted);
     return { notes: out, added };
@@ -398,7 +398,7 @@
     const last = out.at(-1), least = Math.min(grid, b.min_duration ?? grid) - 1e-9;
     if (out.some((n, i) => n.duration < least || n.onset < b.min_onset - 1e-9 || n.onset + n.duration > b.max_end + 1e-9 ||
       (i && n.onset < out[i - 1].onset + out[i - 1].duration - 1e-9)) || last.onset > (b.max_final_onset ?? b.max_end) + 1e-9)
-      throw new Error("These notes can't all go on this grid. Choose a finer snap.");
+      throw new Error("These notes need a finer snap.");
     return out;
   }
   // the shortcuts of a roll with notes selected: copy, cut, paste, duplicate, all (never in a text field)
@@ -424,7 +424,7 @@
     const end = Math.min(b.max_end ?? phrase.duration_beats, Math.max(source.at(-1).onset + source.at(-1).duration, start + count * grid));
     const step = Math.floor((end - start + 1e-8) / count / grid) * grid;
     if (step < grid || start + (count - 1) * step > (b.max_final_onset ?? end - grid) + 1e-8)
-      throw new Error("These words need more room. Use fewer syllables in this line.");
+      throw new Error("These words need more room than this line has.");
     return Array.from({ length: count }, (_, i) => {
       const n = source[Math.round(i * (source.length - 1) / Math.max(1, count - 1))];
       return { degree: n.degree, ...(n.alter ? { alter: n.alter } : {}), onset: start + i * step,
@@ -504,7 +504,7 @@
     const limits = target.bounds || {}, count = notes.filter((n) => !n.slur).length;
     if ((!count && target.tune_syllable_count !== 0) || notes.some((n) => n.duration < (limits.min_duration || 0.25) - 1e-8 ||
       n.degree < limits.min_degree || n.degree > limits.max_degree) || notes.at(-1)?.onset > (limits.max_final_onset ?? target.duration_beats) + 1e-8)
-      throw new Error("This melody doesn't fit the destination. Choose a longer phrase or copy fewer notes.");
+      throw new Error("This melody doesn't fit that phrase.");
     const patch = {};
     if (target.own_path && source.lyric_text) {
       patch[target.own_path] = { words: source.lyric_text, notes };

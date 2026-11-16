@@ -47,7 +47,7 @@
       if (count > 32) throw new Error("Use at most 32 note starts in a beat.");
       if (!player.poly && out.length) {
         const prev = out.at(-1);
-        if (prev[0] === n[0]) throw new Error("This instrument plays one note at a time. Move one of these notes.");
+        if (prev[0] === n[0]) throw new Error("This instrument plays one note at a time.");
         prev[1] = Math.min(prev[1], n[0] - prev[0]);
       }
       if (player.poly && out.filter((x) => x[0] + x[1] > n[0]).length >= 10)
@@ -74,7 +74,7 @@
   function pasted(notes, clip, at, b, mono = false) {
     const put = clip.notes.map((n) => [n[0] + at, n[1], n[2], n[3]]);
     if (!put.length || put.some((n) => n[0] < b.start || n[0] >= b.end || n[2] < b.low || n[2] > b.high))
-      throw new Error("These notes don't fit here. Paste them earlier or into a longer phrase.");
+      throw new Error("These notes don't fit here.");
     const kept = mono ? notes.filter((n) => !put.some((m) => n[0] < m[0] + m[1] && n[0] + n[1] > m[0])) : notes;
     return { notes: [...copy(kept), ...put], put };
   }
@@ -106,7 +106,7 @@
       const notes = (data.players.find((x) => x.part === s.player.name)?.notes || []).filter((n) => inside(n[0]));
       const preview = await ask("/api/notes-in", { edits, take: { player: s.player.name, notes, lines: missing.map((x) => x.p.part_key) } });
       if (current !== s || !s.loading) return;
-      if (preview.refused?.length) throw new Error(`${preview.refused[0].why}. Start empty to write a new part.`);
+      if (preview.refused?.length) throw new Error(`${preview.refused[0].why}.`);
       for (const x of missing) { x.notes = copy(preview.changes.find((c) => c.path === x.path)?.value || []); x.ready = true; }
     } catch (error) { if (current === s && s.loading) s.error = error.message; }
     if (current === s) { s.loading = false; s.paint(); }
@@ -164,7 +164,7 @@
     const x = line(); if (!x?.ready) return false;
     const chosen = chosenOf();
     clipboard = chosen.length ? clipOf(x.notes, chosen) : { start: x.bounds.start, notes: x.notes.map((n) => [n[0] - x.bounds.start, n[1], n[2], n[3]]), whole: true };
-    if (!quiet) { current.paint(); bridge().toast?.(chosen.length ? `${chosen.length} note${chosen.length === 1 ? "" : "s"} copied.` : "Notes copied. Choose another phrase and paste."); }
+    if (!quiet) { current.paint(); bridge().toast?.(chosen.length ? `${chosen.length} note${chosen.length === 1 ? "" : "s"} copied.` : "The phrase's notes copied."); }
     return true;
   }
   function paste(at = null) {
@@ -181,7 +181,7 @@
     if (!chosen.length) { bridge().toast?.("Select notes to duplicate."); return; }
     const clip = clipOf(x.notes, chosen), end = Math.max(...chosen.map((i) => x.notes[i][0] + x.notes[i][1]));
     try { const { notes, put } = pasted(x.notes, clip, end, x.bounds, !current.player.poly); current.focusNote = true; save(notes, put); }
-    catch (error) { bridge().toast?.(`No room to duplicate here. ${error.message}`); }
+    catch (error) { bridge().toast?.("No room to duplicate here."); }
   }
   function quantize() {
     const s = current, x = line(); if (!x?.ready || !x.notes.length) return;

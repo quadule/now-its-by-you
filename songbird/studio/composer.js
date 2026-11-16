@@ -350,7 +350,7 @@
     const left = notes.filter((x) => !x.slur).length;
     if (left === p.notes.filter((x) => !x.slur).length) { pick(Math.min(i, notes.length - 1)); commitNotes(notes, "Joined into the notes before."); return; }
     if (!p.own_path || left < 1) {
-      bridge().toast?.(p.own_path ? "Keep one syllable in a sung line. The section's Singer control can make the section instrumental."
+      bridge().toast?.(p.own_path ? "A sung line keeps at least one syllable."
         : "Choose a sung line to change how many notes it has."); return;
     }
     pick(Math.min(chosen[0], notes.length - 1));
@@ -364,7 +364,7 @@
     const chosen = picked(), whole = !chosen.length || chosen.length === p.notes.length;
     clipboard = whole ? { whole, notes: serializeNotes(p.notes, true), start: bounds(p).min_onset, end: bounds(p).max_end }
       : { whole, ...window.SongbirdModel.clipOf(p.notes, chosen) };
-    if (!quiet) { paint(); bridge().toast?.(whole ? "Notes copied. Choose another phrase and paste." : `${chosen.length} note${chosen.length === 1 ? "" : "s"} copied.`); }
+    if (!quiet) { paint(); bridge().toast?.(whole ? "The phrase's notes copied." : `${chosen.length} note${chosen.length === 1 ? "" : "s"} copied.`); }
     return true;
   }
   function pasteAt(notes, added, p = phrase(), message = "Notes pasted. Undo restores the phrase.") {
@@ -381,7 +381,7 @@
       const ratio = (b.max_end - b.min_onset) / (clipboard.end - clipboard.start);
       const notes = clipboard.notes.map((n) => ({ ...n, onset: b.min_onset + (n.onset - clipboard.start) * ratio, duration: n.duration * ratio }));
       if (notes.some((n) => n.duration < b.min_duration || n.degree < b.min_degree || n.degree > b.max_degree) || notes.at(-1).onset > b.max_final_onset) {
-        bridge().toast?.("These notes don't fit this phrase. Paste into a longer phrase or use fewer notes."); return;
+        bridge().toast?.("These notes don't fit this phrase."); return;
       }
       pasteAt(notes, notes.map((_, i) => i)); return;
     }
@@ -415,7 +415,7 @@
     try {
       const { notes, added } = window.SongbirdModel.pasteAt(p.notes, clip, last.onset + last.duration, bounds(p));
       pasteAt(notes, added, p, `${chosen.length} note${chosen.length === 1 ? "" : "s"} duplicated.`);
-    } catch (error) { bridge().toast?.(`No room to duplicate here. ${error.message}`); }
+    } catch (error) { bridge().toast?.("No room to duplicate here."); }
   }
   // Ctrl or ⌘ with C, X, V, D or A in the roll (model.js rollKey: never in a text field)
   function shortcut(event) {
@@ -619,7 +619,7 @@
     const originalOccurrences = sections().filter((s) => s.name === moved.name).map((s) => s.id);
     const nextOccurrences = reordered.filter((s) => s.name === moved.name).map((s) => s.id);
     if (originalOccurrences.some((id, index) => id !== nextOccurrences[index])) {
-      bridge().toast?.("Repeated verses and refrains keep their lyric order. Move this section between other kinds of section."); return;
+      bridge().toast?.("Repeated verses and refrains keep their lyric order."); return;
     }
     const order = reordered.map((s) => s.id);
     state.section = to; state.phrase = 0; state.note = null;

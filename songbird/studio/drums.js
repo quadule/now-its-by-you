@@ -150,7 +150,7 @@
       const notes = (data.players.find((x) => x.part === s.player.name)?.strokes || []).filter((n) => n[0] >= from && n[0] < end);
       const preview = await ask("/api/notes-in", { edits, take: { player: s.player.name, notes, lines: [p.part_key] } });
       if (current !== s || !s.loading) return;
-      if (preview.refused?.length) throw new Error(`${preview.refused[0].why}. Start empty to write a new part.`);
+      if (preview.refused?.length) throw new Error(`${preview.refused[0].why}.`);
       s.notes = copy(preview.changes.find((x) => x.path === s.path)?.value || []);
       s.ready = true;
     } catch (error) { if (current === s && s.loading) s.error = error.message; }
