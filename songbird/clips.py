@@ -481,8 +481,11 @@ def view(genome, params) -> dict:
     shaped = song(genome, value) if is_stored else None
     ids = section_ids(value["form"])
     names = labels(shaped, value["order"]) if shaped is not None else None
-    bars_of = {c: sum(genome.phrases[p].bars if p in genome.phrases else value["clips"][c]["lines"][i]["bars"]
-                      for i, (p, _) in enumerate(_lines_of(genome, value, c))) for c in value["clips"]}
+    def line_bars(c: str) -> list[int]:
+        return [genome.phrases[p].bars if p in genome.phrases else value["clips"][c]["lines"][i]["bars"]
+                for i, (p, _) in enumerate(_lines_of(genome, value, c))]
+
+    bars_of = {c: sum(line_bars(c)) for c in value["clips"]}
     total = sum(bars_of[c] for c in value["order"])
     room = len(value["order"]) < MAX_INSTANCES
     out = []
@@ -499,7 +502,8 @@ def view(genome, params) -> dict:
         out.append({
             "id": clip, "label": label, "role": role, "source": source,
             "sung": bool(section.lyrics) if section is not None else spec["sung"],
-            "bars": bars_of[clip], "lines": [{"phrase": p, "of": of} for p, of in _lines_of(genome, value, clip)],
+            "bars": bars_of[clip], "lines": [{"phrase": p, "of": of, "bars": n}
+                                             for (p, of), n in zip(_lines_of(genome, value, clip), line_bars(clip))],
             "instances": where, "authored": _authored(params, clip, sids),
             "can": {"delete": True if len(value["order"]) > 1 else "a song needs one clip",
                     "duplicate": True if room and len(value["clips"]) < MAX_CLIPS and value["next"] <= LAST and more
@@ -668,8 +672,9 @@ def operate(genome, params, lyrics, edits: dict, op: dict) -> dict:
     Raises ValueError with why, for an operation that can't be done."""
     import copy
 
+    kinds = "duplicate, repeat, delete, blank, empty, move, lines or label"
     if not isinstance(op, dict) or not isinstance(op.get("op"), str):
-        raise ValueError("an operation on the clips is duplicate, repeat, delete, blank, move or lines")
+        raise ValueError(f"an operation on the clips is {kinds}")
     value = copy.deepcopy(arrangement(params))
     edits = dict(edits or {})
     if stored(params) is None:
@@ -707,7 +712,7 @@ def operate(genome, params, lyrics, edits: dict, op: dict) -> dict:
         if clip not in order:
             specs.pop(clip)
             edits = {p: v for p, v in edits.items() if clip_of(p) != clip}
-    elif kind == "blank":
+    elif kind in ("blank", "empty"):
         role = op.get("role")
         if role not in ROLES:
             raise ValueError(f"a blank clip is an {', '.join(ROLES[:-1])} or {ROLES[-1]}")
@@ -721,8 +726,20 @@ def operate(genome, params, lyrics, edits: dict, op: dict) -> dict:
             total = _whole(op.get("bars", 2 * n), "the clip's bars", n, min(CLIP_BARS, n * LINE_BARS))
             bars = [total // n + (1 if k < total % n else 0) for k in range(n)]
         made = fresh(role)
+        if kind == "empty":  # the song this one clip: every other goes, with the edits that name it
+            gone = set(specs)
+            order.clear()
+            specs.clear()
+            edits = {p: v for p, v in edits.items() if clip_of(p) not in gone}
         specs[made] = {"role": role, "sung": bool(sung), "lines": [{"bars": b} for b in bars]}
         order.insert(_at(op, "at", len(order), len(order)), made)
+    elif kind == "label":
+        clip = named()
+        label = op.get("label")
+        if label is None or (isinstance(label, str) and not label.strip()):
+            specs[clip].pop("label", None)
+        else:
+            specs[clip]["label"] = label  # (checked below)
     elif kind == "move":
         k = _at(op, "from", 0, len(order) - 1)
         order.insert(_at(op, "to", k, len(order) - 1), order.pop(k))
@@ -735,6 +752,6 @@ def operate(genome, params, lyrics, edits: dict, op: dict) -> dict:
         else:
             specs[clip]["lines"] = op["lines"]
     else:
-        raise ValueError("an operation on the clips is duplicate, repeat, delete, blank, move or lines")
+        raise ValueError(f"an operation on the clips is {kinds}")
     edits["clips"] = check(genome, value)
     return {"edits": edits, "clip": made}

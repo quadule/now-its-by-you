@@ -191,6 +191,20 @@ def test_a_song_of_its_own_clips_is_the_same_on_both(device, server):
     assert spec["status"] == 200 and spec["json"] == server.render_spec(edits, "you", 0)
 
 
+def test_an_empty_song_and_a_clip_s_label_are_the_same_on_both(device, server):
+    """The editor's Empty song and a section renamed (docs/notes/STUDIO-CLIPS.md, "For the editor")."""
+    body = {"edits": {"tempo": 90}, "op": "empty", "role": "verse", "bars": 8, "lines": 4}
+    made = ask(device, "/api/clips", body)
+    assert made["status"] == 200 and made["json"] == S.answer(server, "/api/clips", body)
+    body = {"edits": made["json"]["edits"], "op": "label", "clip": made["json"]["clip"], "label": "Opening"}
+    named = ask(device, "/api/clips", body)
+    assert named["status"] == 200 and named["json"] == S.answer(server, "/api/clips", body)
+    view = ask(device, "/api/song", {"edits": named["json"]["edits"]})["json"]
+    assert [s["label"] for s in view["composition"]["sections"]] == ["Opening"]
+    refused = ask(device, "/api/clips", {**body, "label": "x" * 25})
+    assert refused["status"] == 400
+
+
 def test_start_says_the_device_and_what_it_can_t_do(device, server):
     out = ask(device, "/api/start", method="GET")
     start, theirs = out["json"], server.start_view()

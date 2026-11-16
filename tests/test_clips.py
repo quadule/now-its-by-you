@@ -332,3 +332,48 @@ def test_with_clips_the_shape_is_theirs_and_null_gives_the_song_its_form_back():
     assert {"path": f"line.{verse}:0.0", "why": f"there is no section called {verse}"} in problems
     score, _ = sung(r)
     assert score.sections[0][0] == "intro"
+
+
+# ---------------------------------------------------------------- the editor's own operations
+
+
+def test_the_view_gives_each_line_its_bars():
+    edits = op({}, op="lines", clip="refrain103", lines=[{"of": 0}, {"bars": 3}])["edits"]
+    r, _ = version(edits)
+    view = C.view(G, r.params, r.lyrics)["clips"]
+    refrain = next(c for c in view["clips"] if c["id"] == "refrain103")
+    own = G.phrases[G.section("refrain").phrases[0]].bars
+    assert refrain["lines"] == [{"phrase": G.section("refrain").phrases[0], "of": 0, "bars": own},
+                                {"phrase": "refrain103-1", "of": None, "bars": 3}]
+    assert refrain["bars"] == own + 3
+
+
+def test_a_clip_takes_a_label_of_its_own_and_gives_it_back():
+    edits = op({}, op="label", clip="verse102", label="  The  wire ")["edits"]
+    r, problems = version(edits)
+    assert not problems and edits["clips"]["clips"]["verse102"]["label"] == "The wire"
+    sections = C.view(G, r.params, r.lyrics)["sections"]
+    assert next(s for s in sections if s["clip"] == "verse102")["label"] == "The wire"
+    edits = op(edits, op="label", clip="verse102", label="")["edits"]
+    assert "label" not in edits["clips"]["clips"]["verse102"]
+    blank = op({}, op="blank", role="break", sung=False, bars=2, lines=1, at=0)
+    named = op(blank["edits"], op="label", clip=blank["clip"], label="Breath")["edits"]
+    r, problems = version(named)
+    assert not problems and C.view(G, r.params, r.lyrics)["sections"][0]["label"] == "Breath"
+    with pytest.raises(ValueError, match="a clip's label is plain text of at most 24 characters"):
+        op({}, op="label", clip="verse102", label="x" * 25)
+
+
+def test_an_empty_song_is_one_blank_clip_the_rest_of_the_record_kept():
+    edits = {"tempo": 90, "tonic": 2, "part.harp.intro:0.0": [[0, 96, 0, 100]], "arrange.verse:1.bars": 16}
+    made = op(edits, op="empty", role="verse", bars=8, lines=4)
+    out, clip = made["edits"], made["clip"]
+    assert out["clips"]["order"] == [clip] and list(out["clips"]["clips"]) == [clip]
+    assert out["clips"]["clips"][clip] == {"role": "verse", "sung": True, "lines": [{"bars": 2}] * 4}
+    assert out["tempo"] == 90 and out["tonic"] == 2
+    assert not any(clips.clip_of(p) for p in out if p != "clips")
+    r, problems = version(out)
+    assert not problems
+    view = C.view(G, r.params, r.lyrics)
+    assert [s["clip"] for s in view["sections"]] == [clip]
+    assert all(p["notes"] == [] and p["own_path"] for p in view["sections"][0]["phrases"])
