@@ -589,6 +589,9 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .tool > p { margin: 0; font-size: 12px; color: var(--ink-2); }
 .tool > :not(.btn):not(p:first-of-type) { grid-column: 1 / -1; }
 .tool > p.hint:empty { display: none; }
+.tool .confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.tool .confirm[hidden] { display: none; }
+.tool .confirm .hint { margin: 0; font-size: 12px; }
 .tool .drop { border: 1px dashed var(--rule-strong); border-radius: var(--radius); padding: 5px; font-size: 12px; color: var(--ink-3); text-align: center; }
 .tool .drop.over { border-color: var(--hand); color: var(--hand); background: var(--hand-wash); }
 .saved { font-size: 13px; }

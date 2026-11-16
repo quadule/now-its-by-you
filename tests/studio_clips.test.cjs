@@ -94,7 +94,7 @@ function studio(view = song()) {
   };
   const audio = document.getElementById("audio");
   Object.assign(audio, { paused: true, pause() {}, play: () => Promise.resolve() });
-  for (const id of ["finishPanel", "drawer", "scrim", "notes", "howPop", "keyPop"]) document.getElementById(id).hidden = true;
+  for (const id of ["finishPanel", "drawer", "scrim", "notes", "howPop", "keyPop", "emptyConfirm"]) document.getElementById(id).hidden = true;
   const opened = [];
   let player = "voice";
   const window = { addEventListener() {}, SongbirdComposer: { stop() {}, playing: () => false, sketch() {}, deselect() {}, mini: () => null,
@@ -269,4 +269,21 @@ test("one selection: a cell opens its track's editor on its section, the notes f
   page.run("window.SongbirdScore.partChosen('fiddle')");
   assert.equal(page.run("JSON.stringify(window.SongbirdScore._state.sel)"), '{"kind":"cell","id":"verse:0","player":"fiddle"}');
   assert.equal(page.run("JSON.stringify(window.SongbirdModel.playTarget(window.SongbirdScore._state.sel, window.SongbirdScore._state.grid.sections))"), JSON.stringify({ section: 1, phrase: false }), "▶ plays the cell's section");
+});
+
+test("Empty song: one confirmed step, the form one blank verse, the Arrange view on it", async () => {
+  const page = studio();
+  await page.open();
+  page.$("emptySong").dispatch("click");
+  assert.equal(page.$("emptyConfirm").hidden, false, "it asks first");
+  assert.equal(page.clipAsks().length, 0);
+  page.$("emptyNo").dispatch("click");
+  assert.equal(page.$("emptyConfirm").hidden, true);
+  page.$("emptySong").dispatch("click");
+  page.$("emptyYes").dispatch("click");
+  await settle();
+  assert.deepEqual(page.clipAsks(), [{ op: "empty", role: "verse", sung: true, bars: 8, lines: 4 }]);
+  assert.equal(page.run("state.undo.length"), 1);
+  assert.equal(page.run("state.undo.at(-1).label"), "Empty song");
+  assert.equal(page.run("window.SongbirdScore.view()"), "arrange");
 });

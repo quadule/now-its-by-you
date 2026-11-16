@@ -234,6 +234,15 @@
         <button class="btn" id="roll" type="button">New performance</button>
         <p title="Chance is drawn again for the band's small choices, where you haven't chosen or locked them.">The band plays it a little differently: its fills and small choices. The words, key and tempo stay.</p>
       </div>
+      <div class="tool" id="emptyTool">
+        <button class="btn" id="emptySong" type="button" aria-expanded="false" aria-controls="emptyConfirm">Empty song</button>
+        <p>One blank verse in place of every section. The key, tempo, style and band stay.</p>
+        <div class="confirm" id="emptyConfirm" hidden>
+          <button class="btn primary" id="emptyYes" type="button">Empty the song</button>
+          <button class="btn quiet" id="emptyNo" type="button">Cancel</button>
+          <p class="hint">Undo brings the sections back.</p>
+        </div>
+      </div>
       <!-- where the song is made (renderer.js shows it where the studio serves the singer for browsers) -->
       <fieldset class="tool make-where" id="makeWhere" hidden>
         <legend>Make the song</legend>

@@ -112,6 +112,14 @@
     say(`${s.label} deleted`);
     return clipOp(() => (placeOf(id) < 0 ? null : { op: "delete", at: placeOf(id) }), `Delete ${s.label}`, { focus });
   }
+  async function emptySong() {
+    $("emptyConfirm").hidden = true; $("emptySong").setAttribute("aria-expanded", "false");
+    const r = await clipOp({ op: "empty", role: "verse", sung: true, bars: 8, lines: 4 }, "Empty song", { focus: true });
+    if (!r) return;
+    openTools(false);
+    showView("arrange");
+    say("The song is one blank verse");
+  }
   function clipLinesTo(s, change, label) {
     const clip = (clipsView()?.clips || []).find((c) => c.id === s.clip);
     const r = clip ? M.clipLines(clip, clipsView(), change) : { error: "This section has no lines of its own." };
@@ -1695,6 +1703,11 @@
       const p = $("performPanel"); p.hidden = !p.hidden; $("performOpen").setAttribute("aria-expanded", String(!p.hidden));
       if (!p.hidden) { window.SongbirdPerform?.render(state.view); sayTarget(); }
     });
+    // Empty song: one confirmed step, the form replaced by one blank verse (op empty); key, tempo, style, band stay
+    const confirmEmpty = (on) => { $("emptyConfirm").hidden = !on; $("emptySong").setAttribute("aria-expanded", String(on)); if (on) $("emptyYes").focus(); };
+    $("emptySong")?.addEventListener("click", () => confirmEmpty($("emptyConfirm").hidden));
+    $("emptyNo")?.addEventListener("click", () => { confirmEmpty(false); $("emptySong").focus(); });
+    $("emptyYes")?.addEventListener("click", () => emptySong());
     const drop = $("midiDrop");
     drop.addEventListener("click", () => $("importFile").click());
     for (const ev of ["dragenter", "dragover"]) drop.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); drop.classList.add("over"); $("dropVeil").hidden = true; });
