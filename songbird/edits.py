@@ -32,6 +32,9 @@ keeps. An edit that can't be kept is left out and said why, never bent.
                          a line with its own count of syllables: {"words": text, "notes": [{degree, onset, duration,
                          slur?, alter?}, ...]}, kept by the verse (or round) its words are for, as lyrics.* are
                          (docs/notes/OWN-COUNT-LINES.md); null gives the line back to its tune line
+    clips                the song's sections as independent clips (songbird.clips, docs/notes/STUDIO-CLIPS.md):
+                         {"form", "order", "clips", "next"}; null gives the song its own form back. With clips the
+                         paths above name a clip by its instance (verse102:0) and form.* is refused
     words.verse.<i>      {"id": verse, "slots": {slot: words}}, or just the verse: the i-th verse (from 0)
     words.refrain.<i>    the i-th refrain's own words: {"id": couplet, "head": head, "slots": {slot: words}},
                          any of the three, or just a couplet (never the last's: it always sings the canon)

@@ -291,3 +291,33 @@ def test_the_view_says_what_each_clip_can_do():
     assert only["stored"] and only["clips"][0]["can"]["delete"] == "a song needs one clip"
     with pytest.raises(ValueError, match="a song needs one clip"):
         op(edits, op="delete", at=0)
+
+
+@pytest.mark.parametrize("style", ["ballad", "jazz", "house", "hymn", "dub", "jig", "acappella"])
+def test_every_style_plays_a_song_of_clips(style):
+    """A style's own form (house's drop, a dub's version, the jig's rounds), a round, a build and a length of a
+    clip's own, over clips duplicated, deleted and repeated."""
+    edits = op({}, op="duplicate", clip="refrain103", at=0)["edits"]
+    edits = op(edits, op="delete", at=len(edits["clips"]["order"]) - 2)["edits"]
+    edits = op(edits, op="repeat", clip="verse102", at=3)["edits"]
+    edits.update({"arrange.refrain103:0.round": True, "arrange.verse105:0.build": True,
+                  "arrange.bridge108:0.bars": 8, "style.name": style})
+    r, problems = version(edits)
+    assert [p for p in problems if p["path"] != "style.name"] == []
+    score = stage.laid(G, r.params, lyrics=r.lyrics)
+    view = C.view(G, r.params, r.lyrics)
+    assert [s["clip"] for s in view["sections"]] == r.params.composition["clips"]["order"]
+    assert score.part("voice") or style == "dub"
+    midi.from_score(G, r.params, score, lyrics=r.lyrics)
+
+
+def test_the_design_note_s_new_song_is_what_the_operations_make_and_is_sung():
+    """docs/notes/STUDIO-CLIPS.md, "For the editor": the worked example, as written there."""
+    note = (ROOT / "docs/notes/STUDIO-CLIPS.md").read_text()
+    text = note.split("it is written by hand):\n\n", 1)[1].split("\n\n## ", 1)[0]
+    example = json.loads(text)
+    edits, ids = new_song()
+    assert example["clips"] == edits["clips"] and tuple(example["clips"]["order"]) == ids
+    r, problems = version(example)
+    assert not problems
+    assert sung(r)[1] == ["here", "is", "a", "new", "song"]

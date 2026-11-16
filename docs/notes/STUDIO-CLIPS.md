@@ -90,8 +90,12 @@ the key's I chord in each bar.
   view gives every instance the first instance's paths (`verse102:0`), so an
   edit on any instance edits the clip.
 - **Duplicate** makes a new clip with the same `from` and `lines` and copies
-  every authored entry of the original's first instance to the copy's id. The
+  every authored entry of the original's first instance to the copy's id
+  (words, lines of their own, a place's tune and chords, a blank line's chords,
+  players' notes, its arrangement; not a transition, which is the seam's). The
   two share only the generated layer; editing either never touches the other.
+- **Delete** takes an instance out of the order; a clip with none left goes,
+  and the operation drops the edits that name it.
 - **Old occurrence paths.** When clips are made, every entry the version holds
   under a source section id (`arrange.verse:1`, `part.fiddle.verse:1.2`,
   `tune.refrain:last.1`, `transition.verse:1`) is moved to the clip that
@@ -109,15 +113,17 @@ section; a blank line's empty). Everything downstream reads that one
 `(genome, params, lyrics)`: realize (singer, choir, band, played parts, sound
 design), the clock, the studio's view, the arrangement grid, section previews,
 the whole render, MIDI in and out, the lyric sheet (from the score), the piano
-page and the stage plan. The function returns its arguments unchanged when
+page, the stage plan and a section preview's window (`studio.window`, in the
+native studio and the browser's). The function returns its arguments unchanged when
 there is no arrangement, and an already resolved song unchanged. It is the
 only place clips are interpreted.
 
 Consequences, all from the ordinary engine running on the resolved form:
 
 - **Seams and transitions** fall between clips; a transition is the clip
-  instance's. Two adjacent clips are never merged into one band section (a pair
-  of verses in a row is two sections to the band).
+  instance's. Two different clips side by side are two sections to the band; a
+  linked repeat right after its clip is one, as two verses in a row are (the
+  view, the grid and the previews still show each instance).
 - **The last refrain's rules** (its key lift, the canon couplet's place, the
   ending) belong to whichever refrain clip comes last. Deleting the source's
   last refrain leaves its canon unsung: the person chose that.
@@ -164,7 +170,7 @@ Read (`/api/song`, `composition`):
   a person's), "can": {"delete", "duplicate", "repeat", "lines"}: true, or why
   not}], "roles": [...], "bounds": {...}}`.
 - each section: `id` (`verse102:0`), `clip` (`verse102`), `instance` (0, 1...),
-  `label`, `role`, and its phrases with the fields the editor reads already
+  `label`, and its phrases with the fields the editor reads already
   (`own_path`, `lyric_path`, `place`, `chords_path`, `part_key`, `bounds`,
   `notes`, `chords`...). A blank line's `path` and `chords_path` name its own
   tune line.
@@ -179,29 +185,45 @@ Write:
   - `{"op": "repeat", "clip": "verse102", "at": 3}` (a linked instance)
   - `{"op": "delete", "at": 2}` (an instance; a clip with none left goes)
   - `{"op": "blank", "role": "verse", "sung": true, "bars": 8, "lines": 4, "at": 1}`
-    (bars shared evenly over the lines; or `"line_bars": [2, 2, 2, 2]`)
+    (bars shared evenly over the lines, or `"line_bars": [2, 2, 2, 2]`; `sung`
+    is true by default for a verse, refrain, bridge or tag)
   - `{"op": "move", "from": 4, "to": 1}`
   - `{"op": "lines", "clip": "refrain103", "lines": [{"of": 0}, {"bars": 2}]}`
 
-A new song of three sections, as one edits map (after `/api/clips` has made
-the first, or written by hand):
+The first operation on a song without clips stores its implicit clips with the
+change, and the edits that named the form's places name their clips (the
+shape's `form.*` edits go: the source form is the shape they made).
 
-    {"clips": {"form": <the version's form>,
-               "order": ["intro110", "verse111", "refrain112"],
-               "clips": {"intro110":   {"role": "intro", "sung": false, "lines": [{"bars": 4}]},
-                         "verse111":   {"role": "verse", "sung": true,
+A new song of three sections, as one edits map (H's seed has ten sections,
+`intro101` to `tag110`; three `blank` operations and ten `delete`s make it, or
+it is written by hand):
+
+    {"clips": {"form": ["intro", "verse", "refrain", "turn", "verse", "refrain",
+                        "turn", "bridge", "refrain", "tag"],
+               "order": ["intro111", "verse112", "refrain113"],
+               "clips": {"intro111":   {"role": "intro", "sung": false, "lines": [{"bars": 4}]},
+                         "verse112":   {"role": "verse", "sung": true,
                                         "lines": [{"bars": 2}, {"bars": 2}, {"bars": 2}, {"bars": 2}]},
-                         "refrain112": {"role": "refrain", "sung": true,
+                         "refrain113": {"role": "refrain", "sung": true,
                                         "lines": [{"bars": 4}, {"bars": 4}]}},
-               "next": 113},
-     "line.verse111:0.0": {"words": "here is a new song",
+               "next": 114},
+     "line.verse112:0.0": {"words": "here is a new song",
                            "notes": [{"degree": 5, "onset": 0, "duration": 1},
                                      {"degree": 6, "onset": 1, "duration": 1},
                                      {"degree": 5, "onset": 2, "duration": 1},
                                      {"degree": 3, "onset": 3, "duration": 1},
                                      {"degree": 1, "onset": 4, "duration": 2}]},
-     "chords.verse111-0": [["I"], ["IV"]],
-     "part.kit.intro110:0.0": [[0, 24, 0, 100], [192, 24, 1, 90]]}
+     "chords.verse112-0": [["I"], ["IV"]],
+     "part.harp.intro111:0.0": [[0, 96, 0, 100], [192, 96, 4, 90]]}
+
+## Not changed by clips
+
+- The page's Words cards (which bank verse, couplet and stanza each section
+  draws) describe the source form: they choose the generated layer the clips
+  sing from.
+- A whole render's record keeps the source form in `params.form` and the
+  arrangement beside it; its lyric sheet is read from the score, as a record
+  with a person's lines has it.
 
 ## Out of scope
 
