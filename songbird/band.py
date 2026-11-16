@@ -352,6 +352,16 @@ class Context:
     def tune_in(self, section: int) -> list[Tune]:
         return [t for t in self.tune if t.section == section]
 
+    def blank(self, section: int) -> bool:
+        """Whether the section is a person's blank lines (songbird.clips) with no note of a tune written in them (the
+        next line's pickup may lie in it)."""
+        clips = getattr(self.genome, "clips", None)
+        if clips is None:
+            return False
+        lines = self.genome.section(self.sections[section].name).phrases
+        return all(pid not in clips.base.phrases for pid in lines) and \
+            not any(t.phrase in lines for t in self.tune_in(section))
+
     def pitches(self, section: int | None = None, sung: bool = False) -> list[int]:
         """Where the tune lies, as pitches: its notes in the section (sung ones only, if `sung`); where it has none
         there, the whole tune's; and where the song has no tune at all (blank lines), the key's own note in the

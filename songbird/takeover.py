@@ -1260,7 +1260,11 @@ def _reasons(v, ctx, i: int, k: int, player: str, program: str, enters, line_in:
         else:
             out.append({"kind": "rule", "text": f"{band_words} leaves the {shown} out of {where}"})
         return out
-    out.append({"kind": "rule", "text": f"{band_words}: the {shown} plays {label(player, program)} in {where}"})
+    if program in ("lead", "fills") and ctx.blank(i):  # blank lines: nothing to play or answer
+        out.append({"kind": "rule", "text": f"{band_words}: the {shown} would play {label(player, program)} in "
+                                            f"{where}; with no tune here, it rests"})
+    else:
+        out.append({"kind": "rule", "text": f"{band_words}: the {shown} plays {label(player, program)} in {where}"})
     busy = "busier" if s.energy >= 0.6 else "quieter" if s.energy < 0.42 else "in between"
     out.append({"kind": "rule", "text": f"the band builds from the first verse to the last refrain; here it is {busy}"})
     if enters is not None and line_in:
