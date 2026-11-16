@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
 import functools
 import hashlib
 import json
@@ -135,6 +134,8 @@ def lock():
     Two runs at once unpack the acoustic model into the same folder and one of them fails."""
     path = lock_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    import fcntl  # (MFA runs on macOS and Linux; measuring without it runs anywhere)
+
     with open(path, "a") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
