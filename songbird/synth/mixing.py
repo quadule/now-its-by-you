@@ -482,8 +482,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     False: its stems are the caller's). sound: a person's sound design (the score's `sound`, songbird.sound:
     each player's send, sidechain and the role its kit mixes as; the band's filter sweeps), or None."""
     p = (params or MixParams()).clamped()
-    if not parts:
-        return np.zeros((0, 2))
+    if not parts:  # nobody plays or sings (a song of blank lines a cappella): its length of silence
+        return np.zeros((length, 2))
     makers = dict(parts)
     rise = None if lift is None else (10.0 ** (np.asarray(lift, dtype=float)[:length] / 20.0))[:, None]
     lift = None

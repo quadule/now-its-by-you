@@ -226,7 +226,7 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
             identities = {name: key for name, key in identities.items() if name not in touched(score)}
         jobs = [(name, Cached(cache, identities[name], make, name) if name in identities else make)
                 for name, make in jobs]
-    length = int(np.ceil(score.duration * sr)) if jobs else 0
+    length = int(np.ceil(score.duration * sr))
     return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress,
                            sound=getattr(score, "sound", None) or None)  # a person's sound design, if any
 

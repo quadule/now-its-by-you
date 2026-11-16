@@ -149,7 +149,7 @@ class PipeOrgan:
                 continue
             t = np.arange(n) / sr
             swell = touch.gain(float(np.clip(note.vel, 0.0, 1.0)), SWELL)
-            off = np.where(t < note.dur, 1.0, np.exp(-(t - note.dur) / RELEASE))
+            off = np.where(t < note.dur, 1.0, np.exp(-np.maximum(t - note.dur, 0.0) / RELEASE))  # (a long hold: no overflow)
             m = float(note.pitch)
             key = int(round(m))
             for feet, kind, gain in ranks:
