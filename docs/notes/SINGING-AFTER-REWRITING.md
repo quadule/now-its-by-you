@@ -14,15 +14,16 @@ note is how a take keeps following the song through those.
 - A blank clip's line (`<clip>-<i>`, not a phrase of the song) was dropped whole.
 - At render time a line of its own took no gesture at all.
 - The refusal "That way of singing is for another song" did not happen: `gather` only makes rows of the song's
-  phrases, at their counts. A tune edited with the same count still keeps its gestures by place (unchanged here).
+  phrases, at their counts. A tune edited with the same count kept its gestures by place, whatever its notes became.
 
 ## The format, added to
 
-A phrasing file keeps `fields`, `phrases` and its description as before, and may carry two more fields:
+A phrasing file keeps `fields`, `phrases` and its description as before, and may carry three more fields:
 
     "lines":  {"verse:wire.0": {"notes":    [[onset, length, pitch], ...],
                                 "gestures": [[...] | null, ...]}}
     "habits": {"*": [...], "first.short": [...], "inside.long.up": [...], ...}
+    "tunes":  {"v1": [[onset, length, pitch], ...]}
 
 - `lines` is keyed by the key the line's words and notes are kept under (`phrase.own`: `verse:wire.0`,
   `refrain:last.1`, a clip's `verse112:0.0`). `notes` is each note's shape as the take sang it: onset and length in
@@ -31,6 +32,8 @@ A phrasing file keeps `fields`, `phrases` and its description as before, and may
 - `habits` has a row for each kind of note heard often enough, from 22 kinds at most (`phrasing.HABITS`): a line's
   first note by its length (short under 3/4 of a beat, medium under 1.5 beats, long), any other note by its place
   (inside, last), its length and the step into it (within two semitones, a leap up, a leap down); `*` is any note.
+- `tunes` is each tune line a take sang, as it was written then (a verse's variants aside): what its row in
+  `phrases` is by place in. At most 64 tune lines of 1 to 64 notes (`phrasing.checked_tunes`).
 - Every row is rounded and bounded as any gesture is (`reduce`); every shape is bounded; anything else is refused
   (`phrasing.checked_extras`, by `from_json`, the studio's Store and `received`).
 
@@ -41,7 +44,10 @@ dict of phrases with `.lines` and `.habits`), which everything that takes a phra
 
 For each sung note of the lead:
 
-1. a tune line's note: its row in `phrases`, by place (as ever);
+1. a tune line's note: its row in `phrases`, by place (as ever). Where the way says how the line was written when
+   it was sung (`tunes`) and it is written otherwise now, a note takes the row of the note it was then
+   (`phrasing.aligned`: the one at the same onset for the same length, else the one at its own place if that one
+   is no other note's; its `tune` dropped if its pitch moved); any other note has none;
 2. a line a person wrote: its `lines` entry. If the line is sung now in exactly the shapes it was sung in, each note
    takes its own row. If it was changed since, a note takes the row of the note sung then at the same onset for the
    same length (its `tune` dropped if its pitch moved); any other note has none;
@@ -54,12 +60,15 @@ each note's line, shape and which of these it took.
 ## Where it is made
 
 - **The guide says what each note is.** `webstudio/guide.py score_for` keeps, beside the notes, `lines` (every line
-  sung: the key of a line a person wrote, or null, and its notes' shapes) and `line_of` (each voice note's line and
+  sung: the key of a line a person wrote, or null, its notes' shapes, and a tune line's notes as `written`) and `line_of` (each voice note's line and
   place). The released guide doesn't, and its notes are the tune's.
 - **Measuring** (`tools/phrasing.py sightings`, `guide_lines`): a sighting on a line a person wrote is kept under
   `line:<key>` and never counts for the tune line; the latest take's shapes of that line win, and an earlier take's
   sightings of an older shape of it are left out. Those sightings join the singer's rules as any note does
   (`ruled`, its features read from the shapes), so they're shrunk the same way. `worker.fitted` keeps them.
+- **Tune lines edited between takes** (`sighting_key`): the latest guide that says how a tune line is written sets
+  its `tunes` entry; a sighting from a take of the line written otherwise (its guide's, else the song's own) counts
+  for the note it is now (`aligned`), or isn't counted.
 - **Habits** (`tools/phrasing.py habits`): from every sighting, by kind, each person counting once; a kind needs 8
   sightings of at least 4 different notes; each field is its mean shrunk toward no habit by how far it stands out
   from the noise of one sighting (fewer with more) and the extractor's error at one note (`REPEATS`, fewer with more
@@ -104,5 +113,6 @@ the song as it is, sung with a plain phrasing, whole and through a stage edition
 
 ## Not here
 
-- A tune line edited with its count kept still keeps its gestures by place, whatever its notes became.
+- A way made before `tunes` (or from the released guide alone) doesn't say how its tune lines were written: an
+  edited tune line keeps its gestures by place.
 - A habit isn't conditioned on words, the beat or the section.

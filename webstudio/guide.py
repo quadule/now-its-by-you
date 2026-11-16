@@ -81,7 +81,8 @@ def score_for(genome, params, lyrics=None, speed: int = 100, key: int = 0, which
 def lines_sung(score, told: list) -> dict:
     """What each sung note of a guide is, for a way of singing made from a take of it (tools/phrasing.py
     sung_phrasing): "lines", every line sung, as {"key": the key a line a person wrote is kept under (a line of
-    its own, a blank clip's line), else null; "notes": each note's shape (songbird.phrasing.shape)}; and
+    its own, a blank clip's line), else null; "notes": each note's shape (songbird.phrasing.shape); "written", a
+    tune line's notes as written (a verse's variants aside)}; and
     "line_of", for each note of the voice in the order the guide sings them, [its line, its place in it]. Nothing
     where the notes can't be told apart (they always can: realize tells them in the order they're sung)."""
     voice = sorted(score.part("voice"), key=lambda n: n.start)
@@ -90,7 +91,8 @@ def lines_sung(score, told: list) -> dict:
     lines, line_of, at = [], [], {}
     for t in told:
         if t["index"] == 0 or (t["line"], t["of"]) != at.get("last"):
-            lines.append({"key": t["line"], "notes": [list(s) for s in t["of"]]})
+            lines.append({"key": t["line"], "notes": [list(s) for s in t["of"]],
+                          **({"written": [list(s) for s in t["written"]]} if t.get("written") else {})})
             at["last"] = (t["line"], t["of"])
         line_of.append([len(lines) - 1, t["index"]])
     return {"lines": lines, "line_of": line_of}
@@ -292,5 +294,6 @@ def applies(data: dict, phrasing) -> dict | None:
     count = Counter({"sung": 0, "matched": 0, "habit": 0, "none": 0})
     for n, (i, k) in zip(voice, line_of):
         shapes = [tuple(s) for s in lines[i]["notes"]]
-        count[P.sung_gesture(phrasing, n["phrase"], lines[i]["key"], k, shapes)[1]] += 1
+        written = [tuple(s) for s in lines[i]["written"]] if lines[i].get("written") else None
+        count[P.sung_gesture(phrasing, n["phrase"], lines[i]["key"], k, shapes, written)[1]] += 1
     return dict(count)

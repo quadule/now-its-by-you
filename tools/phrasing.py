@@ -788,8 +788,10 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
     take of the whole song sings every place, a take of one section its own.
     measurements: the takes already measured (measured()'s dicts, one for each take, in order), for takes that
     were never kept as files (webstudio/: a take sung in the web studio is measured and its audio deleted).
-    Last, what the sightings are: each key's kind of note, sighting by sighting (songbird.phrasing.kind), and the
-    shapes of each line a person wrote, as the latest take sang it."""
+    Last, what the sightings are: each key's kind of note, sighting by sighting (songbird.phrasing.kind), the
+    shapes of each line a person wrote, as the latest take sang it, and each tune line's notes as written when
+    the latest take whose guide says so sang it (a sighting of the line written otherwise is of the note it is
+    there: songbird.phrasing.aligned)."""
     seen: dict[tuple[str, int], list[P.Gesture]] = defaultdict(list)
     words: dict[tuple[str, int], list[str]] = defaultdict(list)  # who sang it to what: singer|syllable
     weights: dict[tuple[str, int], list[float]] = defaultdict(list)
@@ -798,11 +800,13 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
     # a note on a line a person wrote (its guide says which: guide_lines) is a sighting of that line's note, kept
     # by the line's key, never of the tune line it stands in for; its shape is the one the latest take sang it in
     told = [guide_lines(genome_path, d["stamp"]["guide"], len(d["notes"])) for d in data]
-    latest = {}
+    latest, tunes = {}, {}
     for t in told:
         for key, shapes in (t or {}).get("wrote", {}).items():
             latest[key] = shapes
-    keyed = [[sighting_key(n, t, k, latest) for k, n in enumerate(d["notes"])] for d, t in zip(data, told)]
+        tunes.update((t or {}).get("tunes", {}))
+    keyed = [[sighting_key(n, t, k, latest, tunes, genome) for k, n in enumerate(d["notes"])]
+             for d, t in zip(data, told)]
     heard = Counter((singer, key, place) for singer, d, keys in zip(who, data, keyed)
                     for n, key, place in zip(d["notes"], keys, places(d)) if n["gesture"] is not None and key)
     portrait = []
@@ -815,7 +819,8 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
         for k, (n, note, ge, place, key) in enumerate(zip(d["notes"], sung_to, gestures, places(d), keys)):
             if n["gesture"] is None or key is None:
                 continue
-            if not key[0].startswith(LINE) and key in now and round(note.pitch) - tonic - shift != now[key]:
+            is_now = tunes[key[0]][key[1]][2] if key[0] in tunes else now.get(key)
+            if not key[0].startswith(LINE) and is_now is not None and round(note.pitch) - tonic - shift != is_now:
                 ge = replace(ge, tune=NAN)  # the tune has another note here now: this one's tuning was against the old
             seen[key].append(bounded(scaled(ge, SUNG)))
             shapes = t["notes"][k][2] if t is not None else written_shapes(genome, key[0])
@@ -826,7 +831,7 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
         sung = [k for k, n in enumerate(d["notes"]) if n["gesture"] is not None]
         portrait.append((d["take"], d["lag"], d["key"], [gestures[k] for k in sung],
                          [d["notes"][k]["off"] for k in sung]))
-    return seen, (words, weights), portrait, (kinds, latest)
+    return seen, (words, weights), portrait, (kinds, latest, tunes)
 
 
 # ---------------------------------------------------------------- lines a person wrote, and habits
@@ -848,7 +853,8 @@ def _guide_file(path: str, mtime: float) -> dict:
 
 def guide_lines(genome_path: Path, digest: str | None, count: int) -> dict | None:
     """What a guide says about its notes (lines_sung): for each of its count notes, its line's key (None for a
-    tune line), its place and its line's shapes; and "wrote", each line a person wrote's shapes. None for a guide
+    tune line), its place and its line's shapes; "wrote", each line a person wrote's shapes; and "tunes", each
+    tune line's notes as written, by its phrase (the notes' own, in order: phrases). None for a guide
     that doesn't say (the released one, the tools' own guides), whose notes are all the tune's."""
     path = K.guide_score(genome_path.stem, digest)
     if path is None:
@@ -857,19 +863,30 @@ def guide_lines(genome_path: Path, digest: str | None, count: int) -> dict | Non
     lines, line_of = data.get("lines"), data.get("line_of")
     if not isinstance(lines, list) or not isinstance(line_of, list) or len(line_of) != count:
         return None
-    notes = []
-    for i, k in line_of:
+    notes, tunes = [], {}
+    voice = sorted((n for n in data.get("notes", []) if n.get("part") == "voice"), key=lambda n: n["start"])
+    for at, (i, k) in enumerate(line_of):
         line = lines[i]
         notes.append((line["key"], int(k), tuple(tuple(x) for x in line["notes"])))
-    return {"notes": notes, "wrote": {key: shapes for key, _, shapes in notes if key}}
+        if line["key"] is None and line.get("written") and len(voice) == count:
+            tunes[voice[at]["phrase"]] = tuple(tuple(x) for x in line["written"])
+    return {"notes": notes, "wrote": {key: shapes for key, _, shapes in notes if key}, "tunes": tunes}
 
 
-def sighting_key(n: dict, told: dict | None, k: int, latest: dict) -> tuple[str, int] | None:
+def sighting_key(n: dict, told: dict | None, k: int, latest: dict, tunes: dict | None = None,
+                 genome=None) -> tuple[str, int] | None:
     """The key a measured note is a sighting of: its tune line's (phrase, place), or a line a person wrote's
     (LINE + its key, place) where that line is sung in the shape the latest take sang it; None for a note of an
-    earlier shape of a line since rewritten."""
+    earlier shape of a line since rewritten. tunes: each tune line as written now, where a guide said; a note of
+    the line written otherwise (its guide's, else the genome's) is a sighting of the note it is now, or of none."""
     if told is None or told["notes"][k][0] is None:
-        return (n["phrase"], n["index"])
+        pid, at = n["phrase"], n["index"]
+        if tunes and pid in tunes:
+            then = (told or {}).get("tunes", {}).get(pid) or (written_shapes(genome, pid) if genome else None)
+            if then and tuple(then) != tunes[pid]:
+                where = [j for j, was in enumerate(P.aligned(tunes[pid], then)) if was == at]
+                return (pid, where[0]) if where else None
+        return (pid, at)
     key, place, shapes = told["notes"][k]
     return (LINE + key, place) if latest.get(key) == shapes else None
 
@@ -1106,15 +1123,16 @@ def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None,
     singer's, or, given several singers' takes, everyone's at once, each
     person counting once and each voice's own errors averaging away.
     measurements: as sung_phrasing's."""
-    seen, (words, weights), portrait, (kinds, wrote) = sightings(genome_path, genome, takes, measurements)
+    seen, (words, weights), portrait, (kinds, wrote, tunes) = sightings(genome_path, genome, takes, measurements)
     if not seen:  # takes of part of the song that stopped before a note, or of a stretch with no singing
         raise ValueError("none of these takes sang a whole note of the tune")
     made = ruled(genome, seen, words, floor_for(SUNG), weights, wrote=wrote)
     phrasing = gather(genome, made)
     lines = gather_lines(made, wrote)
     found = habits(seen, weights, kinds, floor_for(SUNG)) if any(k for ks in kinds.values() for k in ks) else {}
-    if lines or found:
-        phrasing = P.Way(phrasing, lines, found)
+    tunes = {pid: shapes for pid, shapes in tunes.items() if pid in phrasing}
+    if lines or found or tunes:
+        phrasing = P.Way(phrasing, lines, found, tunes)
     detail = f"{len(takes)} sung take(s)" + (f" by {credit}" if credit else "") + sung_to(takes)
     return phrasing, P.to_json(phrasing, source="song", source_detail=detail, scale=SUNG), portrait
 

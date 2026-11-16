@@ -494,6 +494,10 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
         shapes = [note_shape((played[k] if played else n).onset / meter.beat, (played[k] if played else n).dur / meter.beat,
                              degree_semitones(played[k].degree if played else n.degree, params.mode, n.alter))
                   for k, n in enumerate(sung)]
+        # a tune line's notes as written (a verse's variants aside): what its gestures are by place in
+        written = None if phrase.own else shapes if composed else [
+            note_shape(n.onset / meter.beat, n.dur / meter.beat, degree_semitones(n.degree, params.mode, n.alter))
+            for n in sung]
         for k, (note, (syllable, word, word_len)) in enumerate(zip(sung, words)):
             v = played[k] if played else None
             u = start + lead + (v.onset if v else note.onset)
@@ -526,13 +530,15 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     choir=genome.section(section_name).choir and j not in in_round,
                     index=k,
                     composed=composed,
-                    # a tune line's note takes its gesture by its place; a line of its own takes one only from a
-                    # take of that line (songbird.phrasing.sung_gesture); either, failing that, the singer's habit
-                    **dict(zip(("gesture", "how"), sung_gesture(phrasing, phrase.id, phrase.own, k, shapes))),
+                    # a tune line's note takes its gesture by its place, or by its onset and length where the line
+                    # was edited since it was sung; a line of its own takes one only from a take of that line
+                    # (songbird.phrasing.sung_gesture); either, failing that, the singer's habit
+                    **dict(zip(("gesture", "how"), sung_gesture(phrasing, phrase.id, phrase.own, k, shapes, written))),
                     own=bool(phrase.own),
                     wrote=phrase.own,
                     shape=shapes[k],
                     of=tuple(shapes),
+                    written=None if written is None else tuple(written),
                     **({"melisma": tuple((off, params.tonic + degree_semitones(d, params.mode)) for off, d in turns)}
                        if turns else {}),
                     **({"round": in_round[j][0], "line": in_round[j][1]} if j in in_round else {}),
@@ -573,7 +579,7 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             deliveries["voice"].append((unphrased, sung_note))
             if told is not None:
                 told.append({"phrase": m["phrase"], "index": m["index"], "line": m["wrote"], "shape": m["shape"],
-                             "how": m["how"], "of": m["of"]})
+                             "how": m["how"], "of": m["of"], "written": m["written"]})
             # the lineage joins, each voice on its own harmony line, plain as harmony is sung
             for v, pitch in enumerate(choirs[i]):
                 own = choir[v] if choir and v < len(choir) else None

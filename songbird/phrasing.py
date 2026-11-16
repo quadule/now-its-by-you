@@ -90,21 +90,23 @@ def to_json(phrasing: Phrasing, **about) -> dict:
                         for key, ln in lines.items()}
     if habits:
         out["habits"] = {key: list(astuple(g)) for key, g in habits.items()}
+    if getattr(phrasing, "tunes", None):
+        out["tunes"] = {pid: [list(s) for s in shapes] for pid, shapes in phrasing.tunes.items()}
     return out
 
 
 def from_json(data: dict) -> Phrasing:
-    """A phrasing from its file: a plain dict of phrases, or a Way where the file has lines or habits. Every
-    gesture is rounded and bounded on the way in; lines and habits are checked (checked_extras)."""
+    """A phrasing from its file: a plain dict of phrases, or a Way where the file has lines, habits or tunes.
+    Every gesture is rounded and bounded on the way in; the rest is checked (checked_extras, checked_tunes)."""
     names = data.get("fields", [f.name for f in fields(Gesture)])
     phrases = {
         pid: tuple(reduce(Gesture(**dict(zip(names, row)))) for row in rows)
         for pid, rows in data["phrases"].items()
     }
-    if not data.get("lines") and not data.get("habits"):
+    if not data.get("lines") and not data.get("habits") and not data.get("tunes"):
         return phrases
     lines, habits = checked_extras(data, names)
-    return Way(phrases, lines, habits)
+    return Way(phrases, lines, habits, checked_tunes(data))
 
 
 def _number(x, lo: float, hi: float) -> float:
@@ -148,6 +150,26 @@ def checked_extras(data: dict, names: list[str]) -> tuple[dict[str, Line], dict[
     return lines, habits
 
 
+def checked_tunes(data: dict) -> dict[str, tuple[Shape, ...]]:
+    """A file's tunes, held to their shape and bounds: at most MAX_LINES tune lines of 1 to MAX_TUNE_NOTES notes
+    under phrase ids, each note's shape bounded as a line's is. Raises ValueError."""
+    tunes_in = data.get("tunes") or {}
+    if not isinstance(tunes_in, dict) or len(tunes_in) > MAX_LINES:
+        raise ValueError("a phrasing's tunes aren't ones this program reads")
+    tunes = {}
+    for pid, notes in tunes_in.items():
+        if not isinstance(pid, str) or not TUNE_KEY.fullmatch(pid) or not isinstance(notes, list) \
+                or not 1 <= len(notes) <= MAX_TUNE_NOTES:
+            raise ValueError("a phrasing's tune isn't one this program reads")
+        shapes = []
+        for n in notes:
+            if not isinstance(n, list) or len(n) != 3 or isinstance(n[2], bool) or not isinstance(n[2], int):
+                raise ValueError("a phrasing's tune isn't one this program reads")
+            shapes.append(shape(_number(n[0], -8, 128), _number(n[1], 0, 32), int(_number(n[2], -48, 48))))
+        tunes[pid] = tuple(shapes)
+    return tunes
+
+
 def inherited(source: dict, record: dict | None = None) -> tuple[dict | None, list[dict]]:
     """The small performance a rendition carries (only rounded gestures travel; recordings and local paths do
     not), or the seed's for a record that names none. An explicit empty performance is meaningful:
@@ -173,12 +195,16 @@ def gesture(phrasing: Phrasing | None, phrase_id: str, index: int) -> Gesture | 
 #           length in beats and its pitch in semitones above the tonic
 #   habits  how this singer sings notes alike (by place in the line, length and the step into it), for any sung
 #           note no gesture was measured for
+#   tunes   each tune line's notes as written when the take sang them (its phrases' rows are by place in these),
+#           so a tune line edited since keeps each gesture on the note it was sung on
 #
 # A phrasing without them is a plain dict and sings exactly as it always has.
 
 SHAPE_STEP = 1 / 48  # beats: a note's onset and length are kept to this
 MAX_LINES = 64
 MAX_LINE_NOTES = 32  # composition.OWN_MAX
+MAX_TUNE_NOTES = 64
+TUNE_KEY = re.compile(r"[A-Za-z0-9_:.-]{1,64}")
 LINE_KEY = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,31}:[A-Za-z0-9_-]{1,32}\.\d{1,2}")
 POSITIONS = ("first", "inside", "last")
 LENGTHS = ("short", "medium", "long")  # under 3/4 of a beat; under a beat and a half; longer
@@ -198,12 +224,14 @@ class Line:
 
 
 class Way(dict):
-    """A phrasing that carries lines and habits beside its phrases (a dict of phrases, as Phrasing is)."""
+    """A phrasing that carries lines, habits and tunes beside its phrases (a dict of phrases, as Phrasing is)."""
 
-    def __init__(self, phrases=(), lines: dict[str, Line] | None = None, habits: dict[str, Gesture] | None = None):
+    def __init__(self, phrases=(), lines: dict[str, Line] | None = None, habits: dict[str, Gesture] | None = None,
+                 tunes: dict[str, tuple[Shape, ...]] | None = None):
         super().__init__(phrases)
         self.lines = dict(lines or {})
         self.habits = dict(habits or {})
+        self.tunes = dict(tunes or {})
 
 
 def shape(onset_beats: float, length_beats: float, semitones: int) -> Shape:
@@ -247,15 +275,43 @@ def habit(phrasing, shapes: list[Shape], k: int) -> Gesture | None:
     return habits.get(kind(shapes, k), habits.get("*"))
 
 
-def sung_gesture(phrasing, phrase_id: str, own: str | None, k: int, shapes: list[Shape]) -> tuple[Gesture | None, str]:
-    """A sung note's gesture and where it came from: a tune line's note by its place ("sung", as ever); a line a
-    person wrote by its key (line_gesture: "sung" or "matched"); else the singer's habit ("habit"); else none
-    ("none": the singer's own timing). A line of its own takes nothing from a plain phrasing."""
+def aligned(now, then) -> list[int | None]:
+    """For each note of a line as written now, the note of the line as written then that it is: the one at the
+    same onset for the same length; failing that, the one at its own place, where that one is no other note's;
+    else None."""
+    at = {}
+    for j, (onset, length, _) in enumerate(then):
+        at.setdefault((onset, length), j)
+    out = [at.get((onset, length)) for onset, length, _ in now]
+    taken = {j for j in out if j is not None}
+    return [k if j is None and k < len(then) and k not in taken else j for k, j in enumerate(out)]
+
+
+def tune_gesture(phrasing, phrase_id: str, k: int, written: list[Shape] | None) -> tuple[Gesture | None, str]:
+    """Note k of a tune line, written now as these shapes: its gesture by its place ("sung", as ever) where the
+    phrasing doesn't say how the line was written when it was sung, or it is written the same now; else the
+    gesture of the note it was then (aligned: "matched"; its tuning goes if its pitch moved), or none."""
+    was = (getattr(phrasing, "tunes", None) or {}).get(phrase_id)
+    if was is None or written is None or tuple(written) == was:
+        return gesture(phrasing, phrase_id, k), "sung"
+    j = aligned(written, was)[k] if k < len(written) else None
+    g = None if j is None else gesture(phrasing, phrase_id, j)
+    if g is None:
+        return None, "sung"
+    return (g if was[j][2] == written[k][2] else replace(g, tune=0.0)), "matched"
+
+
+def sung_gesture(phrasing, phrase_id: str, own: str | None, k: int, shapes: list[Shape],
+                 written: list[Shape] | None = None) -> tuple[Gesture | None, str]:
+    """A sung note's gesture and where it came from: a tune line's note by its place ("sung", as ever), or by its
+    onset and length where the line was edited since it was sung (tune_gesture: "matched"; written: the line's
+    notes as written now); a line a person wrote by its key (line_gesture: "sung" or "matched"); else the
+    singer's habit ("habit"); else none ("none": the singer's own timing). A line of its own takes nothing from a
+    plain phrasing."""
     if own:
         g, how = line_gesture(phrasing, own, k, shapes)
     else:
-        g = gesture(phrasing, phrase_id, k)
-        how = "sung"
+        g, how = tune_gesture(phrasing, phrase_id, k, written)
     if g is None:
         g = habit(phrasing, shapes, k)
         how = "habit" if g is not None else "none"
@@ -266,16 +322,18 @@ def without_habits(phrasing):
     """The same way with its habits left out: a note nobody sang takes the singer's own timing."""
     if not getattr(phrasing, "habits", None):
         return phrasing
-    return Way(phrasing, phrasing.lines) if phrasing.lines else dict(phrasing)
+    tunes = getattr(phrasing, "tunes", None)
+    return Way(phrasing, phrasing.lines, None, tunes) if phrasing.lines or tunes else dict(phrasing)
 
 
 def mapped(phrasing, one):
     """Every gesture of a phrasing passed through one(gesture), its lines and habits too."""
     phrases = {pid: tuple(one(g) for g in row) for pid, row in phrasing.items()}
     lines, habits = getattr(phrasing, "lines", None), getattr(phrasing, "habits", None)
-    if not lines and not habits:
+    tunes = getattr(phrasing, "tunes", None)
+    if not lines and not habits and not tunes:
         return phrases
     return Way(phrases, {key: Line(ln.shapes, tuple(None if g is None else one(g) for g in ln.gestures))
                          for key, ln in (lines or {}).items()},
-               {key: one(g) for key, g in (habits or {}).items()})
+               {key: one(g) for key, g in (habits or {}).items()}, tunes)
 

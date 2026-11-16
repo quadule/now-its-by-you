@@ -124,7 +124,7 @@ def choir_of(parent: dict | None, singer: VoiceParams) -> tuple[list[dict], list
 ARTIST = "The Volunteers"  # the FLAC tag: who the song is by (the artist's decision; the program stays Songbird)
 
 
-NUMBERS = ("phrases", "fields", "lines", "habits")  # a phrasing's numbers: in the record's performance, not its description
+NUMBERS = ("phrases", "fields", "lines", "habits", "tunes")  # a phrasing's numbers: in the record's performance, not its description
 
 
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,

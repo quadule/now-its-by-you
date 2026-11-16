@@ -50,7 +50,7 @@ def test_a_plain_phrasing_stays_plain_and_a_way_round_trips():
     data = json.loads(json.dumps(P.to_json(way, source="song")))
     back = P.from_json(data)
     assert isinstance(back, P.Way) and back == way and back.lines == way.lines and back.habits == way.habits
-    assert set(data) == {"fields", "source", "phrases", "lines", "habits"}
+    assert set(data) == {"fields", "source", "phrases", "lines", "habits"}  # (and "tunes", where a guide said)
     assert type(P.from_json({**data, "lines": {}, "habits": {}})) is dict  # empty: the plain phrasing
 
 
@@ -112,6 +112,48 @@ def test_the_lookup_order():
     assert P.sung_gesture(plain, "v1", "verse:a.0", 0, shapes) == (None, "none")
     assert P.sung_gesture(plain, "v1", None, 0, shapes) == (P.Gesture(level=3.0), "sung")
     assert P.sung_gesture(plain, "v2", None, 0, shapes) == (None, "none")
+
+
+def test_a_tune_line_edited_since_keeps_each_gesture_on_its_note():
+    then = ((0.0, 1.0, 0), (1.0, 1.0, 2), (2.0, 1.0, 4), (3.0, 1.0, 5))
+    row = tuple(P.Gesture(level=float(k), tune=8.0) for k in range(4))
+    way = P.Way({"v1": row}, None, {"*": HABIT}, {"v1": then})
+    for k in range(4):  # written as it was sung: by place, as ever
+        assert P.sung_gesture(way, "v1", None, k, list(then), list(then)) == (row[k], "sung")
+        assert P.sung_gesture(way, "v1", None, k, list(then)) == (row[k], "sung")  # a caller that doesn't say
+    # its first note taken off and one put on the end: every note left keeps its own gesture, the new one a habit
+    now = [(1.0, 1.0, 2), (2.0, 1.0, 4), (3.0, 1.0, 5), (4.0, 1.0, 7)]
+    assert [P.sung_gesture(way, "v1", None, k, now, now) for k in range(4)] == \
+        [(row[1], "matched"), (row[2], "matched"), (row[3], "matched"), (HABIT, "habit")]
+    # a note moved or held longer is still the note at its place; one whose pitch moved loses its tuning
+    now = [(0.0, 1.0, 0), (1.25, 0.75, 2), (2.0, 1.0, 7), (3.0, 1.0, 5)]
+    assert [P.sung_gesture(way, "v1", None, k, now, now) for k in range(4)] == \
+        [(row[0], "matched"), (row[1], "matched"), (P.Gesture(level=2.0), "matched"), (row[3], "matched")]
+    # a way that doesn't say how the line was written sings by place whatever the line is now
+    assert P.sung_gesture(P.Way({"v1": row}), "v1", None, 0, now, now) == (row[0], "sung")
+    assert P.aligned(now, then) == [0, 1, 2, 3] and P.aligned(then[1:], then) == [1, 2, 3]
+    back = P.from_json(json.loads(json.dumps(P.to_json(way))))
+    assert back == way and back.tunes == {"v1": then} and P.without_habits(back).tunes == {"v1": then}
+    for bad in ({"v 1": [[0.0, 1.0, 0]]}, {"v1": []}, {"v1": [[0.0, 99.0, 0]]}, {"v1": [[0.0, 1.0, 0.5]]}, []):
+        with pytest.raises(ValueError):
+            P.from_json({**P.to_json(way), "tunes": bad or [1]})
+
+
+def test_an_edited_tune_line_sung_then_edited_again_is_matched_in_the_song():
+    from test_composition import editable
+
+    r = E.resolve(G, None, ADA, DAY, {"tune.v1": editable()})
+    written = next(t["written"] for t in told(r) if t["phrase"] == "v1")
+    assert written == next(t["of"] for t in told(r) if t["phrase"] == "v1")  # an edited line is sung as written
+    row = tuple(P.Gesture(level=float(k)) for k in range(len(written)))
+    way = P.Way({"v1": row}, None, None, {"v1": written})
+    assert {t["how"] for t in told(r, way) if t["phrase"] == "v1"} == {"sung"}
+    plain = E.resolve(G, None, ADA, DAY, {})  # the line as the song has it: the notes edited back are matched
+    hows = [t["how"] for t in told(plain, way) if t["phrase"] == "v1"][: len(written)]
+    assert set(hows) == {"matched"}
+    score = realize(G, plain.params, phrasing=way, lyrics=plain.lyrics)
+    voice = [n for n in sorted(score.part("voice"), key=lambda n: n.start) if n.phrase == "v1"][: len(written)]
+    assert [n.gesture.level for n in voice] == [float(k) for k in range(len(written))]
 
 
 def test_a_line_of_its_own_is_sung_its_way_and_the_rest_by_habit():
@@ -277,6 +319,34 @@ def test_a_take_of_the_whole_verse_keeps_the_tune_lines_clean(tools):
     from webstudio import guide as GD
 
     assert GD.applies(data, way) == {"sung": len(g.notes), "matched": 0, "habit": 0, "none": 0}
+
+
+def test_a_take_of_an_edited_tune_line_says_how_it_was_written(tools):
+    """A take sung to a version whose first verse line was edited keeps that line's notes as written then; on the
+    song as it is, its notes are the notes they were (matched), and a later take of the song as it is brings the
+    earlier take's sightings onto the notes they are now."""
+    from test_composition import editable
+    from webstudio import guide as GD
+
+    edited, plain = E.resolve(G, None, ADA, DAY, {"tune.v1": editable()}), E.resolve(G, None, ADA, DAY, {})
+    _, digest, g = guide_of(tools, edited)
+    first = measurement(tools, digest, g, lambda k, n: 0.125)
+    way = made(tools, digest, first)["phrasing"]
+    written = next(t["written"] for t in told(edited) if t["phrase"] == "v1")
+    assert way["tunes"]["v1"] == [list(s) for s in written]
+    assert set(way["tunes"]) == set(way["phrases"])
+    data, digest2, g2 = guide_of(tools, plain)
+    counts = GD.applies(data, way)
+    sung_v1 = sum(n.phrase == "v1" for n in g2.notes)
+    assert counts["matched"] == sung_v1 and counts["sung"] == len(g2.notes) - sung_v1
+    second = measurement(tools, digest2, g2, lambda k, n: 0.125)
+    from webstudio import worker
+
+    both = worker.phrasing(tools, {"song": SONG.stem, "offered": [digest, digest2],
+                                   "measurements": [first, second]})["phrasing"]
+    now = next(t["written"] for t in told(plain) if t["phrase"] == "v1")
+    assert both["tunes"]["v1"] == [list(s) for s in now] and len(both["phrases"]["v1"]) == len(now)
+    assert GD.applies(data, both) == {"sung": len(g2.notes), "matched": 0, "habit": 0, "none": 0}
 
 
 def test_a_blank_clips_line_is_measured_and_kept_by_its_key(tools):
