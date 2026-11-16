@@ -246,8 +246,9 @@ What the score (`songbird/studio/score.js`, its pure parts in `model.js`) does w
 - **A blank sung line** opens empty in the melody roll: a note drawn into it, or **Write words**, starts its draft;
   words written first get notes (`model.js` `blankTune`: a syllable a beat where there's room, from the third up to
   the fifth and home to the tonic). On the Page it is an empty field; its words take their notes with them
-  (`line.`). The Page and its lyric sheet are the clips in order (`model.js` `pageWords`), a linked repeat written
-  once; a clip that sings its source's lines as they are keeps the bank's choices of words.
+  (`line.`). The Page and its lyric sheet are the clips in order (the view's `words`, `explain.clip_words`), each
+  line as it reads (no syllable hyphens, no says), a linked repeat written once; a clip that sings its source's
+  lines as they are keeps the bank's choices of words.
 - **Tools → Empty song** (`op empty`), once confirmed: one blank verse of 8 bars and 4 lines; key, tempo, style and
   band as they were.
 - **The Shape** with clips says the sections are Arrange's; its Reset is `clips: null`.
@@ -256,9 +257,9 @@ What the score (`songbird/studio/score.js`, its pure parts in `model.js`) does w
 
 ## Not changed by clips
 
-- The page's Words cards (which bank verse, couplet and stanza each section
-  draws) describe the source form: they choose the generated layer the clips
-  sing from.
+- The bank's choices of words (which verse, couplet and stanza each section
+  draws) are the source form's: they choose the generated layer the clips sing
+  from, and a clip that sings its source's lines offers its source's.
 - A whole render's record keeps the source form in `params.form` and the
   arrangement beside it; its lyric sheet is read from the score, as a record
   with a person's lines has it.
