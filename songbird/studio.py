@@ -84,6 +84,9 @@ LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 LOCAL_VERSION_DAYS = 90  # how long this computer's own studio keeps a version someone opened in it
 MAX_WAITING = 12  # renders waiting at once: more are refused until the queue shortens (a shared studio)
 CACHE_LIMIT = 300 * 2**20  # bytes of previews kept; the least recently heard go first
+NOTE_SECONDS = 2.0  # a single note's file (Studio.note): the note held half a second and its ring
+NOTE_VELOCITIES = (40, 72, 96, 120)  # its velocity's classes: soft, medium, firm, hard
+STEM_CACHE_MB = 256  # MB of parts' stems a studio on this computer keeps for its next previews (synth.cache)
 PREVIEW_GAIN_DB = 5.3  # what mastering gives a whole rendition of H (5.1 to 5.4 dB): a section keeps its level
 STATIC = {"/identity.css": ("identity.css", "text/css; charset=utf-8"),  # the shared tokens (docs/IDENTITY.md)
           "/composer.js": ("composer.js", "text/javascript; charset=utf-8"),
@@ -220,6 +223,22 @@ def spans(score, form, bars=None) -> list[tuple[str, float, float]]:
 def window(genome, params: Params, score, form, index: int) -> tuple[float, float]:
     """Where a section's preview starts and ends: from a breath before its first pickup (a beat of the band
     before it at least) to where the next section's pickup begins."""
+    return _window(genome, params, score, form, index)[:2]
+
+
+def loop_of(genome, params: Params, score, form, index: int) -> dict:
+    """A section's preview as a loop (the page's live.js Looper): where its first bar line is in the file
+    (`start`, seconds from the file's beginning, which is the window's start), its length bar line to bar line
+    (`length`), its own pickup before that bar line (`head`), and each of its bar lines from its first
+    (`bars`), all by the score's own clock."""
+    t0, _, s0, s1, head = _window(genome, params, score, form, index)
+    lines = [b - s0 for b in bar_seconds(genome, params) if s0 - 1e-3 <= b < s1 - 1e-3]
+    return {"start": round(s0 - t0, 4), "length": round(s1 - s0, 4), "head": round(min(head, s0 - t0), 4),
+            "bars": [round(max(0.0, b), 4) for b in lines] or [0.0]}
+
+
+def _window(genome, params: Params, score, form, index: int) -> tuple[float, float, float, float, float]:
+    """window's start and end, the section's own start and end, and its first line's pickup (seconds)."""
     from .clips import resolved
     from .takeover import arranged, phrase_plan
 
@@ -238,7 +257,7 @@ def window(genome, params: Params, score, form, index: int) -> tuple[float, floa
 
     t0 = max(0.0, s0 - max(pickup(index), genome.meter.beat * unit) - 0.5)
     t1 = parts[index + 1][1] - pickup(index + 1) - 0.5 * unit if index + 1 < len(parts) else s1
-    return t0, max(t1, s0 + unit)
+    return t0, max(t1, s0 + unit), s0, s1, pickup(index)
 
 
 def bar_seconds(genome, params: Params) -> list[float]:
@@ -358,7 +377,7 @@ class Job:
     whole: bool = False  # the whole song, not a section: how long it may take
 
     def view(self) -> dict:
-        return {"id": self.id, "kind": self.kind, "label": self.label, "state": self.state,
+        return {"id": self.id, "key": self.key, "kind": self.kind, "label": self.label, "state": self.state,
                 "progress": round(self.progress, 3), "stage": self.stage, "url": self.url, "error": self.error,
                 "result": self.result}
 
@@ -601,7 +620,9 @@ class Studio:
         self.cache_limit = public.cache_mb * 2**20 if public else CACHE_LIMIT
         from .synth.cache import StemCache
 
-        self._stem_cache = StemCache(64 * 2**20)
+        # each part's stem of the sections heard lately (a verse's band and voice is 100 MB or so): a public studio's
+        # renders share its container's memory
+        self._stem_cache = StemCache((64 if public else STEM_CACHE_MB) * 2**20)
         # a public studio's counts of what each visitor has had made, and its recordings waiting to be downloaded
         self.gate = public_mod.Gate(public) if public else None
         self.downloads = public_mod.Downloads(self.home / "downloads", public.downloads_mb * 2**20,
@@ -774,6 +795,8 @@ class Studio:
             done = {"state": "done", "url": f"/audio/{key}.flac", "label": label, "progress": 1.0, "key": key}
             if section is None:  # as a whole song's job ends (_whole)
                 done["result"] = {"bar_seconds": bar_seconds(self.genome, v.params)}
+            elif (loop := self._loop_kept(key)) is not None:  # as a section's job ends (_section)
+                done["result"] = {"key": key, "loop": loop}
             return done
         if section is None:
             self.check_whole(v)
@@ -883,12 +906,78 @@ class Studio:
         loud = faded(loud, synth.SR, lead_in, inplace=True)
         pcm = master.to_pcm16(loud, seed=v.params.seed)
         del loud
+        loop = loop_of(self.genome, v.params, score, v.params.form, index)
+        (self.cache / f"{key}.loop.json").write_text(json.dumps(loop), encoding="utf-8")  # before the file it is of
         tmp = self.cache / f"{key}.part.flac"
         master.write_flac(tmp, pcm, synth.SR)
         tmp.replace(self.cache / f"{key}.flac")
         job.url = f"/audio/{key}.flac"
         prune(self.cache, self.cache_limit)
-        return {"url": job.url, "duration": round(len(pcm) / synth.SR, 2)}
+        return {"url": job.url, "key": key, "duration": round(len(pcm) / synth.SR, 2), "loop": loop}
+
+    def note(self, edits: dict, body: dict) -> dict:
+        """One note of a band player, made as its maker makes it in this version (instruments.render_part: the
+        band's settings, the player's sound, the seed), dry, for the page to sound a key, a drum's row or a
+        selected note with: {"player", "pitch" (semitones from the key's note; a drum's piece: its place in
+        the player's pieces), "velocity" 1..127}. The velocity is taken to its class (NOTE_VELOCITIES) and the
+        note levelled to that class's peak, so a soft drone and a hard drum sound alike loud; kept as a
+        preview file under a key of everything the maker reads. Not in an open studio (its renders are
+        counted): the page sounds the sketch's tone there."""
+        from dataclasses import asdict
+
+        from .composition import DRUM_PIECES
+        from .score import Note
+        from .synth.cache import _band_of, _sound_of
+        from .synth.instruments import render_part
+
+        if self.public is not None:
+            raise ValueError("an open studio sounds a note with the sketch")
+        player = str(body.get("player", ""))
+        v = self.version(edits)
+        score = self._score(v)
+        if player in ("voice", "chop") or player.startswith("choir") or not score.part(player):
+            raise ValueError("no such player here")
+        velocity = min(NOTE_VELOCITIES, key=lambda c: abs(c - int(body.get("velocity", 96))))
+        pitch = int(body.get("pitch", 0))
+        pieces = DRUM_PIECES.get(player)
+        if pieces is not None:  # a stroke: its piece is its art, on the pitch the program's strokes carry (composition.played_in)
+            if not 0 <= pitch < len(pieces):
+                raise ValueError("no such piece")
+            n = Note(part=player, start=0.01, dur=0.25, pitch=float(v.params.tonic - 24 if player == "drum" else 0),
+                     vel=velocity / 127, art=pieces[pitch][0])
+        else:
+            n = Note(part=player, start=0.01, dur=0.5, pitch=float(v.params.tonic + max(-48, min(48, pitch))),
+                     vel=velocity / 127)
+        band = score.band or {}
+        sound = _sound_of(score.sound, player)
+        players = {*INSTRUMENTS, *(p for p in {x.part for x in score.notes} if p not in ("voice", "chop")
+                                   and not p.startswith("choir"))}
+        material = {"note": NOTE_SECONDS, "program": self.program_digest, "player": player,
+                    "made": asdict(n), "band": _band_of(band, player, players),
+                    "sound": sound, "seed": v.params.seed, "sr": synth.SR}
+        key = hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:24]
+        flac = self.cache / f"{key}.flac"
+        if not flac.exists():
+            y = render_part(player, (n,), synth.SR, int(NOTE_SECONDS * synth.SR), band, v.params.seed,
+                            sound["players"][player] if sound else None)
+            peak = float(np.max(np.abs(y))) if y.size else 0.0
+            if peak > 0:
+                y = y * (0.35 * (velocity / 96) ** 0.5 / peak)
+            fade = int(0.05 * synth.SR)
+            y[len(y) - fade:] *= np.linspace(1.0, 0.0, fade)[:, None]
+            tmp = self.cache / f"{key}.part.flac"
+            master.write_flac(tmp, master.to_pcm16(y, seed=v.params.seed), synth.SR)
+            tmp.replace(flac)
+            prune(self.cache, self.cache_limit)
+        else:
+            os.utime(flac)
+        return {"url": f"/audio/{key}.flac", "key": key, "velocity": velocity}
+
+    def _loop_kept(self, key: str) -> dict | None:
+        """A section's loop (loop_of), as its preview was made with it; None for one made without."""
+        with contextlib.suppress(OSError, ValueError):
+            return json.loads((self.cache / f"{key}.loop.json").read_text(encoding="utf-8"))
+        return None
 
     def _whole(self, job: Job, v: explain.Version, key: str) -> dict:
         """The whole rendition, made exactly as `songbird render --pack` makes it (cli.render_one): one file
@@ -1659,6 +1748,8 @@ def answer(studio: Studio, path: str, body: dict, by: tuple[str, str] | None = N
     if path == "/api/listen":
         section = body.get("section")
         return studio.listen(edits, _who(body), None if section is None else int(section), by=by)
+    if path == "/api/note":  # one note of a player, as its maker makes it (for a key, a drum's row, a note chosen)
+        return studio.note(edits, body)
     if path == "/api/cancel":
         return {"cancelled": studio.jobs.cancel(str(body.get("job", "")), owner=by[0] if by else None)}
     if path == "/api/export":

@@ -8,7 +8,7 @@
 //       bytes: what a first visit fetches }
 //   ← { kind: "loading", received, bytes, step }  ...  { kind: "ready", seconds, heap }
 //   → { cmd: "render", spec: the spec as JSON text, keep?: { song, day } }
-//   ← { kind: "progress", progress, stage }  ...  { kind: "done", id, duration, flac (ArrayBuffer), seconds, heap, record,
+//   ← { kind: "progress", progress, stage }  ...  { kind: "done", id, duration, loop (a section's: studio.loop_of), flac (ArrayBuffer), seconds, heap, record,
 //       stems? }
 //   (keep, for a whole song: its stems kept as it is made, named after it (studio_render.Kept): stems is
 //    { name, parts, gain, again, seconds, files: [{ index, name, crc, bytes }], midi: { name, crc, bytes }, readme })
@@ -204,7 +204,7 @@ OUT = studio_render.run(SPEC, "/tmp/render", PROGRESS, PROGRAM, json.loads(KEEP)
 del KEEP
 KEPT = OUT.pop("stems", None)
 RECORD = OUT.pop("record", None)
-SUMMARY = json.dumps({**{k: OUT[k] for k in ("kind", "key", "id", "duration")},
+SUMMARY = json.dumps({**{k: OUT[k] for k in ("kind", "key", "id", "duration")}, "loop": OUT.get("loop"),
                       "record": {"generation": RECORD.get("generation"), "rendered_at": RECORD.get("rendered_at"),
                                  "yours": len(RECORD.get("chosen_by_you") or {}), "title": RECORD.get("title"),
                                  "program_sha256": RECORD.get("program_sha256")} if RECORD else None})

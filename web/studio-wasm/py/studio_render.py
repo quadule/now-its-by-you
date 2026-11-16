@@ -116,7 +116,7 @@ def section(spec: dict, folder: Path, progress=None) -> dict:
     """One section's preview, as Studio._section makes it."""
     from songbird import explain, synth
     from songbird.cli import choir_of
-    from songbird.studio import PREVIEW_GAIN_DB, cut, faded, stage_words, stages, window
+    from songbird.studio import PREVIEW_GAIN_DB, cut, faded, loop_of, stage_words, stages, window
     from songbird.synth import master
     from songbird.synth.mixing import MixParams
 
@@ -143,7 +143,7 @@ def section(spec: dict, folder: Path, progress=None) -> dict:
     flac = folder / f"{spec['key']}.flac"
     master.write_flac(flac, pcm, synth.SR)
     return {"kind": "section", "key": spec["key"], "flac": str(flac), "id": master.pcm_sha256(pcm),
-            "duration": round(len(pcm) / synth.SR, 2)}
+            "duration": round(len(pcm) / synth.SR, 2), "loop": loop_of(genome, params, score, params.form, index)}
 
 
 @contextlib.contextmanager
