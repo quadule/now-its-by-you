@@ -305,6 +305,7 @@
       onpointerdown: (event) => empty(event, g, plot) });
     box.append(plot);
     const here = lines[s.focus];
+    if (here && s.reveal) { s.reveal = false; s.scrollTo?.(Math.max(0, (here.start - start) * g.unit)); }  // a phrase chosen on the strip
     if (here) box.append(el("div", { class: "sbc-phrase-span", style: { left: `${g.left + (here.start - start) * g.unit}px`, top: `${g.top}px`, width: `${(here.end - here.start) * g.unit}px`, height: `${height - g.top}px` } }));
     for (const x of lines.slice(1)) box.append(el("div", { class: "sbc-phrase-line", style: { left: `${g.left + (x.off - start) * g.unit}px`, top: "0px", height: `${height}px` } }));
     if (s.cursor && lines[s.cursor.pi]) box.append(el("div", { class: "sbc-cursor", "aria-hidden": "true", style: { left: `${g.left + (lines[s.cursor.pi].off + s.cursor.t / PPB - start) * g.unit}px`, top: `${g.top}px`, height: `${height - g.top}px` } }));
@@ -345,7 +346,7 @@
     }
     const s = current; Object.assign(s, options);
     const at = phrases.indexOf(section.phrases?.[options.phrase]);
-    if (at >= 0 && at !== s.focus) { s.focus = at; s.selected = new Set(); s.cursor = null; }
+    if (at >= 0 && at !== s.focus) { s.focus = at; s.selected = new Set(); s.cursor = null; s.reveal = true; }
     s.focus = clamp(s.focus, 0, s.lines.length - 1);
     const x = line(), chosen = chosenOf(), n = chosen.length === 1 ? x.notes[chosen[0]] : null, ready = s.lines.every((y) => y.ready);
     const out = el("div", { class: "sbc-part-editor" },

@@ -936,13 +936,19 @@ A chip console's drums are not yet a player of their own and can't be written.
 - **MIDI.** On channel 10, each piece on its General MIDI key, as the
   program's strokes are.
 
-The editor (`drums.js`) is a step grid: a row a piece, a column a step of the
-snap from the line's pickup. Click to strike or clear, drag to paint; ⇧-click
-louder, ⌥-click softer; Ghost, Normal and Accent set the level drawn. The
-keys: arrows move, Space or Enter strikes or clears, Delete clears, ⇧↑↓ the
-level, ⇧←→ how long a stroke is held. Copy, Paste (within one player), Clear,
-Reset part and Hear phrase work as in the piano roll; the piece's name plays
-it.
+The editor (`drums.js`) is a step grid over the whole section, as the
+instrument's roll is: a row a piece, a column a step of the snap, the
+section's phrases end to end, each from its pickup to where the next one's
+begins (a heavier line where a phrase starts), each phrase's strokes kept as
+that phrase's own part edit. A phrase the arrangement added is drawn hatched
+and can't be written. The program's strokes for every phrase not yet written
+load in one request. Click to strike or clear, drag to paint (across a
+phrase's edge too, one undo step); ⇧-click louder, ⌥-click softer; Ghost,
+Normal and Accent set the level drawn. The keys: arrows move, Space or Enter
+strikes or clears, Delete clears, ⇧↑↓ the level, ⇧←→ how long a stroke is
+held. Copy, Paste (within one player), Clear, Reset part and Hear phrase act
+on the phrase holding the focused cell, which the phrase strip follows; the
+piece's name plays it.
 
 ### The tune, played
 

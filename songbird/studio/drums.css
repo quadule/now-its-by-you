@@ -19,3 +19,7 @@
 .sbc-drum-cell:focus-visible { outline: 2px solid var(--note-strong); outline-offset: -2px; z-index: 2; }
 .sbc-drum-held { position: absolute; left: 3px; top: 10px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--note) 45%, transparent); pointer-events: none; z-index: 1; }
 .sbc-drum-cell.is-edited .sbc-drum-held { background: color-mix(in srgb, var(--hand) 45%, transparent); }
+.sbc-drum-cell.is-phrase, .sbc-drum-tick.is-phrase { border-left: 2px solid color-mix(in srgb, var(--ink-2) 60%, transparent); }
+.sbc-drum-cell.is-here { background: color-mix(in srgb, var(--wash) 55%, transparent); }
+.sbc-drum-cell.is-locked { cursor: not-allowed; background: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--rule) 45%, transparent) 4px 5px); }
+.sbc-drum-cell.is-locked:hover { background: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--rule) 45%, transparent) 4px 5px); }

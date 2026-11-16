@@ -1426,6 +1426,7 @@
       options.map((o) => el("button", { type: "button", "aria-pressed": String(o.id === now), id: `sbc-scope-${kind}-${o.id}`,
         onclick: () => { state.where[kind] = o.id; paint(); told(); } }, o.label)));
   }
+  const scrollTo = (x) => { state.scrollTo = x; };  // where the roll is scrolled to once it is drawn
   function notesPanel() {
     const s = section(), p = phrase();
     const part = state.player !== "voice" && window.SongbirdParts;
@@ -1438,19 +1439,20 @@
           stop(); state.player = value; state.note = null; state.chord = null;
           window.SongbirdParts?.reset?.(); window.SongbirdDrums?.reset?.(); paint(); told();
         }, { id: "sbc-part" }),
-        part ? el("span", { class: "hint" }, drummer ? "This phrase only" : "This section only") : scopeSwitch("tune"),
+        part ? el("span", { class: "hint" }, "This section only") : scopeSwitch("tune"),
         el("span", { class: "settings" }, select("Snap", state.snap, [[0.25, "¼"], [0.5, "½"], [1, "1"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, ZOOMS, (value) => { state.zoom = M().zoomOf(value); paint(); }, { id: "sbc-zoom" })),
         button("Close", () => page()?.closeNotes?.(), { class: "sbc-button sbc-quiet", id: "sbc-close", title: "Close the notes (Esc)" }),
         !part && p?.notes?.length ? health() : null),
       (s.phrases || []).length ? phraseStrip() : null,
-      // a percussion player's part is a step grid of its pieces (drums.js), a phrase at a time
-      drummer && window.SongbirdDrums ? window.SongbirdDrums.render(state.view, p, state.player, { snap: state.snap, zoom: state.zoom, paint,
+      // a percussion player's part is a step grid of its pieces over the section (drums.js), as the instrument's roll is
+      drummer && window.SongbirdDrums ? window.SongbirdDrums.render(state.view, s, state.player, { snap: state.snap, zoom: state.zoom, paint, phrase: state.phrase, scrollTo,
+        choose: (q) => { const i = (s.phrases || []).indexOf(q); if (i >= 0) { state.phrase = i; state.note = null; state.chord = null; } },
         hear: (notes) => {
           stop(); bridge().pauseAudio?.(); const ctx = audioContext(); if (!ctx) return;
           for (const node of window.SongbirdDrums.play(ctx, notes, drummer, composition().tempo, bus(ctx))) state.nodes.add(node);
         } })
-      : part ? window.SongbirdParts.render(state.view, s, state.player, { snap: state.snap, zoom: state.zoom, paint, phrase: state.phrase,
+      : part ? window.SongbirdParts.render(state.view, s, state.player, { snap: state.snap, zoom: state.zoom, paint, phrase: state.phrase, scrollTo,
         // a note of another phrase chosen in the instrument's roll: that phrase is the one the strip and ▶ mean
         choose: (q) => { const i = (s.phrases || []).indexOf(q); if (i >= 0) { state.phrase = i; state.note = null; state.chord = null; } },
         hear: (notes, q = p) => {

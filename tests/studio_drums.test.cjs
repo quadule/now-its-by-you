@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const vm = require("node:vm"), fs = require("node:fs"), path = require("node:path");
 const window = {};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/drums.js"), "utf8"), { window });
-const { LEVELS, levelOf, bounds, stepOf, columns, cellOf, hitsAt, setCell, setVelocity, setLength, normalize, fit, voice } = window.SongbirdDrums.core;
+const { LEVELS, levelOf, bounds, stepOf, columns, cellOf, hitsAt, setCell, setVelocity, setLength, normalize, fit, sectionColumns, voice } = window.SongbirdDrums.core;
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 test("the grid's columns are the snap's steps from the bar line, the pickup's start included", () => {
@@ -69,6 +69,14 @@ test("every piece has a sketch sound", () => {
   assert.equal(voice("hat").kind, "noise");
 });
 
+test("a section's columns: its phrases end to end, each from its pickup to where the next one's begins", () => {
+  const lines = [{ off: 0, bounds: { start: -48, end: 384 } }, { off: 4, bounds: { start: -48, end: 384 } }];
+  const { local, cols } = sectionColumns(lines, 1);
+  assert.deepEqual(clone(local), [[-48, 0, 96, 192, 288], [-48, 0, 96, 192, 288]], "the first phrase stops where the second's pickup begins");
+  assert.deepEqual(clone(cols.map((c) => [c.pi, c.k, c.at])), [[0, 0, -0.5], [0, 1, 0], [0, 2, 1], [0, 3, 2], [0, 4, 3],
+    [1, 0, 3.5], [1, 1, 4], [1, 2, 5], [1, 3, 6], [1, 4, 7]]);
+});
+
 // ---- the editor on a small DOM double: what it draws and the edits it makes
 class Node {}
 class Text extends Node { constructor(text) { super(); this.textContent = text; this.children = []; } }
@@ -84,69 +92,107 @@ class Element extends Node {
   }
   set className(v) { this._class = v; this.classes = new Set(String(v).split(/\s+/).filter(Boolean)); }
   get className() { return [...(this.classes || [])].join(" "); }
-  append(...nodes) { for (const n of nodes) this.children.push(n); }
+  append(...nodes) { for (const n of nodes) { this.children.push(n); n.parent = this; } }
   addEventListener(k, f) { (this.listeners[k] ||= []).push(f); }
-  removeEventListener() {}
+  removeEventListener(k, f) { this.listeners[k] = (this.listeners[k] || []).filter((x) => x !== f); }
   fire(k, e = {}) { for (const f of this.listeners[k] || []) f({ button: 0, preventDefault() {}, stopPropagation() {}, currentTarget: this, ...e }); }
   get textContent() { return this.children.map((c) => c.textContent ?? "").join(""); }
-  closest() { return null; }
+  closest(selector) {
+    const fits = (at) => (selector === "[data-drum-cell]" ? at.dataset?.drumCell !== undefined : at.classes?.has(selector.slice(1)));
+    let at = this; while (at && !fits(at)) at = at.parent; return at || null;
+  }
+  contains(node) { for (let at = node; at; at = at.parent) if (at === this) return true; return false; }
+  setPointerCapture() { throw Object.assign(new Error("InvalidStateError"), { name: "InvalidStateError" }); }
+  hasPointerCapture() { return false; }
   focus() {}
   all(test, out = []) { if (test(this)) out.push(this); for (const c of this.children) if (c instanceof Element) c.all(test, out); return out; }
 }
-function editor(saved) {
+// a section of two phrases of the frame drum, 8 beats each from a half-beat pickup, and one the arrangement added
+function editor(saved, more = []) {
   const edits = [], win = {}, doc = {
     createElement: (t) => new Element(t), createTextNode: (t) => new Text(t),
     getElementById: () => ({ clientWidth: 900 }), querySelector: () => null,
   };
-  win.StudioBridge = { getEdits: () => ({}), setEdit: (p, v) => edits.push([p, v]), releaseEdit: (p) => edits.push([p, null]) };
+  win.StudioBridge = { getEdits: () => ({}), setEdit: (p, v, label) => edits.push([p, v, label]), releaseEdit: (p) => edits.push([p, null]),
+    setEdits: (patch, label) => edits.push([patch, label]) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/model.js"), "utf8"), { window: win });
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/drums.js"), "utf8"), { window: win, document: doc, Node, fetch: () => new Promise(() => {}) });
+  doc.elementFromPoint = (x, y) => box.all((e) => e.dataset.drumCell === `${y}:${x}`)[0] || null;
   const player = { name: "drum", label: "Drum", poly: true, drums: ["bass", "tip", "mute", "rim", "top"].map((name, index) => ({ index, name, label: name })) };
   const view = { composition: { players: [player], beats_per_bar: 4 } };
-  const p = { part_key: "verse:0.0", pickup_beats: 0.5, duration_beats: 8, start_beat: 0.5, part_editable: true, part_notes: saved === undefined ? {} : { drum: saved } };
+  const phrase = (k, notes) => ({ part_key: `verse:0.${k}`, pickup_beats: 0.5, duration_beats: 8, start_beat: 0.5 + 8 * k, part_editable: true,
+    part_notes: notes === undefined ? {} : { drum: notes } });
+  const section = { id: "verse:0", start_beat: 0.5, phrases: [phrase(0, saved), phrase(1, more[0] ?? saved), ...more.slice(1).map(() => ({ ...phrase(2), part_editable: false, part_key: "verse:0.2" }))] };
   const heard = [];
   let box;
-  const options = { snap: 0.25, zoom: 1, hear: (n) => heard.push(n), paint: () => { box = win.SongbirdDrums.render(view, p, "drum", options); } };
+  const options = { snap: 0.25, zoom: 1, phrase: 0, hear: (n) => heard.push(n), choose: (p) => { options.phrase = section.phrases.indexOf(p); },
+    paint: () => { box = win.SongbirdDrums.render(view, section, "drum", options); } };
   options.paint();
-  return { edits, heard, box: () => box, cells: () => box.all((e) => e.dataset.drumCell !== undefined), button: (text) => box.all((e) => e.tagName === "button" && e.textContent === text)[0] };
+  const cells = () => box.all((e) => e.dataset.drumCell !== undefined);
+  return { edits, heard, options, box: () => box, cells, cell: (id) => cells().find((c) => c.dataset.drumCell === id),
+    button: (text) => box.all((e) => e.tagName === "button" && e.textContent === text)[0] };
 }
-test("the grid draws a row a piece and a column a step, the pickup included", () => {
+test("the grid spans the section: a row a piece, a column a step, each phrase from its pickup, the second where its pickup begins", () => {
   const ed = editor([[0, 24, 0, 100], [96, 96, 4, 40]]);
   const cells = ed.cells();
-  assert.equal(cells.length, 5 * (8 * 4 + 2));
+  assert.equal(cells.length, 5 * (8 * 4 + 2 + 8 * 4), "the first phrase's pickup, then 32 steps each, the first's last step under the second's pickup");
   const hit = cells.filter((c) => c.classes.has("is-hit")).map((c) => c.dataset.drumCell);
-  assert.deepEqual(hit, ["0:2", "4:6"]);
-  assert.ok(cells.find((c) => c.dataset.drumCell === "4:6").classes.has("is-ghost"));
-  assert.ok(cells.find((c) => c.dataset.drumCell === "0:2").classes.has("is-bar"));
+  assert.deepEqual(hit, ["0:2", "0:34", "4:6", "4:38"], "each phrase's own strokes in its own time");
+  assert.ok(ed.cell("4:6").classes.has("is-ghost"));
+  assert.ok(ed.cell("0:2").classes.has("is-bar"));
+  assert.ok(ed.cell("0:34").classes.has("is-bar") && ed.cell("0:32").classes.has("is-phrase"), "bar 3 is the second phrase's first; its pickup starts the phrase");
+  assert.match(ed.cell("0:34").attrs["aria-label"], /phrase 2, beat 1,/);
   assert.equal(cells.filter((c) => c.attrs.tabindex === "0").length, 1, "one cell in the tab order");
 });
-test("keys strike, clear and set a level; nothing changed writes nothing", () => {
+test("keys strike, clear and set a level, each phrase its own edit; nothing changed writes nothing", () => {
   const ed = editor([[0, 24, 0, 100]]);
-  const cell = (id) => ed.cells().find((c) => c.dataset.drumCell === id);
-  cell("0:2").fire("keydown", { key: "Enter" });
-  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", []]);
-  cell("0:2").fire("keydown", { key: " " });
-  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[0, 24, 0, 90]]]);
-  cell("0:2").fire("keydown", { key: "ArrowUp", shiftKey: true });
-  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[0, 24, 0, 120]]]);
-  cell("0:2").fire("keydown", { key: "ArrowRight", shiftKey: true });
-  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[0, 48, 0, 120]]]);
+  ed.cell("0:2").fire("keydown", { key: "Enter" });
+  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [], "Clear a stroke"]);
+  ed.cell("0:2").fire("keydown", { key: " " });
+  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[0, 24, 0, 90]], "Strike a drum"]);
+  ed.cell("0:2").fire("keydown", { key: "ArrowUp", shiftKey: true });
+  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[0, 24, 0, 120]], "Change a stroke's level"]);
+  ed.cell("0:2").fire("keydown", { key: "ArrowRight", shiftKey: true });
+  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[0, 48, 0, 120]], "Change a stroke's length"]);
+  ed.cell("1:35").fire("keydown", { key: " " });
+  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.1", [[0, 24, 0, 100], [24, 24, 1, 120]], "Strike a drum"], "the second phrase's own");
+  assert.equal(ed.options.phrase, 0, "the keys alone don't choose a phrase; a move does");
+  ed.cell("1:35").fire("keydown", { key: "ArrowRight" });
+  assert.equal(ed.options.phrase, 1, "the focus in the second phrase: the strip follows");
   const count = ed.edits.length;
-  cell("0:2").fire("keydown", { key: "ArrowUp", shiftKey: true });  // already accented
-  cell("1:5").fire("keydown", { key: "Delete" });  // already empty
+  ed.cell("0:2").fire("keydown", { key: "ArrowUp", shiftKey: true });  // already accented
+  ed.cell("1:5").fire("keydown", { key: "Delete" });  // already empty
   assert.equal(ed.edits.length, count);
   ed.button("Hear phrase").fire("click");
-  assert.deepEqual(clone(ed.heard), [[[0, 48, 0, 120]]]);
+  assert.deepEqual(clone(ed.heard.at(-1)), [[0, 24, 0, 100], [24, 24, 1, 120]]);
 });
-test("a click strikes a cell; a part not yet loaded starts empty as a rest; reset releases it", () => {
+test("a click strikes a cell, a drag across two phrases is one undo step, and a pointer that can't be captured still paints", () => {
   const ed = editor([]);
-  ed.cells().find((c) => c.dataset.drumCell === "2:0").fire("pointerdown", { pointerType: "touch" });
-  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[-48, 24, 2, 90]]]);
+  ed.cell("2:0").fire("pointerdown", { pointerType: "touch" });
+  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", [[-48, 24, 2, 90]], "Strike a drum"]);
+  const grid = ed.box().all((e) => e.classes.has("sbc-drum-grid"))[0];
+  ed.cell("3:31").fire("pointerdown", { pointerType: "mouse", pointerId: 1 });  // setPointerCapture throws: guarded
+  for (const x of [32, 33]) grid.fire("pointermove", { clientX: x, clientY: 3 });  // (the double's point: column, row)
+  grid.fire("pointerup", { pointerId: 1 });
+  assert.deepEqual(clone(ed.edits.at(-1)), [{ "part.drum.verse:0.0": [[-48, 24, 2, 90], [696, 24, 3, 90]],
+    "part.drum.verse:0.1": [[-48, 24, 3, 90], [-24, 24, 3, 90]] }, "Strike a drum"], "both phrases' edits, one step");
   ed.button("Reset part").fire("click");
-  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.0", null]);
+  assert.deepEqual(clone(ed.edits.at(-1)), ["part.drum.verse:0.1", null], "the phrase the drag ended in");
+});
+test("a phrase not loaded yet: the part loads first, then Start empty rests every unloaded phrase in one step", () => {
   const fresh = editor(undefined);
   assert.equal(fresh.cells().length, 0);
   assert.match(fresh.box().textContent, /Loading the part/);
   fresh.button("Start empty").fire("click");
-  assert.deepEqual(clone(fresh.edits), [["part.drum.verse:0.0", []]]);
+  assert.deepEqual(clone(fresh.edits), [[{ "part.drum.verse:0.0": [], "part.drum.verse:0.1": [] }, "Start empty"]]);
+});
+test("a phrase the arrangement added is drawn but can't be written", () => {
+  const ed = editor([], [[], "added"]);
+  const locked = ed.cells().filter((c) => c.classes.has("is-locked"));
+  assert.ok(locked.length > 0);
+  assert.match(locked[0].attrs["aria-label"], /can't be written/);
+  const count = ed.edits.length;
+  locked[0].fire("pointerdown", { pointerType: "touch" });
+  locked[0].fire("keydown", { key: " " });
+  assert.equal(ed.edits.length, count);
 });
