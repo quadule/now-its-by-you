@@ -927,45 +927,70 @@ def changes_words(genome, params) -> str:
     return "the song's chords with sevenths and sixths" + (", and passing chords into the cadences" if passing else "")
 
 
+def in_clips(v: Version) -> dict | None:
+    """What a song of a person's clips (songbird.clips) has of what the style's options name: its verses and
+    refrains (each a count), a bridge, whether it ends on a refrain, and whether anyone sings a note in it (a song of
+    blank lines sings none). None for a song in its own form, which has them all."""
+    from . import clips as clips_mod
+    from .composition import flat_notes, form_phrases
+    from .takeover import phrase_plan
+
+    if clips_mod.stored(v.params) is None:
+        return None
+    genome, params, lyrics = clips_mod.resolved(v.context.genome, v.params, v.lyrics)
+    blocks = [genome.section(name).lyrics for name in params.form]
+    sung = [s for lines in phrase_plan(genome, params) for _, s in lines]
+    sings = any(s and any(d is not None for d, *_ in flat_notes(phrase, params))
+                for phrase, s in zip(form_phrases(genome, params, lyrics), sung))
+    return {"verses": blocks.count("verse"), "refrains": blocks.count("refrain"),
+            "bridge": any(clips_mod.base(name) == "bridge" for name in params.form),
+            "ends_on_refrain": bool(blocks) and blocks[-1] == "refrain", "sings": sings}
+
+
 def style_card(v: Version) -> dict:
     """The tradition the song is played in (songbird.style): its feel and the arrangement's options, why,
-    and every style and feel a person could choose."""
+    and every style and feel a person could choose. Of a song in clips, only the options it has a place for."""
     from . import style as style_mod
 
     s = v.params.style
+    has = in_clips(v) or {"verses": 99, "refrains": 99, "bridge": True, "ends_on_refrain": True, "sings": True}
+    sings = has["sings"]
     name = s.name or "ballad"
     sdef = style_mod.of(s)
     c = variation.character(v.voice)
     feel = s.feel or next(iter(sdef.feels), "straight")
     value = f"{STYLE_NAMES.get(name, name)}, {STYLE_FEELS.get(name, {}).get(feel) or FEEL_NAMES.get(feel, feel)}"
-    options = [f"the last refrain a whole step up" if s.lift else "",
+    options = [f"the last refrain a whole step up" if s.lift and has["refrains"] else "",
                f"verse {s.alone} sung {'with the ' + player(s.alone_with) + ' alone' if s.alone_with else 'bare'}"
-               if s.alone else "",
-               f"verse {s.stops} in stop-time" if s.stops else "",
-               "the last refrain starts stripped down" if s.breakdown else "",
+               if s.alone and has["verses"] >= s.alone and sings else "",
+               f"verse {s.stops} in stop-time" if s.stops and has["verses"] >= s.stops else "",
+               "the last refrain starts stripped down" if s.breakdown and has["refrains"] else "",
                ("the voices come in a line apart" if sdef.group else "the band joins line by line in the first verse")
-               if s.entrances else "",
-               "the bridge in half-time" if s.bridge == "half" else "",
+               if s.entrances and has["verses"] and (sings or not sdef.group) else "",
+               "the bridge in half-time" if s.bridge == "half" and has["bridge"] else "",
                ({"lead": "the tune hummed over the voices' chords to begin",
                  "pad": "the voices' chords swell in to begin"} if sdef.group and not sdef.leads else
                 {"lead": "", "pad": "a pad swells in to begin", "count": "a count-in to begin",
                  "voice": "the singer begins alone", "quote": "a line of an older song to begin",
-                 "air": "the tune slow and free to begin, the lead alone"}).get(s.intro, ""),
-               group_words(v.params) if sdef.group and (s.backing or name != "hymn") else "",
+                 "air": "the tune slow and free to begin, the lead alone"}).get(s.intro, "")
+               if sings or s.intro in ("pad", "count", "quote") and not sdef.group else "",
+               group_words(v.params) if sdef.group and (s.backing or name != "hymn") and sings else "",
                "an older song's first notes over the last chord" if s.coda == "quote" else "",
                # by chance it's an easter egg, and every drawn ballad's default: not told
-               {"bridge": "an older song's first notes through the bridge"}.get(s.motif, ""),
+               {"bridge": "an older song's first notes through the bridge"}.get(s.motif, "") if has["bridge"] else "",
                ("the voices join each line's last word in the verses" if s.backing == "echo" and sdef.group
-                and not sdef.leads else "" if name == "hymn" else BACKING_NAMES.get(s.backing, "")),
-               *(hymn_words(v.params) if name == "hymn" else ()),
-               ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring" else "",
+                and not sdef.leads else "" if name == "hymn" else BACKING_NAMES.get(s.backing, "")) if sings else "",
+               *(hymn_words(v.params, bool(has["refrains"])) if name == "hymn" and sings else ()),
+               ENDING_NAMES.get(s.ending, "") if s.ending and s.ending != "ring"
+               and (s.ending != "repeat" or has["ends_on_refrain"] and sings) else "",
                f"a breakdown after the {ORDINALS[s.drop - 1]} refrain, the singer with the pad, and the drop"
-               if 0 < s.drop <= len(ORDINALS) else "",
+               if 0 < s.drop <= len(ORDINALS) and has["refrains"] > s.drop else "",
                loop_words(v.context.genome, v.params) if sdef.loops else "",
                changes_words(v.context.genome, v.params) if name in style_mod.CHANGES else "",
-               f"after the {ORDINALS[s.dissolve - 1]} refrain the song dissolves into its version: the singer in "
-               f"fragments thrown into the echo, the melodica taking the tune in pieces"
-               if 0 < s.dissolve <= len(ORDINALS) else ""]
+               (f"after the {ORDINALS[s.dissolve - 1]} refrain the song dissolves into its version: the singer in "
+                f"fragments thrown into the echo, the melodica taking the tune in pieces" if sings else
+                f"after the {ORDINALS[s.dissolve - 1]} refrain the song dissolves into its version")
+               if 0 < s.dissolve <= len(ORDINALS) and has["refrains"] >= s.dissolve else ""]
     about = STYLE_ABOUT[name](v.params) if name in STYLE_ABOUT else sdef.about.split(":", 1)[-1].strip() \
         if name != "ballad" else \
         "harp, cittern, whistle, fiddle, guitar, upright bass, frame drum and a reed drone"
@@ -1012,14 +1037,15 @@ def style_card(v: Version) -> dict:
                  endings={k: w for k, w in ENDING_NAMES.items() if k != "amen" or name == "hymn" or s.ending == "amen"}, backings={"": "no backing voices", **BACKING_NAMES})
 
 
-def hymn_words(params) -> tuple[str, ...]:
-    """What a hymn does beyond its band, in the style card's detail (songbird.hymn)."""
+def hymn_words(params, refrain: bool = True) -> tuple[str, ...]:
+    """What a hymn does beyond its band, in the style card's detail (songbird.hymn); refrain: the song has one."""
     from .hymn import descant
 
     if not params.style.backing:
         return ("the organ gives the tune out to begin", "the singer alone with the organ")
     return ("the organ gives the tune out to begin", "verses in unison and in parts",
-            "the organ's descant over the last refrain" if descant(params) else "", "the organ's pedal takes the bass")
+            "the organ's descant over the last refrain" if descant(params) and refrain else "",
+            "the organ's pedal takes the bass")
 
 
 def group_words(params) -> str:
@@ -1240,9 +1266,16 @@ def _word_place(path: str) -> str:
 def choir_card(v: Version) -> dict:
     n = v.params.choir
     sings = [s for s in dict.fromkeys(v.params.form) if v.context.genome.section(s).choir and s != "bridge2"]
+    has = in_clips(v)
+    if has is not None:  # a song of a person's clips: the sections it sings that the voices join, by their role
+        from .clips import base, resolved
+
+        genome, params, _ = resolved(v.context.genome, v.params, v.lyrics)
+        sings = list(dict.fromkeys(base(s) for s in params.form if genome.section(s).choir)) if has["sings"] else []
     where = listed([f"the {SECTIONS.get(s, s).lower()}" for s in sings])
     value = (f"{number(n)} voice{'s' if n != 1 else ''} from earlier versions join{'s' if n == 1 else ''} {where}"
-             if n else "no voices from earlier versions yet")
+             if n and (sings or has is None) else f"{number(n)} voice{'s' if n != 1 else ''} from earlier versions, with nothing here "
+             f"to join" if n else "no voices from earlier versions yet")
     parent = v.context.parent_record or {}
     known = (1 + len(parent.get("lineage_singers") or [])) if parent.get("singer") else 0
     if not v.context.parent_record:
