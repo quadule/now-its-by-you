@@ -263,6 +263,14 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .region.mine.selected { box-shadow: inset 0 3px 0 var(--red), inset 0 -3px 0 var(--hand); }
 .region.mine .name { color: var(--hand); }
 .region.dragging { opacity: .45; }
+/* a linked repeat: its instances share a colour on the left and a chain mark before the name */
+.region.linked { border-left: 3px solid var(--link); padding-left: 5px; }
+.region.link-0 { --link: var(--ochre); } .region.link-1 { --link: var(--green); } .region.link-2 { --link: var(--parent); } .region.link-3 { --link: var(--gold); }
+.region .link-mark { width: 13px; height: 9px; margin-right: 4px; vertical-align: -1px; color: var(--link); opacity: 1; display: inline; }
+/* + after the last section */
+.addcell { display: grid; align-items: start; }
+.addcell > .add { width: 28px; height: 66px; margin: 2px 0 6px 4px; border: 1px dashed var(--rule-strong); border-radius: var(--radius); background: none; color: var(--ink-2); font: 18px/1 var(--sans); padding: 0; cursor: pointer; }
+.addcell > .add:hover, .addcell > .add:focus-visible { border-color: var(--hand); color: var(--hand); border-style: solid; }
 .region.drop { outline: 2px dashed var(--hand); outline-offset: 1px; }
 /* a region's length: its own handle at the cell's right end (the region's last 8 px and the gap after it), over the
    region and clear of the next seam, which begins where this cell ends */
@@ -525,6 +533,15 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .stepper { display: inline-flex; align-items: center; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--paper); }
 .stepper button { border: 0; background: none; width: 28px; height: 28px; padding: 0; color: var(--ink-2); }
 .stepper output { min-width: 60px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+/* a section's lines: each line's bars, a blank line's with − +, a line of its tune's plain */
+.lines-row .chips { flex-wrap: wrap; gap: 4px; }
+.line-bars .stepper output, .line-bars.own output { min-width: 22px; }
+.line-bars.own output { display: inline-block; padding: 5px 6px; border: 1px dashed var(--rule); border-radius: var(--radius); color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; text-align: center; }
+.line-bars .stepper button { width: 22px; }
+.inspector .name-field { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--paper); color: var(--hand); }
+.inspector .name-field::placeholder { color: var(--ink-3); }
+.inspector .new-section > summary { font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.inspector .clip-ops .link-mark { width: 13px; height: 9px; vertical-align: -1px; }
 .refused { font-size: 12px; color: var(--ink-2); margin: 4px 0 0; padding-left: 14px; }
 .refused b { font-family: var(--serif); color: var(--ink); font-weight: 600; }
 .inspector .word-rules > summary { font-size: 13px; }
@@ -723,6 +740,7 @@ dialog.help .keys td { padding: 3px 0; }
   .track-head .ms, .track-head .route { display: none; }
   .cell { height: 28px; }
   .region { height: 52px; }
+  .addcell > .add { height: 52px; }
   .region svg { display: none; }
   .strip { flex-basis: 76px; }
   .tools { width: 100%; border-left: 0; padding: 18px 14px; }

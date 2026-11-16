@@ -15,6 +15,7 @@
     view: "page", sel: null, how: "sung", howSet: false, open: null, arr: null, sound: null, grid: null, serial: 0,
     keyed: false, about: false, playhead: null, sketch: false, recording: null, why: {}, tall: false, pop: null,
     lastOptions: {}, dragged: new Set(), moved: new Set(), movedKey: null,
+    fresh: { ...M.NEW_SECTION }, want: null, wantFocus: null,  // what + adds; what a clip operation leaves selected
   };
   const card = (id) => state.view?.cards?.find((c) => c.id === id);
   const edited = (path) => Object.prototype.hasOwnProperty.call(state.edits, path) && state.edits[path] !== null;
@@ -63,7 +64,78 @@
     } catch (error) { toast(error.message); }
   }
   const wordsOf = (s) => state.view?.words?.find((w) => w.index === s?.index);
+
+  // ------------------------------------------------------------------ clips: sections added, copied, repeated, deleted,
+  // moved and given lines (docs/notes/STUDIO-CLIPS.md, "For the editor"). Each is one request to /api/clips, which
+  // answers the whole edits map; that is one step of the history. They run one after another, each on the edits the
+  // one before left, so two quick presses do two things.
+  const clipsView = () => state.view?.composition?.clips || null;
+  const clipOrder = () => state.edits.clips?.order || clipsView()?.value?.order || [];
+  // a section's place in the order: its instance's (verse102:1), or, before the song has clips stored, its index
+  const placeOf = (id) => (clipsView()?.stored || state.edits.clips ? M.instanceIds(clipOrder()).indexOf(id) : (S.grid?.sections || []).findIndex((s) => s.id === id));
+  const sentence = (text) => { const t = String(text || "").trim(); return t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}${/[.!?]$/.test(t) ? "" : "."}` : ""; };
+  let clipChain = Promise.resolve();
+  function clipOp(make, label, { focus = false } = {}) {
+    const run = async () => {
+      const op = typeof make === "function" ? make() : make;
+      if (!op) return null;
+      const revision = state.editRevision;
+      const r = await api("/api/clips", { edits: copyEdits(), ...op });
+      if (state.editRevision !== revision) throw new Error("The song changed. Try again.");
+      const id = M.selectedAfter(op, r, clipOrder());
+      if (id) { S.want = { kind: "section", id }; S.wantFocus = focus ? id : null; }
+      window.StudioBridge.replaceEdits(r.edits, label);
+      return r;
+    };
+    clipChain = clipChain.then(run).catch((e) => { toast(sentence(e.message)); return null; });
+    return clipChain;
+  }
+  const can = (s, what) => (s?.can?.[what] === undefined || s.can[what] === true ? null : sentence(s.can[what]));
+  function newSection(after = null, spec = S.fresh) {
+    const name = M.ROLE_NAMES[spec.role] || spec.role;
+    return clipOp(() => ({ op: "blank", role: spec.role, sung: !!spec.sung, bars: spec.bars, lines: spec.lines,
+      at: after ? placeOf(after) + 1 : clipOrder().length }), `New ${name.toLowerCase()}${after ? ` after ${sectionAt(after)?.label || ""}` : ""}`.trim(), { focus: true });
+  }
+  function duplicateSection(id, focus = false) {
+    const s = sectionAt(id);
+    if (!s?.clip || can(s, "duplicate")) { if (s) toast(can(s, "duplicate")); return null; }
+    return clipOp(() => (placeOf(id) < 0 ? null : { op: "duplicate", clip: s.clip, at: placeOf(id) + 1 }), `Duplicate ${s.label}`, { focus });
+  }
+  function repeatSection(id) {
+    const s = sectionAt(id);
+    if (!s?.clip || can(s, "repeat")) { if (s) toast(can(s, "repeat")); return null; }
+    return clipOp(() => (placeOf(id) < 0 ? null : { op: "repeat", clip: s.clip, at: placeOf(id) + 1 }), `Repeat ${s.label}`);
+  }
+  function deleteSection(id, focus = false) {
+    const s = sectionAt(id);
+    if (!s?.clip || can(s, "delete")) { if (s) toast(can(s, "delete")); return null; }
+    say(`${s.label} deleted`);
+    return clipOp(() => (placeOf(id) < 0 ? null : { op: "delete", at: placeOf(id) }), `Delete ${s.label}`, { focus });
+  }
+  function clipLinesTo(s, change, label) {
+    const clip = (clipsView()?.clips || []).find((c) => c.id === s.clip);
+    const r = clip ? M.clipLines(clip, clipsView(), change) : { error: "This section has no lines of its own." };
+    if (r.error) { toast(r.error); return null; }
+    return clipOp({ op: "lines", clip: s.clip, lines: r.lines }, label);
+  }
+  function clipLength(s, bars) {  // a blank clip's length: its lines, the bars shared evenly over them
+    const clip = (clipsView()?.clips || []).find((c) => c.id === s.clip);
+    if (!clip || bars === clip.bars) return null;
+    say(`${s.label}: ${bars} bars`);
+    return clipOp({ op: "lines", clip: s.clip, lines: M.evenBars(bars, clip.lines.length).map((n) => ({ bars: n })) }, `${s.label}: ${bars} bars`);
+  }
+  function renameSection(s, label) {
+    const clip = (clipsView()?.clips || []).find((c) => c.id === s.clip);
+    const now = String(label || "").replace(/\s+/g, " ").trim();
+    if (!clip || now === (clip.label || "") || (!now && !clipsView()?.value?.clips?.[s.clip]?.label)) return null;
+    return clipOp({ op: "label", clip: s.clip, label: now || null }, now ? `Name ${s.label} ${now}` : `${s.label}: its own name`);
+  }
   function say(text) { const el = $("said"); if (el) { el.textContent = ""; setTimeout(() => { el.textContent = text; }, 40); } }
+  function linkIcon() {  // a linked repeat's mark: two links of a chain
+    return svg("svg", { class: "link-mark", viewBox: "0 0 14 10", "aria-hidden": "true" },
+      svg("rect", { x: "0.75", y: "2.25", width: "7", height: "5.5", rx: "2.75", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }),
+      svg("rect", { x: "6.25", y: "2.25", width: "7", height: "5.5", rx: "2.75", fill: "none", stroke: "currentColor", "stroke-width": "1.5" }));
+  }
   function lockIcon() {
     return svg("svg", { class: "lock", viewBox: "0 0 9 11", "aria-hidden": "true" },
       svg("path", { d: "M2 5V3.4a2.5 2.5 0 0 1 5 0V5", fill: "none", stroke: "currentColor", "stroke-width": "1.4" }),
@@ -81,7 +153,7 @@
   // ------------------------------------------------------------------ views
   const ABOUT = {
     page: "The words as this version sings them. A word with a dashed line under it can change: pick another and the tune keeps its syllables. Select a section's name or a line to change more; ▶ plays that part, sung.",
-    arrange: "The song as a timeline: its sections over a ruler of bars, and under them a row for each player. A cell says whether that player plays there and how hard. Select a section, a player, a cell, or the seam between two. Drag a section to move it, its right edge for its length. Double-click a section for its notes (its tune and chords), or the singer's row for its words.",
+    arrange: "The song as a timeline: its sections over a ruler of bars, and under them a row for each player. A cell says whether that player plays there and how hard. Select a section, a player, a cell, or the seam between two. Drag a section to move it, its right edge for its length; + adds one. Double-click a section for its notes (its tune and chords), or the singer's row for its words.",
     mix: "A strip for each player (its level, where it sits, how it pumps), then the voice and the room. Judge the voice against the band on the whole song: a part heard alone is levelled for listening.",
     sing: "Sing along with this version's tune. The song learns your timing and can sing it your way.",
   };
@@ -450,9 +522,16 @@
       const [arr, sound] = await Promise.all([api("/api/arrangement", { edits }), api("/api/sound", { edits })]);
       if (serial !== S.serial || revision !== state.editRevision) return;
       S.arr = arr; S.sound = sound; S.grid = M.grid(arr, state.view, sound);
+      if (S.want && stillThere(S.want)) { S.sel = S.want; S.songShown = false; if (S.open) S.open = S.want.id; }  // what a clip operation made, or moved
+      S.want = null;
       if (S.sel && !stillThere(S.sel)) S.sel = null;
+      if (S.open && !sectionAt(S.open)) closeNotes();
+      else if (S.open && compIndex(S.open) >= 0) C()?.open?.(compIndex(S.open), C()?.selection?.().player || "voice");
       repaint();
       idle();
+      const focus = S.wantFocus;
+      S.wantFocus = null;
+      if (focus) document.querySelector(`[data-key="region:${CSS.escape(focus)}"]`)?.focus({ preventScroll: false });
       P()?.parts().length || (S.sel?.kind === "player" && P()?.fetch());
     } catch (e) {
       if (serial === S.serial) $("grid").replaceChildren(h("p", { class: "problem" }, `The arrangement couldn't be drawn: ${e.message}`));
@@ -470,19 +549,21 @@
     const g = S.grid, box = $("grid");
     if (!g || !box) return;
     keepFocus(() => {
-      box.style.gridTemplateColumns = `var(--head, 176px) ${g.sections.map((s) => `minmax(${s.bars < 4 ? 44 : 72}px, ${s.bars}fr)`).join(" ")}`;
+      const adds = !!clipsView();  // a column after the last section: + adds one
+      box.style.gridTemplateColumns = `var(--head, 176px) ${g.sections.map((s) => `minmax(${s.bars < 4 ? 44 : 72}px, ${s.bars}fr)`).join(" ")}${adds ? " 34px" : ""}`;
+      const tail = () => (adds ? h("div", { class: "tail", "aria-hidden": "true" }) : null);
       const rows = [
         row(h("div", { class: "head", role: "columnheader" }, h("span", { class: "hint" }, "bar")),
           g.sections.map((s) => h("div", { class: "rule-cell", role: "columnheader", "aria-label": `${s.label}, from bar ${s.startBar}`,
             onpointermove: (e) => { if (e.buttons & 1) setPlayhead(s, e, false); } },
           h("button", { class: "rule", type: "button", "data-key": `rule:${s.id}`, title: `${s.label}: bar ${s.startBar}. Put the playhead here (drag along the ruler to move it).`,
             "aria-label": `Put the playhead at bar ${s.startBar}, ${s.label}`, onclick: (e) => setPlayhead(s, e) }, h("b", {}, String(s.startBar))),
-          s.seam?.value ? h("span", { class: "mark", title: `Into ${s.label}: ${M.seamWords(s.seam.value)}` }, "⤴") : null))),
-        row(h("div", { class: "head", role: "rowheader" }, h("span", { class: "rubric small" }, "Sections")), g.sections.map(regionCell)),
-        ...g.tracks.map((t) => row(trackHead(t), g.sections.map((s) => cellFor(t, s)))),
+          s.seam?.value ? h("span", { class: "mark", title: `Into ${s.label}: ${M.seamWords(s.seam.value)}` }, "⤴") : null)), tail()),
+        row(h("div", { class: "head", role: "rowheader" }, h("span", { class: "rubric small" }, "Sections")), g.sections.map(regionCell), adds ? addCell() : null),
+        ...g.tracks.map((t) => row(trackHead(t), g.sections.map((s) => cellFor(t, s)), tail())),
       ];
       box.setAttribute("aria-rowcount", String(rows.length));
-      box.setAttribute("aria-colcount", String(g.sections.length + 1));
+      box.setAttribute("aria-colcount", String(g.sections.length + 1 + (adds ? 1 : 0)));
       morph(box, [...rows, h("div", { class: "playhead", id: "gridHead", "aria-hidden": "true", hidden: true })]);  // in place: a cell clicked as an answer lands stays the one clicked
       roving();
       if (S.playhead !== null) requestAnimationFrame(() => placeHead(S.playhead));
@@ -504,20 +585,29 @@
     if (S.movedKey !== key) { S.movedKey = key; S.moved = M.movedIds(before, now, [...S.dragged]); }
     return S.moved.has(s.id);
   }
+  // + after the last section: a new one (S.fresh: a blank 8-bar verse of 4 lines unless the column's New section
+  // says otherwise) after the section selected, else at the end
+  function addCell() {
+    const after = S.sel?.id && sectionAt(S.sel.id) ? S.sel.id : null, f = S.fresh;
+    const what = `New ${(M.ROLE_NAMES[f.role] || f.role).toLowerCase()}, ${f.bars} bars${after ? ` after ${sectionAt(after).label}` : ""}`;
+    return h("div", { class: "regioncell addcell", role: "gridcell" },
+      h("button", { class: "add", type: "button", "data-key": "add-section", "aria-label": what, title: what, onclick: () => newSection(after) }, "+"));
+  }
   function regionCell(s, i) {
     const chosen = S.sel?.kind === "section" && S.sel.id === s.id;
-    const mine = moved(s) || Object.values(s.by).includes("you");
-    const region = h("button", { class: `region${s.name.startsWith("refrain") ? " refrain" : ""}${chosen ? " selected" : ""}${mine ? " mine" : ""}`,
+    const mine = moved(s) || Object.values(s.by).includes("you") || s.clipMine;
+    const linked = s.link !== null && s.link !== undefined;
+    const region = h("button", { class: `region${s.name.startsWith("refrain") ? " refrain" : ""}${chosen ? " selected" : ""}${mine ? " mine" : ""}${linked ? ` linked link-${s.link % 4}` : ""}`,
       type: "button", draggable: "true", "data-key": `region:${s.id}`, "aria-pressed": String(chosen),
-      "aria-label": `${s.label}, ${s.bars} bars, ${s.round ? "a round" : s.sung ? "sung" : "played"}${mine ? "; yours" : ""}. Enter opens its notes.`,
-      title: `${s.label}, ${s.bars} bars${mine ? "; yours" : ""}. Double-click for its notes; drag to move it.`,
+      "aria-label": `${s.label}, ${s.bars} bars, ${s.round ? "a round" : s.sung ? "sung" : "played"}${linked ? ", linked" : ""}${mine ? "; yours" : ""}. Enter opens its notes.`,
+      title: `${s.label}, ${s.bars} bars${linked ? "; linked: a change to one is a change to all" : ""}${mine ? "; yours" : ""}. Double-click for its notes; drag to move it.`,
       onclick: () => select({ kind: "section", id: s.id }), ondblclick: () => openNotes(s.id),
       ondragstart: (e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/x-section", s.id); e.currentTarget.classList.add("dragging"); },
       ondragend: (e) => { e.currentTarget.classList.remove("dragging"); document.querySelectorAll(".region.drop").forEach((r) => r.classList.remove("drop")); },
       ondragover: (e) => { if ([...e.dataTransfer.types].includes("text/x-section")) { e.preventDefault(); e.currentTarget.classList.add("drop"); } },
       ondragleave: (e) => e.currentTarget.classList.remove("drop"),
       ondrop: (e) => { const from = e.dataTransfer.getData("text/x-section"); if (!from) return; e.preventDefault(); e.stopPropagation(); moveSection(from, { onto: s.id }); } },
-    h("span", { class: "name" }, s.label),
+    h("span", { class: "name" }, linked ? linkIcon() : null, s.label),
     h("span", { class: "bars" }, `${s.bars} bars${s.sung ? "" : " · instr."}${s.round ? " · a round" : ""}${s.build ? " · build" : ""}`),
     C()?.mini?.(compIndex(s.id)) || null);
   // its length by its right edge: a handle of its own beside the region (not inside it, where a press began the
@@ -539,14 +629,31 @@
     const drawn = S.grid.sections, o = state.edits["form.order"];
     return Array.isArray(o) && o.length === drawn.length && drawn.every((s) => o.includes(s.id)) ? o.map((x) => drawn.find((s) => s.id === x)) : drawn;
   }
+  // A section moved, by a drag, ← Earlier / Later → or their keys: one function, whichever way. A song in clips moves
+  // a clip (op move); one without keeps its order as the shape's edit (form.order), and a move that order can't make
+  // (a verse past another) is the clips' own, which can.
   function moveSection(id, where) {  // where: {step: ±1}, or {onto: the section it was dropped on}
-    const list = latestOrder(), from = list.findIndex((s) => s.id === id);
-    const to = where.step !== undefined ? from + where.step : list.findIndex((s) => s.id === where.onto);
-    const r = M.moveOrder(list, from, to);
-    if (r.error) { if (from !== to) toast(r.error); return; }
-    S.dragged.add(id);
-    setEdit("form.order", r.order, `Move ${list[from].label}`);
-    say(`${list[from].label} moved to place ${to + 1}`);
+    const label = sectionAt(id)?.label || "";
+    if (!clipsView()?.stored && !state.edits.clips) {
+      const list = latestOrder(), from = list.findIndex((s) => s.id === id);
+      const to = where.step !== undefined ? from + where.step : list.findIndex((s) => s.id === where.onto);
+      const r = M.moveOrder(list, from, to);
+      if (!r.error) {
+        S.dragged.add(id);
+        setEdit("form.order", r.order, `Move ${label}`);
+        say(`${label} moved to place ${to + 1}`);
+        return;
+      }
+      if (from === to || to < 0 || to >= list.length || !clipsView()) return;
+    }
+    clipOp(() => {
+      const ids = M.instanceIds(clipOrder()), from = placeOf(id);
+      const to = where.step !== undefined ? from + where.step : placeOf(where.onto);
+      const r = M.moveOp(ids, from, to);
+      if (r.error || from < 0) return null;
+      say(`${label} moved to place ${to + 1}`);
+      return r.op;
+    }, `Move ${label}`, { focus: where.step !== undefined && document.activeElement?.matches?.(".region") });
   }
   function edgeDrag(e, s) {
     e.preventDefault(); e.stopPropagation();
@@ -567,6 +674,7 @@
     edge.addEventListener("pointermove", move); edge.addEventListener("pointerup", up); edge.addEventListener("pointercancel", up);
   }
   function setBars(s, n) {
+    if (s.blank) return clipLength(s, n);
     if (n === s.program.bars) releaseEdit(s.paths.bars, `${s.label} as long as the program had it`);
     else setEdit(s.paths.bars, n, `${s.label}: ${n} bars`);
     say(`${s.label}: ${n} bars`);
@@ -962,6 +1070,7 @@
       commitEdits(next, `${s.label} as the program had it`);
     };
     const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine || moved(s);
+    const clip = (clipsView()?.clips || []).find((c) => c.id === s.clip) || null;
     shell({ kind: "section", rubric: s.label, mine,
       set: `${s.bars} bars, ${s.sung ? `${s.round ? "a round" : "sung"}: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${String(w.lines[0] || "").replace(/\*/g, "")}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
       problems: s.problems,
@@ -969,10 +1078,14 @@
         h("div", { class: "row edit-it" },  // the ways into the section's own material, first
           writable ? h("button", { class: "btn", type: "button", onclick: () => editWords(s.id), title: "Its words, edited where they stand on the Page" }, "Edit its words") : null,
           h("button", { class: "btn", type: "button", onclick: () => openNotes(s.id, true), title: "Its tune and chords, under the grid (Enter, or double-click the section)" }, "Edit its notes")),
-        // every length drawn, the ones this section can't have disabled: a drop's shorter lengths don't push the rows
-        chipRow("Length", [...new Set([2, 4, 8, 16, ...s.barOptions])].sort((a, b) => a - b).map((n) => ({ value: n, text: `${n} bars`,
-          disabled: !s.barOptions.includes(n), title: s.barOptions.includes(n) ? null : s.sung ? "A sung section is as long as its lines; played, it can be shorter" : "Not this section's" })),
+        // every length drawn, the ones this section can't have disabled: a drop's shorter lengths don't push the rows.
+        // A blank section's length is its lines' (shared evenly over them); any other's is played longer or shorter
+        clip?.source === null ? chipRow("Length", M.clipLengths(clip, clipsView()).map((x) => ({ value: x.bars, text: `${x.bars} bars`, disabled: x.disabled, title: x.why })),
+          s.bars, (n) => clipLength(s, n), true)
+          : chipRow("Length", [...new Set([2, 4, 8, 16, ...s.barOptions])].sort((a, b) => a - b).map((n) => ({ value: n, text: `${n} bars`,
+            disabled: !s.barOptions.includes(n), title: s.barOptions.includes(n) ? null : s.sung ? "A sung section is as long as its lines; played, it can be shorter" : "Not this section's" })),
           s.bars, (n) => setBars(s, n), s.by.bars === "you"),
+        clip ? linesRow(s, clip) : null,
         // a round: the voices come in one after another (songbird.canon); where the tune can't take one, said why
         s.canPlay ? chipRow("Who sings", [{ value: "singer", text: "the singer" },
           { value: "round", text: "a round", disabled: !s.canRound, title: s.canRound ? `The voices come in one after another: ${s.roundWords}` : s.roundWhy },
@@ -990,6 +1103,12 @@
           h("button", { class: "btn quiet", type: "button", disabled: i === 0, onclick: () => moveSection(s.id, { step: -1 }), title: "Earlier (⌘/Ctrl ←)" }, "← Earlier"),
           h("button", { class: "btn quiet", type: "button", disabled: i === list.length - 1, onclick: () => moveSection(s.id, { step: 1 }), title: "Later (⌘/Ctrl →)" }, "Later →"),
           h("button", { class: "btn quiet", type: "button", hidden: S.open !== s.id, onclick: closeNotes }, "Close the notes")),
+        clip ? h("div", { class: "row clip-ops" },
+          h("button", { class: "btn quiet", type: "button", disabled: !!can(s, "duplicate"), title: can(s, "duplicate") || "An independent copy after it (⌘/Ctrl D)", onclick: () => duplicateSection(s.id) }, "Duplicate"),
+          h("button", { class: "btn quiet", type: "button", disabled: !!can(s, "repeat"), title: can(s, "repeat") || "Again after it, linked: a change to one is a change to both", onclick: () => repeatSection(s.id) }, linkIcon(), " Repeat"),
+          h("button", { class: "btn quiet", type: "button", disabled: !!can(s, "delete"), title: can(s, "delete") || "Delete (Delete key); Undo brings it back", onclick: () => deleteSection(s.id) }, "Delete")) : null,
+        clip ? nameRow(s, clip) : null,
+        clipsView() ? newSectionFold(s.id) : null,
         h("details", {}, h("summary", {}, "Section contents"),
           h("div", { class: "row" },
             h("button", { class: "btn", type: "button", onclick: () => copySection(s.id) }, "Copy contents"),
@@ -1011,6 +1130,56 @@
       hear: hearHow,
       release: { disabled: !anyMine, action: release } });
     return true;
+  }
+  // A section's lines (its clip's): each line's bars, a blank line's to choose; a line added at the end, or the last
+  // taken away. A line of the section's own tune is as long as its tune.
+  function linesRow(s, clip) {
+    const b = clipsView()?.bounds || {}, most = b.line_bars || 8;
+    const refusal = clip.can?.lines === true ? null : sentence(clip.can?.lines);
+    const lines = clip.lines.map((l, j) => {
+      const own = l.of !== null && l.of !== undefined;
+      const name = `Line ${j + 1}`;
+      return h("span", { class: `line-bars${own ? " own" : ""}`, title: own ? `${name}: its tune's ${l.bars} bars` : `${name}: ${l.bars} bars` },
+        own ? h("output", {}, `${l.bars}`) : h("span", { class: "stepper" },
+          h("button", { type: "button", "aria-label": `${name} shorter`, disabled: !!refusal || l.bars <= 1, onclick: () => clipLinesTo(s, { line: j, bars: l.bars - 1 }, `${s.label}, line ${j + 1}: ${l.bars - 1} bars`) }, "−"),
+          h("output", { "aria-label": `${name}: ${l.bars} bars` }, `${l.bars}`),
+          h("button", { type: "button", "aria-label": `${name} longer`, disabled: !!refusal || l.bars >= most, onclick: () => clipLinesTo(s, { line: j, bars: l.bars + 1 }, `${s.label}, line ${j + 1}: ${l.bars + 1} bars`) }, "+")));
+    });
+    const full = clip.lines.length >= (b.lines || 16);
+    return h("div", { class: "row lines-row" }, h("span", { class: "label", title: "Each line's bars" }, "Lines"),
+      h("span", { class: "chips" }, lines,
+        h("button", { class: "chip", type: "button", "aria-label": "Add a line", disabled: !!refusal || full, title: refusal || (full ? `A section has ${b.lines || 16} lines at most.` : "A blank line of 2 bars at the end"),
+          onclick: () => clipLinesTo(s, { add: 2 }, `${s.label}: a line more`) }, "+ line"),
+        h("button", { class: "chip", type: "button", "aria-label": "Take away the last line", disabled: !!refusal || clip.lines.length <= 1, title: refusal || (clip.lines.length <= 1 ? "A section needs one line." : "The last line taken away"),
+          onclick: () => clipLinesTo(s, { remove: true }, `${s.label}: a line fewer`) }, "− line")));
+  }
+  // a section's own name, for the page and the grid; empty gives it its role's
+  function nameRow(s, clip) {
+    const own = clipsView()?.value?.clips?.[clip.id]?.label || "";
+    const input = h("input", { type: "text", class: "name-field", maxlength: String(clipsView()?.bounds?.label || 24), value: own, placeholder: clip.label,
+      "aria-label": `${s.label}: its name`, "data-key": `name:${clip.id}`, onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { e.target.value = own; e.target.blur(); } },
+      onchange: (e) => renameSection(s, e.target.value) });
+    return h("div", { class: "row" }, h("label", { class: "label" }, "Name"), input);
+  }
+  // what + adds, and where: a blank section's role, sung or played, its bars and its lines; Add puts one after this
+  function newSectionFold(after) {
+    const f = S.fresh, b = clipsView()?.bounds || {};
+    const set = (patch) => { Object.assign(S.fresh, patch); renderInspector(); renderGrid(); };
+    const roles = clipsView()?.roles || Object.keys(M.ROLE_NAMES);
+    const step = (label, value, lo, hi, put) => h("span", { class: "stepper" },
+      h("button", { type: "button", "aria-label": `${label}: fewer`, disabled: value <= lo, onclick: () => put(value - 1) }, "−"),
+      h("output", { "aria-label": `${label}: ${value}` }, String(value)),
+      h("button", { type: "button", "aria-label": `${label}: more`, disabled: value >= hi, onclick: () => put(value + 1) }, "+"));
+    const most = Math.min(b.clip_bars || 64, f.lines * (b.line_bars || 8));
+    const d = h("details", { class: "new-section" }, h("summary", {}, "New section"),
+      chipRow("Role", roles.map((r) => ({ value: r, text: M.ROLE_NAMES[r] || r })), f.role, (r) => set({ role: r, sung: M.SUNG_ROLES.includes(r) })),
+      chipRow("Sung", [{ value: true, text: "sung" }, { value: false, text: "played" }], f.sung, (v) => set({ sung: v })),
+      h("div", { class: "row" }, h("span", { class: "label" }, "Bars"), step("Bars", f.bars, f.lines, most, (n) => set({ bars: n }))),
+      h("div", { class: "row" }, h("span", { class: "label" }, "Lines"), step("Lines", f.lines, 1, Math.min(b.lines || 16, f.bars), (n) => set({ lines: n, bars: Math.max(n, Math.min(f.bars, n * (b.line_bars || 8))) }))),
+      h("div", { class: "row" }, h("button", { class: "btn", type: "button", onclick: () => newSection(after) }, "Add")));
+    d.open = !!S.freshOpen;
+    d.addEventListener("toggle", (e) => { S.freshOpen = e.target.open; });
+    return d;
   }
   // who sings a section: the singer, a round (its voices one after another), or nobody (played); one choice, two paths
   function whoSings(s, v) {
@@ -1433,6 +1602,15 @@
       case "record": e.preventDefault(); record(); break;
       case "time": if (!$("timeBtn").hidden) { e.preventDefault(); openTime(); } break;
       case "move": if (S.sel?.kind === "section") { e.preventDefault(); moveSection(S.sel.id, { step: a.step }); } break;
+      // a section's own keys, with its header focused (never a note, a cell or a field): Ctrl/⌘ D, Delete
+      case "duplicate": case "delete": {
+        const region = e.target.closest?.("#grid .region");
+        if (!region) break;
+        e.preventDefault();
+        const id = region.dataset.key.slice(7);
+        if (a.action === "duplicate") duplicateSection(id, true); else deleteSection(id, true);
+        break;
+      }
       case "step":
         if (e.target.closest?.(".sbc-note, input, select, [role=tab]")) return;
         if (stepCell(a.axis, a.step, e.target)) e.preventDefault();

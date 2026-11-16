@@ -20,14 +20,20 @@
     const wordsAt = new Map((view?.words || []).map((w) => [w.index, w]));
     const seams = new Map((sound?.boundaries || []).map((b) => [b.id, b]));
     const order = view?.edits?.["form.order"];
+    const clips = c.clips, marks = linkMarks(clips), yours = clipsYours(clips);
     const sections = (arrangement?.sections || []).map((s) => {
       const own = byId.get(s.id), w = wordsAt.get(s.index), seam = seams.get(s.id);
+      const at = clipAt(clips, s.index), blank = !!at && !at.clip.source;
+      // a blank clip's length is its lines' (op lines); any other's, as the arrangement lays it
+      const lengths = blank ? clipLengths(at.clip, clips).filter((x) => !x.disabled).map((x) => x.bars) : null;
       const chords = (own?.phrases || []).flatMap((p) => (p.harmony || []).map((h) => h.name));
       return {
         id: s.id, index: s.index, name: s.name, label: s.label, role: s.role, bars: s.bars,
         startBar: Math.round((s.start_beat - first) / perBar) + 1, startBeat: s.start_beat, beats: s.duration_beats,
         startSeconds: s.start_seconds, endSeconds: s.end_seconds,
-        sung: s.sung, canPlay: s.can_play, choir: !!s.choir, build: s.build, barOptions: s.bar_options || [s.bars],
+        sung: s.sung, canPlay: s.can_play, choir: !!s.choir, build: s.build, barOptions: lengths || s.bar_options || [s.bars],
+        clip: at?.clip.id ?? null, instance: at?.instance ?? 0, blank, can: at?.clip.can || {}, link: at && marks.has(at.clip.id) ? marks.get(at.clip.id) : null,
+        clipMine: !!at && yours.has(at.clip.id) || (at?.instance || 0) > 0 && !!clips?.stored,
         round: !!s.round, canRound: !!s.can_round, roundWords: s.round_words || "", roundWhy: s.round_why || "",
         first: s.sung ? words(w?.lines?.[0]) : "", wordsMine: !!w?.mine, chords, chordsMine: (own?.phrases || []).some((p) => p.chords_edited),
         moved: Array.isArray(order), by: s.by || {}, program: s.program || {}, paths: s.paths || {}, options: s.options || [],
@@ -120,6 +126,106 @@
     return new Set(b.filter((id) => !kept.has(id)));
   }
 
+  // ------------------------------------------------------------------ clips: the song's sections as a person's own form
+  // (docs/notes/STUDIO-CLIPS.md, "For the editor"). The view's composition.clips: the arrangement (stored, or the
+  // form's own implicit one) and each clip with its lines, its instances (indexes in the sections) and what can be
+  // done with it.
+  const ROLE_NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", break: "Break", bridge: "Bridge", tag: "Tag", outro: "Outro" };
+  const SUNG_ROLES = ["verse", "refrain", "bridge", "tag"];
+  const NEW_SECTION = { role: "verse", sung: true, bars: 8, lines: 4 };  // what + adds
+  // the clip a section of the song is, and which time it comes (0 the first; a linked repeat 1, 2...)
+  function clipAt(clips, index) {
+    const clip = (clips?.clips || []).find((c) => (c.instances || []).includes(index));
+    return clip ? { clip, instance: clip.instances.indexOf(index) } : null;
+  }
+  // the clips a person made or moved: a blank one, a copy (not the clip its source section became), and the fewest
+  // whose moving makes this order from the source form's (movedIds); none without stored clips
+  function clipsYours(clips) {
+    const v = clips?.value;
+    if (!clips?.stored || !v) return new Set();
+    const ids = v.form.map((n, k) => `${n}:${v.form.slice(0, k).filter((x) => x === n).length}`);
+    const home = new Map(v.form.map((n, k) => [ids[k], `${n.replace(/\d+$/, "")}${101 + k}`]));
+    const out = new Set((clips.clips || []).filter((c) => !c.source || home.get(c.source) !== c.id).map((c) => c.id));
+    const first = [...new Set(v.order)];
+    for (const id of movedIds(v.form.map((_, k) => home.get(ids[k])), first)) out.add(id);
+    return out;
+  }
+  // linked repeats: a clip sung more than once, each with its own mark (0, 1, 2...), in the order they first come
+  function linkMarks(clips) {
+    const out = new Map();
+    for (const c of [...(clips?.clips || [])].sort((a, b) => a.instances[0] - b.instances[0])) if ((c.instances || []).length > 1) out.set(c.id, out.size);
+    return out;
+  }
+  // bars shared evenly over a clip's lines, as the engine shares them (clips.operate, op blank)
+  function evenBars(total, n) {
+    return Array.from({ length: n }, (_, k) => Math.floor(total / n) + (k < total % n ? 1 : 0));
+  }
+  const lineSpecs = (clip) => (clip?.lines || []).map((l) => (l.of !== null && l.of !== undefined ? { of: l.of } : { bars: l.bars }));
+  // the lengths a blank clip may have over its lines (each line 1 to line_bars bars, the clip and the song in bounds):
+  // [{bars, disabled, why}] for 2, 4, 8 and 16 bars and its own
+  function clipLengths(clip, clips) {
+    const b = clips?.bounds || {}, n = (clip?.lines || []).length, most = b.line_bars || 8;
+    const song = (clips?.clips || []).reduce((t, c) => t + c.bars * (c.instances || []).length, 0);
+    return [...new Set([2, 4, 8, 16, clip.bars])].sort((x, y) => x - y).map((bars) => {
+      const lines = n === 1 ? "One line is" : `${n} lines are`;
+      const why = bars < n ? `${lines} ${n} bar${n === 1 ? "" : "s"} at least.` : bars > n * most ? `${lines} ${n * most} bars at most.`
+        : bars > (b.clip_bars || 64) ? `A section is ${b.clip_bars || 64} bars at most.`
+          : song + (bars - clip.bars) * clip.instances.length > (b.song_bars || 768) ? `A song is ${b.song_bars || 768} bars at most.` : null;
+      return { bars, disabled: !!why, why };
+    });
+  }
+  // a clip's lines changed: a line added (a blank line of `bars` at the end), the last taken away, or a blank line's
+  // bars set; {lines} for op "lines", or {error}
+  function clipLines(clip, clips, change) {
+    const b = clips?.bounds || {}, most = b.line_bars || 8, lines = lineSpecs(clip);
+    const total = (ls) => ls.reduce((t, l, i) => t + (l.bars ?? clip.lines[i]?.bars ?? 0), 0);
+    if (change.add) {
+      if (lines.length >= (b.lines || 16)) return { error: `A section has ${b.lines || 16} lines at most.` };
+      lines.push({ bars: change.add });
+    } else if (change.remove) {
+      if (lines.length <= 1) return { error: "A section needs one line." };
+      lines.pop();
+    } else if (change.line !== undefined) {
+      const l = lines[change.line];
+      if (!l || l.of !== undefined) return { error: "This line is as long as its tune." };
+      if (change.bars < 1 || change.bars > most) return { error: `A line is 1 to ${most} bars.` };
+      l.bars = change.bars;
+    }
+    if (total(lines) > (b.clip_bars || 64)) return { error: `A section is ${b.clip_bars || 64} bars at most.` };
+    return { lines };
+  }
+  // A section's place in the order moved: one operation on the clips (op move), the same whichever way it was moved
+  function moveOp(sections, from, to) {
+    if (from === to || to < 0 || to >= sections.length || from < 0 || from >= sections.length) return { error: "It is already there." };
+    return { op: { op: "move", from, to } };
+  }
+  // The section ids (clip:n) the clips' order gives, in order: the nth time a clip comes is its nth instance
+  function instanceIds(order) {
+    const seen = {};
+    return (order || []).map((c) => { const n = seen[c] || 0; seen[c] = n + 1; return `${c}:${n}`; });
+  }
+  // what a clip operation leaves selected: the clip made, the one moved where it went, the section after one deleted
+  function selectedAfter(op, result, order) {
+    const ids = instanceIds(result?.edits?.clips?.order || order);
+    if (result?.clip) return `${result.clip}:0`;
+    if (op.op === "move") return ids[op.to] ?? null;
+    if (op.op === "repeat") return ids[op.at] ?? null;
+    if (op.op === "delete") return ids[Math.min(op.at, ids.length - 1)] ?? null;
+    return null;
+  }
+  // which editor a cell of the grid opens: the singer's row the melody, a player's its own roll or step grid, the
+  // chords row the melody's chords; none for the voices before, or a player the notes don't have
+  function cellEditor(track, players) {
+    if (track?.kind === "singer") return { player: "voice" };
+    if (track?.kind === "chords") return { player: "voice", chords: true };
+    if (track?.kind === "player" && (players || []).some((p) => p.name === track.id)) return { player: track.id };
+    return null;
+  }
+  // the grid row a Part menu's choice is
+  function rowOfPart(player, tracks) {
+    return player === "voice" ? (tracks || []).find((t) => t.kind === "singer") : (tracks || []).find((t) => t.kind === "player" && t.id === player);
+  }
+
   // ------------------------------------------------------------------ a seam: what happens into a section
   // a sweep may be {bars, type}: a highpass rising (the default) or a lowpass falling (sound.py)
   const lasts = (v) => (v && typeof v === "object" ? v.bars : v);
@@ -186,7 +292,7 @@
   function defaultHow(sel) { return !sel || ["song", "singer", "choir", "room", "style", "band", "shape"].includes(sel.kind) ? "sung" : "sketch"; }
   // what ▶ plays: a section's index, or the whole song (null); with the notes open, the phrase for the sketch
   function playTarget(sel, sections) {
-    const id = sel?.section || (sel && ["section", "seam", "line"].includes(sel.kind) ? sel.id : null);
+    const id = sel?.section || (sel && ["section", "seam", "line", "cell"].includes(sel.kind) ? sel.id : null);
     const s = id ? sections.find((x) => x.id === id) : null;
     return { section: s ? s.index : null, phrase: sel && (sel.kind === "note" || sel.kind === "chord") };
   }
@@ -232,7 +338,9 @@
     const mod = event.metaKey || event.ctrlKey, k = event.key;
     if (mod && !event.altKey && (k === "z" || k === "Z" || k === "y")) return { action: k === "y" || event.shiftKey ? "redo" : "undo" };
     if (mod && (k === "ArrowLeft" || k === "ArrowRight")) return { action: "move", step: k === "ArrowLeft" ? -1 : 1 };
+    if (mod && !event.altKey && !event.shiftKey && (k === "d" || k === "D")) return { action: "duplicate" };  // (a section's: score.js)
     if (mod || event.altKey) return null;
+    if ((k === "Delete" || k === "Backspace") && !event.shiftKey) return { action: "delete" };  // (a section's: score.js)
     if (k === " " || k === "Spacebar") return { action: "play", how: event.shiftKey ? "sung" : "sketch" };
     const plain = { k: "click", m: "mute", s: "solo", e: "record", t: "time", "?": "help", Enter: "open", Escape: "escape" };
     if (plain[k.length === 1 ? k.toLowerCase() : k] && !(k.length === 1 && event.shiftKey && k !== "?")) return { action: plain[k.length === 1 ? k.toLowerCase() : k] };
@@ -558,7 +666,8 @@
   }
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
-    moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
+    moveOrder, movedIds, ROLE_NAMES, SUNG_ROLES, NEW_SECTION, clipAt, clipsYours, linkMarks, evenBars, lineSpecs, clipLengths, clipLines, moveOp,
+    instanceIds, selectedAfter, cellEditor, rowOfPart, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
     neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, ROLL_BEAT, rollUnit, zoomOf, grip, labelFits,
     SNAPS, PART_SNAPS, onGrid, feelSnap, snapFor,
     phraseAt, semitone, spell, moveRows,

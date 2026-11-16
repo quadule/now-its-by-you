@@ -350,3 +350,76 @@ test("triplet snaps: ⅓ for a melody, ⅙ too for an instrument; thirds kept ex
   assert.equal(M.snapFor(1 / 6, M.SNAPS), 0.25, "no ⅙ for the melody: the nearest");
   assert.equal(M.snapFor(1 / 3, M.SNAPS), 1 / 3);
 });
+
+// ------------------------------------------------------------------ clips (docs/notes/STUDIO-CLIPS.md, "For the editor")
+const BOUNDS = { instances: 48, clips: 48, lines: 16, line_bars: 8, clip_bars: 64, song_bars: 768, label: 24 };
+const blank = { id: "break104", source: null, bars: 4, instances: [3], lines: [{ phrase: "break104-0", of: null, bars: 2 }, { phrase: "break104-1", of: null, bars: 2 }] };
+const sourced = { id: "verse102", source: "verse:0", bars: 8, instances: [1, 4], lines: [{ phrase: "v1", of: 0, bars: 4 }, { phrase: "v2", of: 1, bars: 4 }] };
+const CLIPS = { stored: true, bounds: BOUNDS, clips: [sourced, blank], value: { form: ["intro", "verse", "refrain"], order: ["intro101", "verse102", "refrain103", "break104", "verse102"] } };
+
+test("a blank section's lengths are its lines': two lines of 1 to 8 bars, the song in bounds", () => {
+  assert.deepEqual(M.clipLengths(blank, CLIPS).map((x) => [x.bars, x.disabled]), [[2, false], [4, false], [8, false], [16, false]]);
+  const one = { ...blank, lines: [blank.lines[0]], bars: 2 };
+  assert.deepEqual(M.clipLengths(one, CLIPS).map((x) => [x.bars, x.why]), [[2, null], [4, null], [8, null], [16, "One line is 8 bars at most."]]);
+  const four = { ...blank, lines: [...blank.lines, ...blank.lines], bars: 8 };
+  assert.equal(M.clipLengths(four, CLIPS)[0].why, "4 lines are 4 bars at least.");
+  const full = { ...CLIPS, clips: [{ ...sourced, bars: 760, instances: [0] }, blank] };
+  assert.equal(M.clipLengths(blank, full).find((x) => x.bars === 8).why, null);
+  assert.equal(M.clipLengths(blank, full).find((x) => x.bars === 16).why, "A song is 768 bars at most.");
+  assert.deepEqual(M.evenBars(7, 3), [3, 2, 2]);
+  assert.deepEqual(M.evenBars(8, 4), [2, 2, 2, 2]);
+});
+
+test("a section's lines: a blank line added or the last taken away, a blank line's bars; a line of its tune stays its own", () => {
+  assert.deepEqual(M.clipLines(sourced, CLIPS, { add: 2 }), { lines: [{ of: 0 }, { of: 1 }, { bars: 2 }] });
+  assert.deepEqual(M.clipLines(sourced, CLIPS, { remove: true }), { lines: [{ of: 0 }] });
+  assert.deepEqual(M.clipLines(blank, CLIPS, { line: 1, bars: 5 }), { lines: [{ bars: 2 }, { bars: 5 }] });
+  assert.equal(M.clipLines(sourced, CLIPS, { line: 0, bars: 2 }).error, "This line is as long as its tune.");
+  assert.equal(M.clipLines(blank, CLIPS, { line: 0, bars: 9 }).error, "A line is 1 to 8 bars.");
+  assert.equal(M.clipLines({ ...blank, lines: [blank.lines[0]] }, CLIPS, { remove: true }).error, "A section needs one line.");
+  const sixteen = { ...blank, lines: Array(16).fill(blank.lines[0]) };
+  assert.equal(M.clipLines(sixteen, CLIPS, { add: 2 }).error, "A section has 16 lines at most.");
+  const long = { ...blank, lines: Array(8).fill({ of: null, bars: 8 }) };
+  assert.equal(M.clipLines(long, CLIPS, { add: 1 }).error, "A section is 64 bars at most.");
+});
+
+test("instances in the clips' order, and what an operation leaves selected", () => {
+  assert.deepEqual(M.instanceIds(CLIPS.value.order), ["intro101:0", "verse102:0", "refrain103:0", "break104:0", "verse102:1"]);
+  const order = ["intro101", "verse102", "verse105", "refrain103"];
+  assert.equal(M.selectedAfter({ op: "duplicate", at: 2 }, { edits: { clips: { order } }, clip: "verse105" }), "verse105:0");
+  assert.equal(M.selectedAfter({ op: "move", from: 3, to: 0 }, { edits: { clips: { order: ["refrain103", "intro101", "verse102", "verse102"] } } }), "refrain103:0");
+  assert.equal(M.selectedAfter({ op: "repeat", at: 3 }, { edits: { clips: { order: ["intro101", "verse102", "refrain103", "verse102"] } } }), "verse102:1");
+  assert.equal(M.selectedAfter({ op: "delete", at: 2 }, { edits: { clips: { order: ["intro101", "verse102"] } } }), "verse102:0");
+  assert.deepEqual(M.moveOp([1, 2, 3], 0, 2), { op: { op: "move", from: 0, to: 2 } });
+  assert.equal(M.moveOp([1, 2, 3], 0, 3).error, "It is already there.");
+});
+
+test("the grid knows each section's clip: a linked repeat's mark, a blank one's length, a person's own", () => {
+  const arr = { sections: ["intro101:0", "verse102:0", "refrain103:0", "break104:0", "verse102:1"].map((id, index) => ({ index, id, name: id.split(":")[0], label: id, bars: 4, bar_options: [4], start_beat: index * 16, duration_beats: 16 })), players: [], cells: [] };
+  const clips = { ...CLIPS, clips: [{ id: "intro101", source: "intro:0", instances: [0], bars: 4, lines: [] }, sourced, { id: "refrain103", source: "refrain:0", instances: [2], bars: 4, lines: [] }, blank] };
+  const g = M.grid(arr, { composition: { clips } }, null);
+  assert.deepEqual(g.sections.map((s) => [s.clip, s.instance, s.link, s.blank]), [["intro101", 0, null, false], ["verse102", 0, 0, false], ["refrain103", 0, null, false], ["break104", 0, null, true], ["verse102", 1, 0, false]]);
+  assert.deepEqual(g.sections[3].barOptions, [2, 4, 8, 16]);
+  assert.deepEqual(g.sections.map((s) => s.clipMine), [false, false, false, true, true]);  // a blank one, a repeat
+  const unstored = M.grid(arr, { composition: { clips: { ...clips, stored: false } } }, null);
+  assert.ok(unstored.sections.every((s) => !s.clipMine));
+});
+
+test("a cell opens its track's editor; the Part menu's choice is a row; a section's own keys; ▶ plays a cell's section", () => {
+  const players = [{ name: "fiddle" }, { name: "drum", drums: true }];
+  assert.deepEqual(M.cellEditor({ kind: "singer" }, players), { player: "voice" });
+  assert.deepEqual(M.cellEditor({ kind: "chords" }, players), { player: "voice", chords: true });
+  assert.deepEqual(M.cellEditor({ kind: "player", id: "drum" }, players), { player: "drum" });
+  assert.equal(M.cellEditor({ kind: "player", id: "pad" }, players), null);
+  assert.equal(M.cellEditor({ kind: "choir" }, players), null);
+  const tracks = [{ id: "singer", kind: "singer" }, { id: "fiddle", kind: "player" }];
+  assert.equal(M.rowOfPart("voice", tracks).id, "singer");
+  assert.equal(M.rowOfPart("fiddle", tracks).id, "fiddle");
+  const key = (k, o = {}) => M.keyAction({ key: k, target: { tagName: "BUTTON" }, ...o });
+  assert.deepEqual(key("d", { ctrlKey: true }), { action: "duplicate" });
+  assert.deepEqual(key("Delete"), { action: "delete" });
+  assert.deepEqual(key("Backspace"), { action: "delete" });
+  assert.equal(M.keyAction({ key: "Backspace", target: { tagName: "INPUT", type: "text" } }), null);
+  const g = M.grid(arrangement, view, sound);
+  assert.deepEqual(M.playTarget({ kind: "cell", id: "verse:0", player: "guitar" }, g.sections), { section: 1, phrase: false });
+});
