@@ -205,6 +205,28 @@ def test_an_empty_song_and_a_clip_s_label_are_the_same_on_both(device, server):
     assert refused["status"] == 400
 
 
+@pytest.mark.parametrize("style", ["ballad", "house", "acappella"])
+def test_an_empty_song_plays_the_same_on_both(device, server, style):
+    """The editor's Empty song (one blank sung section, no words, no notes: tests/test_no_tune.py) crosses both
+    runtimes as any song does: its view, grid, players, sound, notes in, the MIDI file and a section's spec."""
+    made = S.answer(server, "/api/clips", {"edits": {}, "op": "empty", "role": "verse", "bars": 8, "lines": 4})
+    edits = {**made["edits"], "style.name": style}
+    for path in ("/api/song", "/api/arrangement", "/api/players", "/api/sound"):
+        actual = ask(device, path, {"edits": edits})
+        assert actual["status"] == 200 and actual["json"] == S.answer(server, path, {"edits": edits})
+    key = server.song(edits)["composition"]["sections"][0]["phrases"][0]["part_key"]
+    body = {"edits": edits, "take": {"player": "guitar", "lines": [key], "notes": [[0.0, 1.0, 60, 90]]}}
+    preview = ask(device, "/api/notes-in", body)
+    assert preview["status"] == 200 and preview["json"] == S.answer(server, "/api/notes-in", body)
+    exported = ask(device, "/api/export", {"edits": edits, "what": "midi"})
+    native = server.export(edits, "midi")
+    assert exported["status"] == 200 and exported["json"] == native
+    filename = native["url"].split("?")[0].rsplit("/", 1)[1]
+    assert Path(exported["file"]["path"]).read_bytes() == (server.cache / filename).read_bytes()
+    spec = ask(device, "/api/render/spec", {"edits": edits, "section": 0})
+    assert spec["status"] == 200 and spec["json"] == server.render_spec(edits, "you", 0)
+
+
 def test_start_says_the_device_and_what_it_can_t_do(device, server):
     out = ask(device, "/api/start", method="GET")
     start, theirs = out["json"], server.start_view()
