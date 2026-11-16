@@ -2834,7 +2834,10 @@ def arrange_style(genome, params, placed, lead, end, melody, seconds, sdef) -> t
     ctx = StyleContext(genome, params, placed, lead, end, melody, sdef, feel)
     takeover.prepare(ctx, lead)  # which section of the form each is, as a person may have arranged it
     mark_dissolved(ctx)  # a dub's version: the sections after the song dissolves (Style.dissolve)
-    sung_end = max((m["u_end"] for m in melody), default=end)
+    from .style import coda as coda_bars
+
+    # where the last line ends; a song with nothing sung: where its last bar ends, before a style's coda
+    sung_end = max((m["u_end"] for m in melody), default=end - coda_bars(genome, params))
     from .canon import sung_until
 
     sung_end = sung_until(ctx, sung_end)  # (a round's last voice sings on after the singer: songbird.canon)

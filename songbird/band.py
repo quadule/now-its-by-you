@@ -1572,9 +1572,9 @@ def prelude_span(ctx: Context) -> tuple[float, float] | None:
     """Where the genome's quote plays, in grid units: its bars before the song's first pickup, which
     style.count_in cleared for it; None where there is no quote, or no room."""
     q = getattr(ctx.genome, "quote", None)
-    if q is None or not ctx.sections or not ctx.tune:
+    if q is None or not ctx.sections:
         return None
-    u1 = min(t.u0 for t in ctx.tune)  # the song's first pickup, or its first bar line
+    u1 = min((t.u0 for t in ctx.tune), default=ctx.sections[0].u0)  # the song's first pickup, or its first bar line
     u0 = u1 - q.bars * ctx.bar
     return (u0, u1) if u0 >= -1e-9 else None
 
@@ -1714,7 +1714,10 @@ def arrange(genome, params, placed, lead, end, melody, seconds) -> tuple[list[No
         events += guitar_part(ctx, capo)
     events += melodic_parts(ctx)
     events += prelude_part(ctx)
-    sung_end = max((m["u_end"] for m in melody), default=end)
+    from .style import coda as coda_bars
+
+    # where the last line ends; a song with nothing sung: where its last bar ends, before a style's coda
+    sung_end = max((m["u_end"] for m in melody), default=end - coda_bars(ctx.genome, ctx.params))
     from .canon import sung_until
 
     sung_end = sung_until(ctx, sung_end)  # (a round's last voice sings on after the singer: songbird.canon)
