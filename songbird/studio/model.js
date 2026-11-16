@@ -637,10 +637,11 @@
   // line does, and what can't be (a paragraph or a line too many, words that don't fit).
   function lyricSheetPatch(targets, blocks, count) {
     const patch = {}, lines = [], errors = [];
-    if (blocks.length > targets.length) errors.push({ message: `This song has ${targets.length} sections of words; this has ${blocks.length} paragraphs.` });
+    const many = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+    if (blocks.length > targets.length) errors.push({ message: `This song has ${many(targets.length, "sung section")}, not ${blocks.length}.` });
     blocks.slice(0, targets.length).forEach((block, b) => {
       const t = targets[b];
-      if (block.lines.length > t.phrases.length) errors.push({ block: b, message: `${t.label} has ${t.phrases.length} lines; this paragraph has ${block.lines.length}.` });
+      if (block.lines.length > t.phrases.length) errors.push({ block: b, message: `${t.label} has ${many(t.phrases.length, "line")}, not ${block.lines.length}.` });
       block.lines.slice(0, t.phrases.length).forEach((line, i) => {
         const p = t.phrases[i], n = count(line.text), entry = { block: b, line: i, at: line.at, label: t.label, text: line.text,
           syllables: n, want: p.syllable_count, changed: line.text !== p.lyric_text, fitted: false, paths: [] };

@@ -303,7 +303,9 @@ test("a lyric sheet: paragraphs onto the song's sections of words in order, brac
   assert.equal(two.patch["line.verse:0.1"].notes.length, 4);
   assert.equal(two.lines[1].fitted, true);
   const many = M.lyricSheetPatch(targets, M.parseLyricSheet("a b c\nd e f\ng h i"), count);
-  assert.match(many.errors[0].message, /Verse 1 has 2 lines; this paragraph has 3/);
+  assert.match(many.errors[0].message, /^Verse 1 has 2 lines, not 3\.$/);
+  const one = M.lyricSheetPatch(targets.slice(1), M.parseLyricSheet("la la la\nla la la\n\nla la la"), count);
+  assert.deepEqual(one.errors.map((e) => e.message), ["This song has 1 sung section, not 2.", "Refrain has 1 line, not 2."], "one section, one line: no plural");
   const long = M.lyricSheetPatch(targets, M.parseLyricSheet(Array(20).fill("la").join(" ")), count);
   assert.match(long.errors[0].message, /Verse 1, line 1: These words need more room/);
 });

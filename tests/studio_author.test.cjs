@@ -220,7 +220,7 @@ test('the whole lyric at once: each paragraph onto the next section, a changed c
   text.value = 'a b c d\n\ne f g h\n\ni j k l'; text.listeners.input();
   find((x) => x.textContent === 'Use these words').listeners.click();
   assert.equal(calls.length, 0);
-  assert.match(find((x) => x.className === 'author-status').textContent, /2 sections of words; this has 3/);
+  assert.match(find((x) => x.className === 'author-status').textContent, /This song has 2 sung sections, not 3\./);
   // the first line kept, the second longer (its notes fitted), the refrain's the same count
   text.value = 'I sing this song\nyou sing it to me now\n\nnow it is ours'; text.listeners.input();
   assert(find((x) => x.className === 'unit' && /notes fitted/.test(x.textContent)), 'said under the field');
