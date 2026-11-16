@@ -21,6 +21,7 @@ Standard library only: a format 1 file, 480 ticks a quarter note.
 
 from __future__ import annotations
 
+import math
 import struct
 
 TPQ = 480  # ticks a quarter note
@@ -499,6 +500,24 @@ def note_key(n, drums: bool) -> int:
     return DRUM_KEYS.get(n.art, 38) if drums else int(round(n.pitch))
 
 
+def played_back(clock, lo: float, hi: float):
+    """Seconds read back to grid units along the clock a person's played notes go on (composition.beat_clock:
+    beat by beat, a foot of a song re-barred in three, straight within it), between grid units lo and hi: where
+    a note heard at that second lies in a part edit's numbers."""
+    from bisect import bisect_left
+
+    step = clock.meter.foot if clock.triple else clock.meter.beat
+    k0 = math.floor((lo - clock.lead) / step)
+    us = [clock.lead + (k0 + k) * step for k in range(int((hi - lo) / step) + 3)]
+    ts = [clock.seconds(u) for u in us]
+
+    def at(t: float) -> float:
+        i = min(max(bisect_left(ts, t), 1), len(ts) - 1)
+        return us[i - 1] + (t - ts[i - 1]) * (us[i] - us[i - 1]) / max(ts[i] - ts[i - 1], 1e-9)
+
+    return at
+
+
 def in_beats(genome, params, score) -> list[dict]:
     """The file's parts (`layout`, the same channels, programs and keys) with their notes in beats of the song's
     grid instead of ticks: [beat, length, key, velocity 1-127], a beat as the song counts them and 0 where its
@@ -507,7 +526,10 @@ def in_beats(genome, params, score) -> list[dict]:
     timing stays. For the studio's sketch, which plays at the song's tempo and sends these to a musician's own
     instruments in step with its tune (songbird/studio/players.js). A percussion player that can be written
     (composition.DRUM_PIECES) has its strokes too, each [beat, length, piece, velocity], its piece a place in
-    its pieces: the drum editor's starting part."""
+    its pieces: the drum editor's starting part. A pitched player has its notes as a person's part of them would
+    be played too ("played"): read back through the clock a person's notes go on (composition.beat_clock, beat by
+    beat and straight within a beat), so a swung eighth comes back where it sounds, and the instrument roll's
+    starting part, saved unchanged, plays where the program played it."""
     from bisect import bisect_left
 
     from .realize import timeline
@@ -518,16 +540,24 @@ def in_beats(genome, params, score) -> list[dict]:
     us = [lo + k * step for k in range(int((hi - lo) / step) + 1)]
     ts = [clock.seconds(u) for u in us]
 
-    def beat(t: float) -> float:
+    def back(t: float, us: list, ts: list) -> float:  # a time read back to the grid, between two of its points
         i = min(max(bisect_left(ts, t), 1), len(ts) - 1)
         t0, t1 = ts[i - 1], ts[i]
         return (us[i - 1] + (t - t0) * (us[i] - us[i - 1]) / max(t1 - t0, 1e-9)) / unit
+
+    straight = played_back(clock, lo, hi)
+
+    def beat(t: float) -> float:
+        return back(t, us, ts)
+
+    def played(t: float) -> float:
+        return straight(t) / unit
 
     from .composition import DRUM_PIECES, drum_piece
 
     out = []
     for track in layout(score):
-        notes, strokes = [], []
+        notes, strokes, kept = [], [], []
         for n in score.part(track["part"]):
             key = note_key(n, track["drums"])
             b0 = beat(n.start)
@@ -535,10 +565,14 @@ def in_beats(genome, params, score) -> list[dict]:
             vel = max(1, min(127, int(round(n.vel * 127))))
             if 0 <= key <= 127:
                 notes.append([*at, key, vel])
+                if not track["drums"]:
+                    p0 = played(n.start)
+                    kept.append([round(p0, 3), round(max(played(n.start + n.dur) - p0, 0.01), 3), key, vel])
             piece = drum_piece(track["part"], n.art) if track["part"] in DRUM_PIECES else None
             if piece is not None:
                 strokes.append([*at, piece, vel])
-        out.append({**track, "notes": notes, **({"strokes": strokes} if track["part"] in DRUM_PIECES else {})})
+        out.append({**track, "notes": notes, **({"strokes": strokes} if track["part"] in DRUM_PIECES else {}),
+                    **({"played": kept} if not track["drums"] else {})})
     return out
 
 

@@ -198,3 +198,39 @@ def _pitched(player):
         return C.part_player(player)["register"] is not None
     except ValueError:
         return False
+
+
+@pytest.mark.parametrize("edits", [{"style.name": "jazz", "style.feel": "swing"}, {"style.name": "blues"}])
+def test_a_part_opened_in_the_editor_and_saved_unchanged_sounds_where_the_program_played_it(tmp_path, monkeypatch, edits):
+    """The instrument roll's starting part (/api/players' "played" notes, through /api/notes-in as a take on the
+    person's clock) saved as part edits: in a swung style every note still starts where the program's did. The
+    sketch's notes (the grid's beats, a swing read back out) would have put a swung eighth on the straight one."""
+    from songbird import notesin
+    from songbird import studio as S
+
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    studio = S.Studio(None, str(ROOT / "songs" / "h-now-its-by-you.json"), "fictional:ada", out=tmp_path / "out")
+    v = studio.version(edits)
+    beat = G.meter.beat
+    lines = [ln for ln in notesin.layout(G, v.params) if ln["key"].startswith("verse:0.")]
+    clock = timeline(G, v.params)
+    a, b = clock.seconds(lines[0]["w0"]), clock.seconds(lines[-1]["w1"])
+    program = studio._score(v)
+    worst = {}
+    for p in studio.players(edits)["players"]:
+        if p["drums"]:
+            continue
+        for kind in ("played", "notes"):
+            notes = [n for n in p[kind] if any(ln["w0"] / beat - C.EARLY <= n[0] < ln["w1"] / beat for ln in lines)]
+            if not notes:
+                continue
+            r = studio.notes_in(edits, {"take": {"player": p["part"], "notes": notes, "lines": [ln["key"] for ln in lines],
+                                                 "played": kind == "played"}})
+            assert not r["refused"], r["refused"]
+            saved = studio._score(studio.version({**edits, **{c["path"]: c["value"] for c in r["changes"]}}))
+            heard = [n.start for n in saved.part(p["part"]) if a - 0.02 <= n.start < b + 0.02]
+            was = [n.start for n in program.part(p["part"]) if a + 0.02 <= n.start < b - 0.02]
+            worst[p["part"], kind] = max(min(abs(t - h) for h in heard) for t in was)
+    played = {k: w for k, w in worst.items() if k[1] == "played"}
+    assert played and max(played.values()) < 0.01, worst  # a 96th of a beat and the band's own rounding
+    assert max(w for k, w in worst.items() if k[1] == "notes") > 0.03, "the grid's beats would have moved the swung notes"

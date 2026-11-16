@@ -103,8 +103,11 @@
       if (current !== s || !s.loading) return;
       // the notes in the windows of those phrases (each from just before its pickup to its end), never a written one's
       const inside = (t) => missing.some(({ p }) => t >= p.start_beat - (p.pickup_beats || 0) - 0.125 && t < p.start_beat + p.duration_beats);
-      const notes = (data.players.find((x) => x.part === s.player.name)?.notes || []).filter((n) => inside(n[0]));
-      const preview = await ask("/api/notes-in", { edits, take: { player: s.player.name, notes, lines: missing.map((x) => x.p.part_key) } });
+      // on the clock a person's notes are played on (played: straight within a beat), so a swung part saved
+      // unchanged sounds where the program played it
+      const mine = data.players.find((x) => x.part === s.player.name), played = !!mine?.played;
+      const notes = ((played ? mine.played : mine?.notes) || []).filter((n) => inside(n[0]));
+      const preview = await ask("/api/notes-in", { edits, take: { player: s.player.name, notes, lines: missing.map((x) => x.p.part_key), played } });
       if (current !== s || !s.loading) return;
       if (preview.refused?.length) throw new Error(`${preview.refused[0].why}.`);
       for (const x of missing) { x.notes = copy(preview.changes.find((c) => c.path === x.path)?.value || []); x.ready = true; }

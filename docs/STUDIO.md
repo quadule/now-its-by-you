@@ -244,7 +244,13 @@ such.
 The notes editor's **Part** chooses Melody or a pitched member of the band.
 Double-click an instrument's arrangement cell, or choose **Edit notes** in
 its inspector, to open that part directly. The piano roll loads its generated
-notes; editing makes the phrase yours. It shows the whole section as the
+notes; editing makes the phrase yours. They are read back on the clock a
+person's notes are played on (`/api/players`' `played`: beat by beat, straight
+within a beat), so in a swung style a swung eighth shows where it sounds, off
+the straight eighth, and a part saved unchanged sounds where the program
+played it. (In a song re-barred in three, a note of the program's at the
+very start of a line's pickup can lie before the earliest onset a part keeps,
+and is left out.) It shows the whole section as the
 melody's roll does, each phrase's notes kept as that phrase's own part edit,
 with the same selection, clipboard keys, drawing and Quantize (a paste for an
 instrument that plays one note at a time takes the place of what it

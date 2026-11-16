@@ -161,13 +161,15 @@ def _change(changes: dict, path: str, value, where: str, what: str) -> None:
 # ---------------------------------------------------------------- a take
 
 
-def take(genome, params, player: str, notes, keys) -> dict:
+def take(genome, params, player: str, notes, keys, played: bool = False) -> dict:
     """A take played along with the sketch, as edits for the lines it covered (keys, "verse:1.0"...): notes as
     [beat, length, pitch, velocity], beats counted as the page's score counts them (from the song's first
     pickup), pitch a MIDI note. A band player's lines become part edits ([] where nothing was played: it
     rests there); the singer's ("voice") tune edits, the first place a line was played taken. A percussion
     player's notes name its pieces (composition.DRUM_PIECES) in place of a pitch, as the studio's players have
-    its strokes."""
+    its strokes. played: a pitched player's notes are counted on the clock a person's notes are played on
+    (/api/players' "played": beat by beat, straight within a beat), the lines' windows read on it too, so the
+    program's notes taken unchanged sound where they did."""
     if not isinstance(notes, list) or len(notes) > MAX_TAKE:
         raise ValueError(f"a take is a list of at most {MAX_TAKE} notes")
     lines = layout(genome, params)
@@ -188,7 +190,16 @@ def take(genome, params, player: str, notes, keys) -> dict:
         clean.append((b * beat, (b + length) * beat, int(pitch), int(vel)))
     clean.sort()
     covered = [ln for ln in lines if ln["key"] in set(keys)]
-    shared, _ = bucket(covered, clean, C.EARLY * beat)
+    windows = covered
+    from .realize import timeline
+
+    clock = timeline(genome, params) if played and not drums else None
+    # each window where the program's notes in it lie on the person's clock (a swing's off-beat pickup later);
+    # a song re-barred in three keeps the grid's windows, its pickups the part's own bounds
+    if clock is not None and not clock.triple:
+        back = midi.played_back(clock, covered[0]["w0"] - 8 * genome.meter.bar, covered[-1]["w1"] + 8 * genome.meter.bar)
+        windows = [dict(ln, w0=back(clock.seconds(ln["w0"])), w1=back(clock.seconds(ln["w1"]))) for ln in covered]
+    shared, _ = bucket(windows, clean, C.EARLY * beat)
     changes: dict = {}
     refused, said = [], []
     if player == "voice":

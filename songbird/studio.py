@@ -1079,7 +1079,8 @@ class Studio:
         take = body.get("take")
         if not isinstance(take, dict):
             raise ValueError("send a file or a take")
-        return notesin.take(self.genome, v.params, str(take.get("player", "")), take.get("notes"), take.get("lines"))
+        return notesin.take(self.genome, v.params, str(take.get("player", "")), take.get("notes"), take.get("lines"),
+                            played=take.get("played") is True)
 
     # ------------------------------------------------------------ sound design (docs/SOUND-DESIGN.md)
 
