@@ -192,7 +192,7 @@
     const id = sel && ["section", "cell", "seam", "line"].includes(sel.kind) ? sel.id : null;
     const ed = sel?.kind === "cell" && S.grid ? M.cellEditor(S.grid.tracks.find((t) => t.id === sel.player), state.view?.composition?.players) : null;
     const now = C()?.selection?.().player || "voice";
-    if (S.open && id && sectionAt(id) && (id !== S.open || (ed && !ed.chords && ed.player !== now))) openNotes(id, false, ed && !ed.chords ? ed.player : now);
+    if (S.open && id && sectionAt(id) && (id !== S.open || (ed && !ed.chords && ed.player !== now))) openNotes(id, false, ed && !ed.chords ? ed.player : now, true);
     repaint();
     const keyed = S.keyed || options.keyboard;
     S.keyed = false;
@@ -204,7 +204,7 @@
     if (kind) select({ kind, section: S.open });
     else if (S.sel && ["note", "chord"].includes(S.sel.kind)) select({ kind: "section", id: S.open });
   }
-  function openNotes(id, focus = false, player = "voice") {
+  function openNotes(id, focus = false, player = "voice", follow = false) {  // follow: the selection moved, the page stays put
     const i = compIndex(id);
     if (i < 0) return;
     S.open = id;
@@ -215,7 +215,7 @@
     renderGrid();
     renderInspector();
     if (focus) $("notesTitle")?.focus();
-    $("notes").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    if (!follow) $("notes").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   }
   // a section's words, to edit: the Page, scrolled to it, the field of its first line that can be written, ready
   function editWords(id, line = null) {
@@ -549,7 +549,7 @@
       S.want = null;
       if (S.sel && !stillThere(S.sel)) S.sel = null;
       if (S.open && !sectionAt(S.open)) closeNotes();
-      else if (S.open && compIndex(S.open) >= 0) C()?.open?.(compIndex(S.open), C()?.selection?.().player || "voice");
+      else if (S.open && C()?.selection?.().section !== S.open) C()?.open?.(compIndex(S.open), C()?.selection?.().player || "voice");
       repaint();
       idle();
       const focus = S.wantFocus;
@@ -751,7 +751,7 @@
       const mine = s.by.sung === "you";
       return h("button", { ...common, ondblclick: () => editWords(s.id), class: `cell words${s.wordsMine || mine ? " you" : ""}${chosen ? " selected" : ""}`,
         "aria-label": `The singer in ${s.label}: ${s.sung ? "sings" : "nobody sings"}${mine ? "; yours" : ""}`, title: `${s.sung ? s.first : "played: nobody sings"}${mine ? "; yours" : ""}${canWrite(s.id) ? ". Double-click to edit its words" : ""}` },
-      s.sung ? s.first : h("i", {}, "instrumental"));
+      s.sung ? s.first || h("i", {}, "empty") : h("i", {}, "instrumental"));
     }
     if (t.kind === "choir") {
       return h("button", { ...common, class: `cell choir ${s.choir ? "plays" : "out"}${chosen ? " selected" : ""}`,
@@ -1116,7 +1116,7 @@
     const anyMine = Object.keys(state.edits).some((p) => p.startsWith(`arrange.${s.id}.`)) || !!w?.mine || moved(s);
     const clip = (clipsView()?.clips || []).find((c) => c.id === s.clip) || null;
     shell({ kind: "section", rubric: s.label, mine,
-      set: `${s.bars} bars, ${s.sung ? `${s.round ? "a round" : "sung"}: “${s.first}”` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${String(w.lines[0] || "").replace(/\*/g, "")}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
+      set: `${s.bars} bars, ${s.sung ? `${s.round ? "a round" : "sung"}${s.first ? `: “${s.first}”` : ", no words"}` : w?.sung ? `played; its words wait, unsung: “${String(w.lines[0] || "").replace(/\*/g, "")}”` : `played${w ? `: ${String(w.lines[0] || "").replace(/\*/g, "")}` : ""}`}${w?.id && w.block === "verse" ? ` (the verse “${w.id}”)` : ""}`,
       problems: s.problems,
       body: h("div", {},
         h("div", { class: "row edit-it" },  // the ways into the section's own material, first
@@ -1195,7 +1195,9 @@
         h("button", { class: "chip", type: "button", "aria-label": "Add a line", disabled: !!refusal || full, title: refusal || (full ? `A section has ${b.lines || 16} lines at most.` : "A blank line of 2 bars at the end"),
           onclick: () => clipLinesTo(s, { add: 2 }, `${s.label}: a line more`) }, "+ line"),
         h("button", { class: "chip", type: "button", "aria-label": "Take away the last line", disabled: !!refusal || clip.lines.length <= 1, title: refusal || (clip.lines.length <= 1 ? "A section needs one line." : "The last line taken away"),
-          onclick: () => clipLinesTo(s, { remove: true }, `${s.label}: a line fewer`) }, "− line")));
+          onclick: () => clipLinesTo(s, { remove: true }, `${s.label}: a line fewer`) }, "− line"),
+        clip.source && clipsView()?.value?.clips?.[clip.id]?.lines ? h("button", { class: "link small", type: "button", title: "Its section's own lines again",
+          onclick: () => clipOp({ op: "lines", clip: clip.id, lines: null }, `${s.label}: its own lines`) }, "Reset") : null));
   }
   // a section's own name, for the page and the grid; empty gives it its role's
   function nameRow(s, clip) {
