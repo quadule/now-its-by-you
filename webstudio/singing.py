@@ -58,7 +58,7 @@ FILES = {"/sing.js": (HERE / "sing.js", "text/javascript; charset=utf-8"),
          "/sing.css": (HERE / "sing.css", "text/css; charset=utf-8"),
          "/karaoke.js": (ROOT / "tools" / "karaoke.js", "text/javascript; charset=utf-8"),
          "/recorder.js": (ROOT / "tools" / "karaoke-recorder.js", "text/javascript; charset=utf-8")}
-CONSENT = 3  # the consent's version: the page asks again when what it says changes
+CONSENT = 5  # the consent's version: the page asks again when what it says changes (studio_device's is its own)
 MAX_TAKE_BYTES = 40 * 2**20  # a whole song at 48 kHz, 16-bit mono, is about 23 MB
 MAX_META_BYTES = 2**20  # where it was sung, and the takes before it as numbers (about 40 kB each)
 MAX_WAITING_TAKES = 3  # takes held in memory waiting for the measuring process, at once
@@ -222,6 +222,17 @@ class Store:
 
     def keep(self, data) -> tuple[str, dict]:
         data = self.normal(data)
+        return self._keep(data)
+
+    def keep_both(self, data) -> tuple[str, dict, str | None]:
+        """A way kept, and the same way without its habits (a note nobody sang takes the singer's own way), so a
+        page can offer either: its name, its JSON, and the other's name (None for a way without habits)."""
+        name, data = self.keep(data)
+        if not data.get("habits"):
+            return name, data, None
+        return name, data, self._keep({k: v for k, v in data.items() if k != "habits"})[0]
+
+    def _keep(self, data: dict) -> tuple[str, dict]:
         body = json.dumps(data, sort_keys=True)
         name = "sung-" + hashlib.sha256(body.encode()).hexdigest()[:16]
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -371,7 +382,13 @@ class Singing:
         name, text = GD.digest(data), GD.text(data)
         path = self.kit.keep_guide(self.song, name, text)
         self.tidy()
-        return {**GD.words(data, title, name), "which": which}, str(path)
+        # how much of the way the page sings it (body "way": its name) this version takes, for the Sing view
+        way = self.store.path(str(body.get("way") or ""))
+        told = None
+        if way is not None:
+            with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
+                told = GD.applies(data, json.loads(way.read_text()))
+        return {**GD.words(data, title, name), "which": which, **({"applies": told} if told else {})}, str(path)
 
     def melody(self, query: dict, by: tuple[str, str] | None = None) -> bytes:
         """A stretch of a guide's melody (GET /api/sing/melody), made by the measuring process the first time and
@@ -452,8 +469,8 @@ class Singing:
         if path == "/api/sing/guide":
             return self.guide(studio or self.studio, body)[0]
         if path == "/api/sing/keep":
-            name, data = self.store.keep(body.get("phrasing"))
-            return {"name": name, "phrasing": data}
+            name, data, exact = self.store.keep_both(body.get("phrasing"))
+            return {"name": name, "phrasing": data, **({"exact": exact} if exact else {})}
         if path == "/api/sing/forget":
             return {"forgotten": self.store.forget(str(body.get("name", "")))}
         raise Refused("not found")
@@ -623,10 +640,12 @@ class Singing:
         finally:
             request = None  # the audio: never kept past this
         self.measurer.learn(result.get("audio_seconds", seconds), result.get("seconds", 0.0))
-        name, phrasing = self.store.keep(result["phrasing"])
+        name, phrasing, exact = self.store.keep_both(result["phrasing"])
         return {"measurement": result["measurement"], "name": name, "phrasing": phrasing,
                 "portrait": result["portrait"], "skipped": result.get("skipped", []),
-                "seconds": result.get("seconds"), "audio_seconds": result.get("audio_seconds")}
+                "seconds": result.get("seconds"), "audio_seconds": result.get("audio_seconds"),
+                **({"exact": exact} if exact else {}),
+                **({"applies": result["applies"]} if result.get("applies") else {})}
 
     # ------------------------------------------------------------ the studio's versions
 

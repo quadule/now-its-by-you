@@ -41,13 +41,14 @@ and the studio imports it only when `--web-singing` asks (or the site is built w
     not saved, played to anyone or used to copy a voice; a take waits in the page's memory until it is used or
     recorded again)
   - *What is kept, in this browser, is a set of numbers for each note: when you came in, how long you held it, how
-    loud it was and how you slid into it.* (until Forget my singing)
+    loud it was and how you slid into it, and their averages over notes alike.* (the averages sing the notes you
+    didn't sing; until Forget my singing)
   - *A version you share contains those numbers and no recording of you. Forget my singing deletes them from this
     browser.* (it can't remove them from a version already exported or shared)
 
   A computer's studio says instead that the take is sent to the computer that runs the studio, measured there, then
   deleted; that the numbers are also stored there with no name or address attached, and deleted 30 days after their
-  last use; and that an exported version contains them. Its consent is version 3, the device's 4 (webstudio/singing.py
+  last use; and that an exported version contains them. Its consent is version 5, the device's 6 (webstudio/singing.py
   `CONSENT`, studio_device.py `DEVICE_CONSENT`); a page asks again when the words change. The words show only once
   the offer says where measuring happens. The headphones advice is the *no headphones* box's tooltip; the slide is
   "Line it up: earlier … later".
@@ -79,7 +80,11 @@ flowchart LR
   measured before it, which the browser keeps. It waits in the studio's one queue, with the renders. Its result is
   the new take's numbers, a way of singing made from all of them (each person counts once: tools/phrasing.py
   `singer_phrasing`), and a portrait ("You sit 12 ms behind the beat on average… You slide into 26 of 44 notes…").
-  The page sets the singer's card to *your way* and offers *Hear it your way* and *Export it your way*. Each further
+  The page sets the singer's card to *your way* and offers *Hear it your way* and *Export it your way*. It says how
+  much of the version the way sings ("In this version: 120 notes as you sang them, 230 the way you sing notes like
+  them"), and a box sings the notes nobody sang with the singer's own timing instead. Lines a person wrote and
+  blank clips' lines are kept by their own key, and the singer's habits sing every note no take sang
+  (docs/notes/SINGING-AFTER-REWRITING.md). Each further
   take joins the way (up to 12); an earlier take sung to a guide that isn't kept is left out of it rather than
   refused.
 
