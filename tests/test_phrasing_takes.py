@@ -79,7 +79,7 @@ def sing(g, gestures, shift: int = 0, seed: int = 3) -> np.ndarray:
 
 
 def window(g, beats, section: tuple) -> tuple[float, float]:
-    """A section's window as the karaoke gives it: from two bars before its first sung note (on a beat) to
+    """A section's window as the recording page gives it: from two bars before its first sung note (on a beat) to
     a beat after its last ends."""
     name, s0, s1 = section
     inside = [n for n in g.notes if s0 - 1.0 <= n.start < s1]

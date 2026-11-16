@@ -5,7 +5,7 @@ tune. The take is measured and the song is sung their way: by the machine's voic
 and pitch gestures, never their voice. They can hear it and export a version that carries it. On studio.itsby.you the
 take is measured in the visitor's own browser and never leaves it ("On the device"); a studio on a computer
 (`songbird studio`, from a checkout or a song's file) measures it there and deletes the audio. docs/WEB-STUDIO.md has the studio it runs
-in. The karaoke on the artist's computer (tools/karaoke.py) is separate, and so was the September 2026 volunteer
+in. The recording page on the artist's computer (tools/recorder.py) is separate, and so was the September 2026 volunteer
 singing (docs/history/SING-ONLINE.md).
 
     uv run python web/studio-wasm/tools/build_site.py OUT   # the studio on the device: singing is in it
@@ -54,7 +54,7 @@ visitor.
   would give its child (today's drift, other words and form), so its guide is laid once with the release's own
   program, as tools/piano_score.py lays the piano page's score (tools/released_guide.py → webstudio/released.json,
   100 kB; its words checked against the packet's lyrics.txt).
-- **A speed and a key for a voice**: as written, 90% (where a singer starts, as the karaoke does) or 80%, by
+- **A speed and a key for a voice**: as written, 90% (where a singer starts, as the recording page does) or 80%, by
   stretching the guide's times; and the key moved 2 or 4 steps either way ("Too high or too low? …" is the key
   chooser's tooltip). A take sung an octave (or a few steps) from the guide is measured in its own key; past 19
   semitones it is refused, said.
@@ -94,9 +94,9 @@ flowchart LR
 - **Singing** reuses the karaoke's code, served from tools/ as it is (tools/karaoke.js and tools/karaoke-recorder.js;
   webstudio/sing.js imports them): the take is recorded in the guide's audio clock by the same worklet, cut from the
   same frame, auto-synced by the same pitch slide and written as the same 16-bit WAV, so it is measured exactly as a
-  karaoke take is. The lane of notes and the words as they're sung are the karaoke's (tools/karaoke_words.py lays
+  take on the recording page is. The lane of notes and the words as they're sung are the recording page's (tools/karaoke_words.py lays
   them out); a section or the whole song; a device delay learned from each take's sync. The melody guide (the
-  karaoke's default mix: the tune on a whistle over a pulse) is made a section at a time (GET
+  recording page's default mix: the tune on a whistle over a pulse) is made a section at a time (GET
   `/api/sing/melody?guide=&from=&to=`), its first sample the section's start.
 - **Measure it** hands the take over (a small JSON of where it was sung, then the WAV) with the numbers of the takes
   measured before it, which the browser keeps. It waits in the studio's one queue, with the renders. Its result is
@@ -512,7 +512,7 @@ dropped a block at a time, nothing of it held.
 7. **Keys and speeds offered**: the version's key and two and four steps either way; as written, 90% (the default)
    and 80%. Each is a guide made when asked for.
 8. **The melody guide only.** The band's guide would need a full render per key (6.7 GB peak on this Mac) and 20 MB
-   downloads; the karaoke's default is the melody anyway.
+   downloads; the recording page's default is the melody anyway.
 9. **No kit made ahead, even for the release.** A precomputed kit for the released version would save a first singer
    about 6 s once per section, and would need making again (and redeploying) at every change to the measuring code
    or the program's synthesis.

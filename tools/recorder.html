@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Songbird Karaoke</title>
+<title>Songbird Recording</title>
 <style>
   :root {
     --bg: #15120f; --panel: #211c18; --line: #3a322c; --ink: #efe6da; --dim: #857a6f;
@@ -93,7 +93,7 @@
 <body>
 <main>
   <header>
-    <h1 id="title">Songbird Karaoke</h1>
+    <h1 id="title">Songbird Recording</h1>
     <span class="hint">Headphones on (wired if you can), so the guide stays out of the mic.</span>
   </header>
 
@@ -291,8 +291,8 @@ async function chooseVersion() {
   S.spec = spec;
   S.lyrics = lyrics;
   S.sections = K.sungSections(lyrics);
-  $("title").textContent = `Songbird Karaoke: ${lyrics.title}`;
-  document.title = `Karaoke: ${lyrics.title}`;
+  $("title").textContent = `Songbird Recording: ${lyrics.title}`;
+  document.title = `Recording: ${lyrics.title}`;
   // the same section if this version has it (the second verse stays the second verse), else the first not yet sung
   const same = was && was.index !== null ? S.sections.find(s => s.name === was.name && s.title === was.title) : null;
   const first = K.nextSection(S.sections, null, sungHere());

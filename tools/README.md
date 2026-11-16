@@ -17,8 +17,8 @@ studio.itsby.you carries these as they are, so they stay where they are
 Beside them: released_guide.py and piano_score.py make webstudio/released.json and web/piano/score.json;
 released_record.py keeps the newest edition's record as webstudio/released-record.json (the web studio opens on
 it); sing_site.py builds the page at now.itsby.you, and site_pictures.mjs and site_pictures.py make its pictures
-of the studio. The studio on your computer sings through karaoke.py (with
-karaoke.html and everyone.py).
+of the studio. recorder.py is the recording page where the artist records takes for measuring
+(with recorder.html and everyone.py).
 
 ## Checking a render
 

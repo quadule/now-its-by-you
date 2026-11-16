@@ -23,7 +23,7 @@ are deleted by DELETE_BY (the release they agreed to: web/sing/consent.md), so
 takes stay on the site until then. sync, in this order: does here what singers
 deleted (the audio goes; its sidecar and the numbers measured from it stay) or
 withdrew (everything of theirs goes: takes, words, versions, phrasing, measured
-numbers); keeps new takes the way the karaoke keeps one (tools/takes.py), with
+numbers); keeps new takes the way the recording page keeps one (tools/takes.py), with
 where in the song each was sung; keeps the words people send
 (recordings/words/<sid>.json); makes each singer's version of the song and their
 vocals (tools/versions.py) and puts them on their page; and once DELETE_BY has
@@ -213,12 +213,12 @@ def mail_file() -> Path:
 
 
 def phrasing_path(song: str, folder: str) -> Path:
-    """A folder's phrasing, as the karaoke writes it (tools/karaoke.py)."""
+    """A folder's phrasing, as the recording page writes it (tools/recorder.py)."""
     return K.ROOT / "renders" / "phrasing" / f"{song}.{folder}.json"
 
 
 def karaoke_render(song: str, folder: str) -> Path:
-    """The machine singing a folder's way, as the karaoke renders it (tools/karaoke.py)."""
+    """The machine singing a folder's way, as the recording page renders it (tools/recorder.py)."""
     return K.ROOT / "renders" / f"{song}.karaoke.{folder}.flac"
 
 
@@ -507,7 +507,7 @@ def missing(info: dict) -> str:
 
 
 def keep_online(t: dict, info: dict, wav: bytes, who: str) -> K.Take:
-    """A take from a singer's page, kept the way the karaoke keeps one, with what the site knows of it."""
+    """A take from a singer's page, kept the way the recording page keeps one, with what the site knows of it."""
     name = plain(info.get("name"))
     sid = t.get("singer") or info.get("sid")
     received = info.get("received") or utc_now()
@@ -634,7 +634,7 @@ def only(folder: Path, sid: str) -> bool:
 def forget_singer(sid: str, site: Site | None = None) -> list[str]:
     """Everything here of a singer who withdrew (their sid): their takes (WAVs and sidecars) and the numbers
     measured from them; the phrasing of each folder they sang into, and everyone's, and the machine singing them
-    (each holds their numbers, as do the choir's blends and its renders: the karaoke makes them again from what's
+    (each holds their numbers, as do the choir's blends and its renders: the recording page makes them again from what's
     left); their words; and the versions made with their takes, from their person's other pages too when site is
     given (sync makes those again). Only this sid's takes: anyone else's in the same folder stay. What went, in
     words (nothing: it had all gone already)."""
@@ -668,7 +668,7 @@ def forget_singer(sid: str, site: Site | None = None) -> list[str]:
         went.append("their words")
     for folder in folders:
         if only(folder, sid) and hasattr(K, "remove_singer"):  # tools/takes.py's own (another agent's): its
-            with contextlib.suppress(TypeError, OSError):  # takes, phrasings, karaoke renders, and the folder
+            with contextlib.suppress(TypeError, OSError):  # takes, phrasings, the recording page's renders, and the folder
                 K.remove_singer(folder.name)
         for side in (side for side, _ in mine if side.parent == folder):
             if hasattr(K, "remove") and side.exists():  # its WAV, sidecar and caches (tools/takes.py's own)

@@ -1312,21 +1312,11 @@ $("bar")?.addEventListener("click", (ev) => {
 
 // ------------------------------------------------------------------ singing and recording
 
-async function sing() {
+async function sing() {  // where the Sing view isn't here: where to sing instead (/api/sing)
   const note = $("singNote") || { set textContent(text) { toast(text); } };
-  const tab = window.open("about:blank", "_blank");
-  note.textContent = "Opening the singing page…";
   try {
-    const r = await api("/api/sing", {});
-    if (r.url) {
-      if (tab) tab.location = r.url; else window.location.href = r.url;
-      note.textContent = "The singing page is open in another tab. When you've made your phrasing there, come back: the singer's card will offer to sing it your way.";
-    } else {
-      if (tab) tab.close();
-      note.textContent = r.error;
-    }
+    note.textContent = (await api("/api/sing", {})).error || "";
   } catch (e) {
-    if (tab) tab.close();
     note.textContent = e.message;
   }
 }

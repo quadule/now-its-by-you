@@ -580,7 +580,7 @@ song's file, usually), the first time Sing is opened it says what measuring
 lacks (wasmtime, about 10 MB) and fetches it into ~/.songbird when asked. A
 file whose program doesn't carry singing (an older version's) says to sing at
 studio.itsby.you. The singer's choice also offers the phrasings made on this
-computer with the artist's karaoke (`tools/karaoke.py`, run by itself): each
+computer with the artist's recording page (`tools/recorder.py`, run by itself): each
 person who kept takes of this song, and everyone's together; never the
 reference voices.
 

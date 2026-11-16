@@ -9,10 +9,10 @@ are always the ones the Page shows:
                                                     only the voice and the parts that state the tune are kept
     released(speed, key)                            the same for the released version (released.json: laid with
                                                     the release's own program, tools/released_guide.py)
-    words(data, title, digest)                      the karaoke's words for it: lines, syllables, beats, and each
+    words(data, title, digest)                      the recording page's words for it: lines, syllables, beats, and each
                                                     sung section's window for singing it alone
     melody(data, a, b)                              its melody guide from a to b seconds: the tune on a whistle
-                                                    over a pulse (tools/guides.py's, the karaoke's default mix),
+                                                    over a pulse (tools/guides.py's, the recording page's default mix),
                                                     mono, 16-bit, at half the program's rate
 
 score_for and words need only the program (the studio's own process, or its worker in a visitor's browser); melody
@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 RELEASED = HERE / "released.json"
 SPEEDS = (100, 90, 80)  # percent of the version's tempo: as written, and two practice speeds (tools/guides.py TEMPOS)
-SPEED = 90  # where a singer starts (tools/karaoke.py SLOWER)
+SPEED = 90  # where a singer starts (tools/recorder.py SLOWER)
 KEYS = (-4, -2, 0, 2, 4)  # semitones from the version's key, for a voice it sits too high or low for (guides.KEYS)
 MELODIC = ("whistle", "fiddle", "lute", "melody")  # parts that can state the tune (tools/guides.py MELODIC)
 TAIL = 4.0  # seconds a stretch of melody rings on past its last note's start (a held note, the room)
@@ -135,7 +135,7 @@ def has_released() -> bool:
 
 
 def words(data: dict, title: str, name: str) -> dict:
-    """What the page shows while a visitor sings (tools/karaoke.py's words), and the guide's name."""
+    """What the page shows while a visitor sings (tools/karaoke_words.py's words), and the guide's name."""
     _tools()
     import karaoke_words
 

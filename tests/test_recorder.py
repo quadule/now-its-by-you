@@ -1,4 +1,4 @@
-"""The karaoke plays the guide a singer chooses and each take says which it heard (tools/karaoke.py)."""
+"""The recording page plays the guide a singer chooses and each take says which it heard (tools/recorder.py)."""
 
 import io
 import json
@@ -15,7 +15,7 @@ import soundfile as sf
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
 import guides as M  # noqa: E402  (tools/guides.py)
-import karaoke  # noqa: E402  (tools/karaoke.py)
+import recorder  # noqa: E402  (tools/recorder.py)
 import phrasing as T  # noqa: E402  (tools/phrasing.py)
 import takes as K  # noqa: E402  (tools/takes.py)
 
@@ -36,7 +36,7 @@ def workspace(tmp_path, monkeypatch):
 
 
 def short(folder: Path, form=("verse",)) -> Path:
-    """H's genome with a seed rendition only a section long, as a file the karaoke can reload."""
+    """H's genome with a seed rendition only a section long, as a file the recording page can reload."""
     data = json.loads(H.read_text())
     data["seed_params"]["form"] = list(form)
     path = folder / "h-short.json"
@@ -44,11 +44,11 @@ def short(folder: Path, form=("verse",)) -> Path:
     return path
 
 
-def test_the_karaoke_says_which_guide_a_take_heard(workspace, monkeypatch):
+def test_the_recording_page_says_which_guide_a_take_heard(workspace, monkeypatch):
     path = short(workspace)
-    monkeypatch.setattr(karaoke.Karaoke, "genome_path", path, raising=False)
-    monkeypatch.setattr(karaoke.Karaoke, "genome", G.load(path))
-    server = ThreadingHTTPServer(("127.0.0.1", 0), karaoke.Karaoke)
+    monkeypatch.setattr(recorder.Recorder, "genome_path", path, raising=False)
+    monkeypatch.setattr(recorder.Recorder, "genome", G.load(path))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), recorder.Recorder)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
@@ -111,7 +111,7 @@ def test_each_sung_section_has_its_first_line_and_a_window_to_record_it_alone():
     score = {"duration": 28.5, "beats": beats, "notes": notes,
              "sections": [["verse", 0.5, 2.0], ["intro", 2.0, 8.0], ["verse", 8.0, 16.0], ["turn", 16.0, 20.0],
                           ["refrain", 20.0, 28.0], ["tag", 28.0, 28.5]]}
-    found = karaoke.sections(score)
+    found = recorder.sections(score)
     assert [(s["index"], s["name"], s["sung"], s.get("nth")) for s in found] == [
         (0, "verse", True, 1), (1, "intro", False, None), (2, "verse", True, 2), (3, "turn", False, None),
         (4, "refrain", True, 1), (5, "tag", False, None)]  # the tag's note is past its end: not its own
@@ -121,7 +121,7 @@ def test_each_sung_section_has_its_first_line_and_a_window_to_record_it_alone():
     assert verse["window"] == [4.0, 17.9]  # the downbeat two bars before its bar line (the pickup's), a bar after it ends
     assert refrain["window"] == [16.0, 28.5]  # after a turn, the turn's first downbeat; never past the end
     assert not any("window" in s for s in found if not s["sung"])
-    words = karaoke.lyrics(score, "H", 120)
+    words = recorder.lyrics(score, "H", 120)
     assert words["sections"] == found and [line["section"] for line in words["lines"]][:3] == ["verse", "verse", "verse"]
 
 
@@ -129,22 +129,22 @@ def test_a_second_bridge_is_bridge_two():
     beats = [[0.5 * k, int(k % 4 == 0)] for k in range(40)]
     notes = [voice(1.0, 1.0, "Car", line_end=True, section="bridge"), voice(9.0, 1.0, "Give", line_end=True, section="bridge2")]
     score = {"duration": 19.0, "beats": beats, "notes": notes, "sections": [["bridge", 0.5, 8.0], ["bridge2", 8.0, 16.0]]}
-    assert [(s["name"], s["nth"]) for s in karaoke.sections(score)] == [("bridge", 1), ("bridge2", 2)]
+    assert [(s["name"], s["nth"]) for s in recorder.sections(score)] == [("bridge", 1), ("bridge2", 2)]
 
 
 def test_a_label_keeps_a_compounds_hyphen_and_closes_up_the_syllables():
-    assert [karaoke.written(w) for w in ("*num-bers*", "half-in-vent-ed", "nine-ty-odd,", "half-a-sleep;", "has-n't",
+    assert [recorder.written(w) for w in ("*num-bers*", "half-in-vent-ed", "nine-ty-odd,", "half-a-sleep;", "has-n't",
                                          "in-vent-ed", "hum-med", "wire,", "zor-blax")] == [
         "numbers", "half-invented", "ninety-odd,", "half-asleep;", "hasn't", "invented", "hummed", "wire,", "zorblax"]
-    assert karaoke.written("zor-blax-ing", {"zor-blax-ing": "Z AO1 R B L AE0 K S IH0 NG"}) == "zorblaxing"
+    assert recorder.written("zor-blax-ing", {"zor-blax-ing": "Z AO1 R B L AE0 K S IH0 NG"}) == "zorblaxing"
 
 
-def test_the_karaoke_sings_a_spec_and_records_one_section_at_a_time(workspace, monkeypatch):
+def test_the_recording_page_sings_a_spec_and_records_one_section_at_a_time(workspace, monkeypatch):
     path = short(workspace)
     monkeypatch.setattr(M, "SETS", workspace / "sets")
-    monkeypatch.setattr(karaoke.Karaoke, "genome_path", path, raising=False)
-    monkeypatch.setattr(karaoke.Karaoke, "genome", G.load(path))
-    server = ThreadingHTTPServer(("127.0.0.1", 0), karaoke.Karaoke)
+    monkeypatch.setattr(recorder.Recorder, "genome_path", path, raising=False)
+    monkeypatch.setattr(recorder.Recorder, "genome", G.load(path))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), recorder.Recorder)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
 
@@ -215,13 +215,13 @@ def test_the_karaoke_sings_a_spec_and_records_one_section_at_a_time(workspace, m
 
 def test_a_singer_who_asked_not_to_be_credited_is_not(workspace):
     here = K.keep_sung("song", "Milo", b"RIFF-a", "abc123abc123")  # sung here: credited if the artist asks
-    assert karaoke.credited([here]) == "Milo"
+    assert recorder.credited([here]) == "Milo"
     yes = K.keep_sung("song", "Ana", b"RIFF-b", "abc123abc123", source="online", credit=True, credit_as="Ana María")
     no = K.keep_sung("song", "Ana", b"RIFF-c", "abc123abc123", source="online", credit=False, credit_as="Ana María")
-    assert karaoke.credited([yes]) == "Ana María"  # the name they gave to be credited by
-    assert karaoke.credited([yes, no]) is None  # one take said no: no credit
+    assert recorder.credited([yes]) == "Ana María"  # the name they gave to be credited by
+    assert recorder.credited([yes, no]) is None  # one take said no: no credit
     nameless = K.keep_sung("song", "choir (ab12cd)", b"RIFF-d", "abc123abc123", source="online", credit=False, credit_as="")
-    assert karaoke.credited([nameless]) is None
+    assert recorder.credited([nameless]) is None
 
 
 def test_everyones_way_blends_every_ticked_take_and_the_choir_keeps_three_voices(workspace, monkeypatch):
@@ -231,9 +231,9 @@ def test_everyones_way_blends_every_ticked_take_and_the_choir_keeps_three_voices
     import songbird.cli
 
     path = short(workspace)
-    monkeypatch.setattr(karaoke, "ROOT", workspace)
-    monkeypatch.setattr(karaoke.Karaoke, "genome_path", path, raising=False)
-    monkeypatch.setattr(karaoke.Karaoke, "genome", G.load(path))
+    monkeypatch.setattr(recorder, "ROOT", workspace)
+    monkeypatch.setattr(recorder.Recorder, "genome_path", path, raising=False)
+    monkeypatch.setattr(recorder.Recorder, "genome", G.load(path))
     for who in ("Ana", "Bo", "Cy", "Di", "Ed"):
         K.keep_sung(path.stem, who, b"RIFF-" + who.encode(), "abc123abc123")
     unticked = K.keep_sung(path.stem, "Fay", b"RIFF-f", "abc123abc123")
@@ -252,7 +252,7 @@ def test_everyones_way_blends_every_ticked_take_and_the_choir_keeps_three_voices
     monkeypatch.setattr(T, "singer_phrasing", singer_phrasing)
     monkeypatch.setattr(T, "write", write)
     monkeypatch.setattr(songbird.cli, "main", rendered.append)
-    handler = karaoke.Karaoke.__new__(karaoke.Karaoke)  # no request needed to render
+    handler = recorder.Recorder.__new__(recorder.Recorder)  # no request needed to render
     assert handler.render({"lead": "everyone", "choir": True})["url"].startswith("/renders/h-short.karaoke.everyone.flac")
     argv = rendered[-1]
     everyone = argv[argv.index("--phrasing") + 1]

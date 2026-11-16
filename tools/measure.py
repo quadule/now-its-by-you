@@ -7,7 +7,7 @@ Measuring a take (tools/phrasing.py measured()) takes up to a minute or so, most
 which runs one take at a time whatever happens (tools/align.py holds a lock); the pitch analysis and
 the template singer run beside it. What's measured is kept in renders/measured/ until the take, the
 guide it was sung to or the measuring code changes, so a take measured here is instant when a phrasing
-is made from it (the karaoke's "Make X's phrasing", everyone's way, or tools/phrasing.py --singer).
+is made from it (the recording page's "Make X's phrasing", everyone's way, or tools/phrasing.py --singer).
 Run it while people are singing (tools/invite.py sync fetches their takes), and the night's phrasings
 take minutes, not hours.
 """

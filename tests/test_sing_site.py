@@ -217,7 +217,7 @@ def test_a_site_being_built_never_replaces_the_one_there_until_it_is_whole(tmp_p
 def test_the_seed_pages_words_are_timed_as_the_file_sang_them(tmp_path):
     """The seed page shows a packed render's words as it plays: its score laid again from what the packet
     carries, a person's phrasing (sung early) and all, matching the score the render itself wrote."""
-    import karaoke  # tools/karaoke.py
+    import karaoke_words  # tools/karaoke_words.py
     from songbird import cli, phrasing as P
     from songbird.genome import load
 
@@ -232,7 +232,7 @@ def test_the_seed_pages_words_are_timed_as_the_file_sang_them(tmp_path):
     phrasing.unlink()  # the packet carries what it needs
     timed = W.seed_words(packed)
     score = json.loads(plain.with_suffix(".score.json").read_text())
-    lines = karaoke.lyrics(score, genome.title, 0)["lines"]
+    lines = karaoke_words.lyrics(score, genome.title, 0)["lines"]
     assert [[s[0] for s in line[2]] for line in timed["lines"]] == [[s["text"] for s in line["syllables"]] for line in lines]
     assert [s[1] for line in timed["lines"] for s in line[2]] == pytest.approx(
         [s["start"] for line in lines for s in line["syllables"]], abs=1e-3)
