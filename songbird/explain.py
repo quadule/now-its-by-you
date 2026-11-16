@@ -1609,7 +1609,7 @@ def summary(ctx: Context, v: Version, who: str, name: str | None = None) -> dict
     singer = singer_of(p)
     style = p.style.name or "ballad"
     lead = leader(p.band, p.style)
-    band = (f"the {player(lead)} leading" if p.band.lineup else
+    band = (f"the {player(lead)} leading" if p.band.lineup and lead else "the voices leading" if p.band.lineup else
             f"{PATTERNS.get(p.band.pattern, p.band.pattern)}, the {player(lead or 'band')} leading")
     return {"who": who, "name": name or "Yours",
             "rows": {"Style": STYLE_NAMES.get(style, style).split(",")[0],
