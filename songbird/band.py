@@ -352,6 +352,13 @@ class Context:
     def tune_in(self, section: int) -> list[Tune]:
         return [t for t in self.tune if t.section == section]
 
+    def pitches(self, section: int | None = None, sung: bool = False) -> list[int]:
+        """Where the tune lies, as pitches: its notes in the section (sung ones only, if `sung`); where it has none
+        there, the whole tune's; and where the song has no tune at all (blank lines), the key's own note in the
+        melody's register (params.tonic)."""
+        here = [t.pitch for t in (self.tune if section is None else self.tune_in(section)) if t.sung or not sung]
+        return here or [t.pitch for t in self.tune] or [self.tonic]
+
     def chord_at(self, u: float) -> Chord:
         if getattr(self, "_chords_len", -1) != len(self.chords):
             self._chords_u0 = [c.u0 for c in self.chords]
@@ -1361,7 +1368,7 @@ def held_tone(ctx: Context, section: int, part: str, top: int) -> list[Ev]:
 
 def melodic_parts(ctx: Context) -> list[Ev]:
     out: list[Ev] = []
-    whole = [t.pitch for t in ctx.tune]
+    whole = ctx.pitches()
     for i, s in enumerate(ctx.sections):
         tune = ctx.tune_in(i)
         top = max([t.pitch for t in tune] or whole)  # counter-lines and pads go above where the tune lies here

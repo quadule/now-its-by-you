@@ -285,12 +285,12 @@ class StyleContext(Context):
 
     def floor(self, section: int) -> int:
         """Where comping should stay under: a little above the low end of what is sung in the section."""
-        sung = sorted(t.pitch for t in self.tune_in(section) if t.sung) or sorted(t.pitch for t in self.tune)
+        sung = sorted(self.pitches(section, sung=True))
         return int(sung[max(0, len(sung) // 10)]) + 2
 
     def top(self, section: int) -> int:
         """The top of what is sung (or played as the tune) in the section."""
-        return max([t.pitch for t in self.tune_in(section)] or [t.pitch for t in self.tune])
+        return max(self.pitches(section))
 
     # --- harmony -----------------------------------------------------------------------------------
 
