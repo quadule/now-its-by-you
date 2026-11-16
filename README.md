@@ -119,7 +119,7 @@ arrangements of the song made by hand. The program and its voice are meant to fi
 `uv run songbird studio` opens today's version in a page on this computer (127.0.0.1 only): the whole song as one
 score, its words and their alternatives, key, tempo, style, band and mix, six years of how it drifts, and an export
 that makes a version with the program inside ([docs/STUDIO.md](docs/STUDIO.md)). Give it a version's file to carry
-on from: `uv run songbird studio song.flac`. With `--web-singing` it takes singing too, measured on this computer
+on from: `uv run songbird studio song.flac`. It takes singing too, measured on this computer
 ([docs/WEB-SINGING.md](docs/WEB-SINGING.md)).
 
 At https://studio.itsby.you the same studio is the program's own Python under Pyodide, its compiled loops

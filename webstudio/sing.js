@@ -701,6 +701,24 @@ function offered() {
   $("singWhich").hidden = !o.released;
 }
 
+function offerFetch(f) {
+  // what measuring lacks on this computer, fetched once when the person asks (webstudio/standins.py): what, how big,
+  // from where and into where, said before anything is fetched
+  const button = h("button", { class: "btn primary", type: "button" }, `Fetch it (about ${f.mb} MB)`);
+  const line = h("p", { class: "hint" }, `It fetches ${f.what} from ${f.from} into ${f.into}, once. Nothing is installed into your system.`);
+  $("singWhy").after(line, h("div", { class: "actions" }, button));
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Fetching…";
+    let o;
+    try { o = await ST.api("/api/sing/fetch", {}); } catch (e) { o = { available: false, why: e.message }; }
+    if (o.available) { location.reload(); return; }
+    $("singWhy").textContent = o.why || "Singing couldn't be set up here.";
+    line.remove();
+    button.parentElement.remove();
+  });
+}
+
 async function init() {
   build();
   try { S.offer = await ST.api("/api/sing/offer"); } catch (e) { S.offer = { available: false, why: e.message }; }
@@ -713,6 +731,7 @@ async function init() {
   if (!S.offer.available) {
     $("singWhy").textContent = S.offer.why || "Singing isn't available here.";
     $("singNote").textContent = $("singWhy").textContent;
+    if (S.offer.fetch) offerFetch(S.offer.fetch);
     return;
   }
   $("singWhy").hidden = true;

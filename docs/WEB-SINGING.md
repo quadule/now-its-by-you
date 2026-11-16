@@ -4,20 +4,42 @@ The studio's *Sing* view lets a visitor sing the version on the studio's page (o
 tune. The take is measured and the song is sung their way: by the machine's voice, with their timing, holds, loudness
 and pitch gestures, never their voice. They can hear it and export a version that carries it. On studio.itsby.you the
 take is measured in the visitor's own browser and never leaves it ("On the device"); a studio on a computer
-(`songbird studio --web-singing`) measures it there and deletes the audio. docs/WEB-STUDIO.md has the studio it runs
+(`songbird studio`, from a checkout or a song's file) measures it there and deletes the audio. docs/WEB-STUDIO.md has the studio it runs
 in. The karaoke on the artist's computer (tools/karaoke.py) is separate, and so was the September 2026 volunteer
 singing (docs/history/SING-ONLINE.md).
 
     uv run python web/studio-wasm/tools/build_site.py OUT   # the studio on the device: singing is in it
-    uv run songbird studio --web-singing                     # a studio on this computer (--public: the server mode)
+    uv run songbird studio                                   # a studio on this computer: singing is in it
+    python3 SONG.flac studio                                 # the same, from a song's file
+    uv run songbird studio --public --web-singing            # the server mode (shared or public: only when asked)
 
-`--web-singing` needs a checkout (tools/, webstudio/) and the `web-singing` dependency group (pyworld, librosa: `uv
-sync --group web-singing`; the dev group has them too). Nothing is made ahead: what measuring needs is made when it's
+Singing needs tools/ and webstudio/, which a checkout has and a song's file carries beside its program
+(songbird/pack.py `SINGING`: about 540 kB, 180 kB compressed, with WORLD in wasm and its licence). Measuring uses
+pyworld and librosa where they are installed (the `web-singing` or dev group); where they aren't, the browser's own
+stand-ins take their places ("Measuring without pyworld or librosa"). Nothing is made ahead: what measuring needs is made when it's
 first needed and kept (`--sing-kit DIR`, else $SONGBIRD_SING_KIT, else `sing-kit` in the studio's home: "The kit").
 Without the dependencies the studio runs and Sing says why.
 
-Nothing of this is in the song's program: `webstudio/` sits beside `songbird/`, a packet carries `songbird/` alone,
-and the studio imports it only when `--web-singing` asks (or the site is built with it, its default).
+The song's program runs without any of it: `webstudio/` sits beside `songbird/`, and the studio imports it only to
+take singing (a studio on this computer always, a shared or public one with `--web-singing`; the site is built with
+it by default). A file whose program doesn't carry it says to sing at studio.itsby.you.
+
+### Measuring without pyworld or librosa
+
+pyworld has no ready-made builds for macOS or Linux, and librosa is heavy, so a song's file can't count on them.
+webstudio/standins.py puts in their places, where they aren't installed: pyworld by `webstudio/world_wasmtime.py`,
+the browser's world.wasm (WORLD's harvest and cheaptrick, the same 83 kB file) run under wasmtime, which is
+ready-made for Windows, macOS and Linux; librosa by `web/studio-wasm/py/sing_dtw.py`, its DTW in numpy. On a take
+measured both ways (tests/test_singing_after_rewriting.py) every number of the measurement and the way is the same;
+WORLD's f0 is pyworld's to within 1e-14 relative, as in the browser.
+
+wasmtime is fetched once, when the person asks: the Sing view says "Singing here needs wasmtime (about 10 MB),
+fetched once into ~/.songbird/singing" and what it fetches from where, with a button (`POST /api/sing/fetch`),
+then installs `wasmtime==50.0.1` from PyPI, ready-made builds only, into `~/.songbird/singing/wasmtime-<version>-
+<system>-<machine>/` (with uv if it is there, else pip, `--target`: never the system or the program's environment).
+The measuring process finds it there. If it can't be fetched (offline, or no build for this computer) singing says
+"Singing couldn't be set up here: … Sing at https://studio.itsby.you." A shared studio never fetches for a
+visitor.
 
 ## The Sing view
 
@@ -424,7 +446,8 @@ dropped a block at a time, nothing of it held.
   `singing.py` (the studio's side: routes, the guide, the melody, the waiting takes, the Measurer, the Store of ways
   by fingerprint), `sing.js` and `sing.css` (the Sing view). tools/karaoke_words.py: the karaoke's words, sections
   and windows.
-- `songbird/studio.py`: `--web-singing`, `--sing-kit`; `/api/sing/guide` answered on the page's version;
+- `songbird/studio.py`: singing taken by a studio on this computer (`--web-singing` for a shared or public one),
+  `--sing-kit`; `/api/sing/guide` answered on the page's version;
   `Studio.enable_web_singing`, `phrasing_choices` (a name `sung-…` is looked up in the Store, never listed),
   `sung_phrasings` (the card's "your way"); the handler asks singing first about its routes and the take's upload,
   and the page gets `/sing.js` and `/sing.css` added. `songbird/public.py`: the `takes` limits.

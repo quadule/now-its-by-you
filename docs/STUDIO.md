@@ -8,7 +8,7 @@ the version this machine would sing now, from the rendition it was opened on
 (or from the song as it began). The page shows every choice the program made
 and why, lets you move through time, roll chance again and hear other
 machines, lets you change what you like (each change marked as yours and
-undoable), lets you sing it where the program has its singing page, and
+undoable), lets you sing it in its Sing view (where singing's files travel), and
 exports the finished rendition: one FLAC carrying the program, the song and
 its record, your choices marked as yours.
 
@@ -570,22 +570,18 @@ it all only copies it.
 
 ## Singing
 
-In a checkout, *Sing it* starts the singing page (`tools/karaoke.py`) on
-127.0.0.1:8765 for the same song, if it isn't running there already (it
-checks the song's title), opens it in a new tab, and stops it when the studio
-stops. Back in the studio, the singer's choice offers the phrasings made on
-this computer: each person who kept takes of this song, and everyone's
-together; never the reference voices. The singing page's own "hear the
-machine" sings the song as it began, not the studio's version; the studio's
-preview is where to hear your version sung your way. A packet's program has
-no singing page, and the studio says so: singing needs a checkout, or the
-studio at studio.itsby.you (docs/WEB-SINGING.md).
-
-Started with `--web-singing` (a checkout, with the singing kit), the studio
-takes singing in its own Sing view instead, as the web studio does: the
-visitor sings to the guide in the browser, the take is measured on the server
-and its audio deleted there, and the singer's choice offers *your way*.
-docs/WEB-SINGING.md.
+A studio on this computer, from a checkout or a song's file, takes singing in
+its Sing view, as the web studio does: you sing to the guide in the browser,
+the take is measured on this computer and its audio deleted there, and the
+singer's choice offers *your way* (docs/WEB-SINGING.md). A shared or public
+studio takes it only with `--web-singing`. Where pyworld isn't installed (a
+song's file, usually), the first time Sing is opened it says what measuring
+lacks (wasmtime, about 10 MB) and fetches it into ~/.songbird when asked. A
+file whose program doesn't carry singing (an older version's) says to sing at
+studio.itsby.you. The singer's choice also offers the phrasings made on this
+computer with the artist's karaoke (`tools/karaoke.py`, run by itself): each
+person who kept takes of this song, and everyone's together; never the
+reference voices.
 
 ## Exporting the song file
 
@@ -1539,7 +1535,7 @@ What changes for several people at once:
 | Listening and exporting | one renderer for everyone: a section takes seconds, a whole song about a minute | exports first, then the newest preview; the page says how many are ahead; past 12 waiting it asks people to try again in a minute |
 | Exported files | written on the serving computer, into `renders/` (a checkout) or the folder it ran from (a packet) | the page offers each visitor **Download it**; the file is theirs to run |
 | The machine | "your machine" is the serving computer's (its languages, size, screen) for everyone | the page and the terminal say *the computer serving this studio*; `--machine fictional:NAME` or `none` if its facts shouldn't shape everyone's version |
-| Singing | the singing page listens on the serving computer only | off while shared; the singer's choice offers only *everyone who has sung it*, never one singer's way or name |
+| Singing | the Sing view, measured on the serving computer | off while shared unless `--web-singing`; the singer's choice offers only *everyone who has sung it*, never one singer's way or name |
 
 Limits:
 

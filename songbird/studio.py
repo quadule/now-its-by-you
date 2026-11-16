@@ -13,8 +13,9 @@ song today: the version this machine would sing now, from that parent (or
 from the song as it began). It shows every choice and why (songbird.explain),
 lets you move through time, roll chance again, hear other machines and
 listen to any section, lets you change what you like (songbird.edits: each
-change marked as yours and undoable), sends you to the singing page if the
-program has one, and records the rendition exactly as `songbird render`
+change marked as yours and undoable), lets you sing along and have the song
+sung your way where its measuring travels with it (the Sing view, webstudio/),
+and records the rendition exactly as `songbird render`
 would, with your choices marked. docs/STUDIO.md has the design.
 
 The page keeps the person's edits and sends them with every request; the
@@ -22,7 +23,7 @@ server keeps nothing else but caches, so any request can be replayed.
 
 Shared (`--host` other than this computer, or `--allow-host` for a tunnel's
 name), it is a temporary preview for a few people: every visitor needs the
-link's key, the singing page is off, only everyone's phrasing is offered (no
+link's key, singing is off (unless asked for), only everyone's phrasing is offered (no
 singer's name), each recording can be downloaded from the page, and the
 machine that shapes the song is the computer serving it. docs/STUDIO.md,
 "Sharing the studio for a preview".
@@ -48,14 +49,12 @@ import secrets
 import shutil
 import socket
 import struct
-import subprocess
 import sys
 import tempfile
 import textwrap
 import threading
 import time
 import traceback
-import urllib.request
 import webbrowser
 import zipfile
 from dataclasses import dataclass, field, replace as dataclass_replace
@@ -79,8 +78,8 @@ PAGE = Path(__file__).with_name("studio")  # index.html, score.css, studio.js
 ROOT = Path(__file__).resolve().parent.parent  # the program's folder: a packet's, or a checkout
 LEAD = "h-now-its-by-you"  # in a checkout, the song the studio opens when nothing names one
 PORT = 8766
-KARAOKE_PORT = 8765
 HOST = "127.0.0.1"  # this computer only, unless asked to share (--host, --allow-host)
+SING_ELSEWHERE = "Singing isn't in this copy of the program: sing at https://studio.itsby.you."
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 LOCAL_VERSION_DAYS = 90  # how long this computer's own studio keeps a version someone opened in it
 MAX_WAITING = 12  # renders waiting at once: more are refused until the queue shortens (a shared studio)
@@ -595,7 +594,6 @@ class Studio:
         self._roll_lock = threading.Lock()
         self._serving: collections.Counter = collections.Counter()  # requests being served, by address (public)
         self._serving_lock = threading.Lock()
-        self.karaoke: subprocess.Popen | None = None
         self.singing = None  # singing in the browser, when asked for (enable_web_singing)
         self.context = explain.Context(self.genome, parent_params, record, self.voice, machine, self.day, self.t,
                                        quiet, shared=self.shared)
@@ -1272,7 +1270,6 @@ class Studio:
         other._timeline = timeline.get("drawn") if timeline and timeline.get("day") == self.day \
             and timeline.get("machine") == self.machine else None
         other._timeline_lock = threading.Lock()
-        other.karaoke = None
         with self._opened_lock:
             if digest != self.song_digest:
                 self._genomes[digest] = genome
@@ -1333,67 +1330,35 @@ class Studio:
         return out
 
     def sing_available(self) -> dict:
-        if self.singing is not None:  # singing in the browser, here (webstudio/): the karaoke page isn't needed
+        if self.singing is not None:  # the Sing view (webstudio/): measured here, its audio deleted
             return self.singing.available()
-        if self.shared:
-            return {"available": False,
-                    "why": "The singing page opens only on the computer serving this studio, not over a shared link."}
-        if (ROOT / "tools" / "karaoke.py").exists():
-            return {"available": True}
-        return {"available": False,
-                "why": "Singing into it needs the singing page, which this copy of the program doesn't have yet."}
+        return {"available": False, "why": SING_ELSEWHERE}
 
     def sing(self) -> dict:
-        """Start the singing page (tools/karaoke.py) for this song if it isn't running, and say where it is."""
-        url = f"http://127.0.0.1:{KARAOKE_PORT}"
-        if self.shared:  # a visitor can't reach it, and shouldn't start anything on this computer
-            return {"error": self.sing_available()["why"]}
-        if listening(KARAOKE_PORT):
-            if self.karaoke_title() == self.genome.title:
-                return {"url": url}
-            return {"error": f"Something else is using port {KARAOKE_PORT}, where the singing page would open."}
-        available = self.sing_available()
-        if not available["available"]:
-            return {"error": available["why"]}
-        if self.karaoke is None or self.karaoke.poll() is not None:
-            self.karaoke = subprocess.Popen([sys.executable, str(ROOT / "tools" / "karaoke.py"), str(self.genome_path),
-                                             "--port", str(KARAOKE_PORT)], cwd=ROOT, stdout=subprocess.DEVNULL,
-                                            stderr=subprocess.DEVNULL)
-        for _ in range(160):  # it loads its measuring tools first: a few seconds
-            if listening(KARAOKE_PORT):
-                return {"url": url}
-            if self.karaoke.poll() is not None:
-                return {"error": "The singing page didn't start."}
-            time.sleep(0.25)
-        return {"error": "The singing page is taking a long time to start; try again in a moment."}
-
-    def karaoke_title(self) -> str | None:
-        with contextlib.suppress(Exception):
-            with urllib.request.urlopen(f"http://127.0.0.1:{KARAOKE_PORT}/lyrics.json", timeout=20) as r:
-                return json.loads(r.read()).get("title")
-        return None
+        """What the page's "Sing it" says where the Sing view isn't here: where to sing instead."""
+        return {"error": self.sing_available()["why"]}
 
     def close(self) -> None:
-        if self.karaoke is not None and self.karaoke.poll() is None:
-            self.karaoke.terminate()
         if self.singing is not None:
             self.singing.close()
 
-    # ------------------------------------------------------------ singing in the browser (webstudio/, --web-singing)
+    # ------------------------------------------------------------ singing (webstudio/: the Sing view)
     #
-    # A visitor sings to a guide on the studio's own page; the take is measured here and its audio deleted, and
-    # the song can be sung their way (docs/WEB-SINGING.md). All of it lives in webstudio/, outside the song's
-    # program (a packet never carries it): it needs a checkout's tools and their dev dependencies. These are the
-    # studio's only hooks into it.
+    # A person sings to a guide on the studio's own page; the take is measured here and its audio deleted, and
+    # the song can be sung their way (docs/WEB-SINGING.md). All of it lives in webstudio/ and tools/, which a
+    # checkout has and a packet carries beside the song's program (pack.SINGING); a program without them has no
+    # Sing view and says where to sing instead. These are the studio's only hooks into it.
 
-    def enable_web_singing(self, kit: str | Path | None = None, check: bool = False) -> None:
+    def enable_web_singing(self, kit: str | Path | None = None, check: bool = False, required: bool = True) -> None:
+        """The Sing view, if its files are here; without them, refused (required) or left off."""
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
         try:
             from webstudio.singing import Singing
-        except ImportError:  # it doesn't travel in a version's file: singing is in a checkout, and at studio.itsby.you
-            raise SystemExit("songbird: singing isn't in this file's studio; sing at https://studio.itsby.you, "
-                             "or from the program's source") from None
+        except ImportError:  # an older version's file: singing is at studio.itsby.you
+            if not required:
+                return
+            raise SystemExit(f"songbird: {SING_ELSEWHERE}") from None
 
         self.singing = Singing(self, kit, check=check)
 
@@ -1527,12 +1492,6 @@ def link(src: Path, dst: Path) -> None:
         os.link(src, dst)
     except OSError:
         shutil.copyfile(src, dst)
-
-
-def listening(port: int) -> bool:
-    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-        s.settimeout(0.2)
-        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def shown(path: Path) -> str:
@@ -2444,7 +2403,7 @@ def shared_warning(shares: list[str], out: str, lan: bool) -> str:
               "so they wait on each other: a section takes seconds, a whole song about a minute.",
               f"What they record is saved into {out}/ here, and each can download theirs from the page.",
               "Their version is shaped by this computer (its languages, size and screen), not by theirs.",
-              lock, "The singing page is off, and no singer's name or own way of singing is offered."]
+              lock, "Singing is off (--web-singing takes it), and no singer's name or own way of singing is offered."]
     return "\n".join(["  SHARED, for a short preview. Anyone with one of these links can use the studio, on this "
                       "computer:", *(f"    {link}" for link in shares), "  What that means:",
                       *(textwrap.fill(point, 104, initial_indent="    - ", subsequent_indent="      ")
@@ -2504,8 +2463,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
                         help="public, behind a proxy on this machine or its private network: the header that "
                              "names the visitor's address (CF-Connecting-IP for a Cloudflare tunnel)")
     parser.add_argument("--web-singing", action="store_true",
-                        help="take singing in the browser, measured here and its audio deleted (a checkout with the "
-                             "dev tools: docs/WEB-SINGING.md)")
+                        help="take singing (the Sing view, measured here and its audio deleted: docs/WEB-SINGING.md) "
+                             "in a shared or public studio too; a studio on this computer takes it anyway")
     parser.add_argument("--sing-kit", metavar="DIR",
                         help="where singing keeps the guides and template analyses it makes (default "
                              "$SONGBIRD_SING_KIT, else sing-kit in the studio's home)")
@@ -2547,8 +2506,9 @@ def run(args: argparse.Namespace) -> int:
     machine = args.machine or ("none" if limits else "here")  # public: never the serving computer's own
     studio = Studio(parent, args.song, machine, Path(args.out) if args.out else None, key=key, public=limits)
     studio.noindex = bool(limits) and getattr(args, "noindex", False)
-    if getattr(args, "web_singing", False):
-        studio.enable_web_singing(getattr(args, "sing_kit", None), check=True)
+    asked = getattr(args, "web_singing", False)
+    if asked or not shared:  # a studio on this computer sings whenever singing's files are here
+        studio.enable_web_singing(getattr(args, "sing_kit", None), check=True, required=asked)
     if getattr(args, "browser_render", None):
         try:
             studio.enable_browser_render(args.browser_render)
