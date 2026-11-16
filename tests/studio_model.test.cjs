@@ -432,12 +432,25 @@ test("a cell opens its track's editor; the Part menu's choice is a row; a sectio
   assert.deepEqual(M.playTarget({ kind: "cell", id: "verse:0", player: "guitar" }, g.sections), { section: 1, phrase: false });
 });
 
-test("a blank line's words get notes: a syllable a beat where there's room, home to the tonic; none is refused plainly", () => {
+test("a blank line's words get notes: a syllable a beat where there's room, a tune from the bank; none is refused plainly", () => {
   const blank = { own_path: "line.verse111:0.0", lyric_path: "lyrics.verse111:0.0", lyric_text: "", syllable_count: 0, tune_syllable_count: 0,
     duration_beats: 8, pickup_beats: 0, notes: [], bounds: { min_onset: 0, max_end: 8, max_final_onset: 8, min_duration: 0.25 } };
   assert.ok(M.isBlank(blank) && !M.isBlank({ ...blank, notes: [{}] }) && !M.isBlank({ ...blank, own_path: null }));
-  const five = M.fitNotes(blank, 5);
-  assert.deepEqual(five.map((n) => [n.degree, n.onset, n.duration]), [[3, 0, 1], [5, 1, 1], [4, 2, 1], [3, 3, 1], [1, 4, 2]]);
+  const five = M.fitNotes(blank, 5, "here is a new song");
+  assert.deepEqual(five.map((n) => [n.onset, n.duration]), [[0, 1], [1, 1], [2, 1], [3, 1], [4, 2]]);
+  assert.deepEqual(M.fitNotes(blank, 5, "Here is a new song!"), five);  // the same words on the same line: the same tune
+  // a section's lines by turns: one ends away from home, the next on the tonic; other words, other tunes
+  const second = { ...blank, own_path: "line.verse111:0.1" };
+  const lines = ["here is a new song", "nobody has sung it yet", "write it down and pass it on", "now it is by you", "one more line to sing", "and another after that"];
+  for (const words of lines) {
+    assert.notEqual(M.fitNotes(blank, 8, words).at(-1).degree, 1);
+    assert.equal(M.fitNotes(second, 8, words).at(-1).degree, 1);
+    assert.equal(M.fitNotes({ ...blank, closes: true }, 8, words).at(-1).degree, 1);  // a section's last line comes home
+  }
+  assert.ok(new Set(lines.map((words) => M.fitNotes(second, 8, words).map((n) => n.degree).join())).size >= 3);
+  // a song whose range stops short of a tune's top sings it an octave down
+  const low = { ...blank, bounds: { ...blank.bounds, min_degree: -4, max_degree: 5 } };
+  assert.ok(lines.every((words) => M.fitNotes(low, 8, words).every((n) => n.degree >= -4 && n.degree <= 5)));
   assert.deepEqual(M.fitNotes(blank, 1), [{ degree: 1, onset: 0, duration: 2 }]);
   const tight = M.fitNotes({ ...blank, duration_beats: 2, bounds: { ...blank.bounds, max_end: 2, max_final_onset: 2 } }, 6);
   assert.deepEqual(tight.map((n) => n.onset), [0, 0.25, 0.5, 0.75, 1, 1.25]);

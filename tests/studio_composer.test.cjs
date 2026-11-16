@@ -1165,7 +1165,7 @@ test("a blank sung line opens in the roll, empty: a note drawn into it waits for
   assert.equal(line.path, "line.verse111:0.0");
   assert.equal(line.value.words, "here is a new song");
   assert.deepEqual(line.value.notes.map((n) => n.onset), [0, 0.75, 1.5, 2.25, 3]);
-  assert.equal(line.value.notes.at(-1).degree, 1, "it ends home");
+  assert.notEqual(line.value.notes.at(-1).degree, 1, "the first of two lines ends away from home");
 });
 
 test("a note drawn into a blank line is the line's first syllable, its words to write", () => {

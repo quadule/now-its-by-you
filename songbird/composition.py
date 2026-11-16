@@ -1047,6 +1047,7 @@ def view(genome, params, lyrics) -> dict:
                             # the tune line's own count; the line's own count is the syllable count above
                             "own": phrase.own, "own_path": f"line.{keys[index]}.{at}" if keys[index] and
                             at < len(section.phrases) else None,
+                            "closes": at == len(section.phrases) - 1,  # its section's last line
                             "tune_syllable_count": len(song.phrases[pid].sung),
                             "advice": advice(genome, params, phrase),  # a freed ending, said
                             "authored": str(at) in patches[index],

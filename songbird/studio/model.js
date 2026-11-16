@@ -553,12 +553,12 @@
 
   // Words can establish a new rhythm. Keep the contour and span, allocate whole
   // grid steps to each syllable, and leave the original phrase untouched.
-  function fitNotes(phrase, count) {
+  function fitNotes(phrase, count, text = "") {
     const source = (phrase.notes || []).filter((n) => !n.slur), b = phrase.bounds || {};
     if (!Number.isInteger(count) || count < 1 || count > 32) throw new Error("Write 1 to 32 syllables for this line.");
     if (!source.length) {
       if (!phrase.own_path) throw new Error("Choose a line with a melody first.");
-      return blankTune(phrase, count);
+      return blankTune(phrase, count, text);
     }
     const grid = b.min_duration || 0.25;
     const start = Math.max(b.min_onset ?? -phrase.pickup_beats, source[0].onset);
@@ -573,18 +573,39 @@
     });
   }
   // A blank line's first notes, for words written into it: a syllable a beat where the line has room (less where it
-  // hasn't, on its grid), from its first bar line, rising from the third to the fifth and falling home to the tonic,
-  // the last held up to two beats.
-  const CONTOUR = [3, 4, 5, 5, 4, 3, 2, 1];
-  function blankTune(phrase, count) {
-    const b = phrase.bounds || {}, grid = b.min_duration || 0.25;
+  // hasn't, on its grid), from its first bar line, the last held up to two beats. Their tune is one of a bank's
+  // (TUNES), each a pair: a section's lines take them by turns, one ending away from home, the next coming home to
+  // the tonic, as its last line always does. Which pair is the line's section's and its words' (the same words on the same line, the same tune).
+  const TUNES = [
+    [[3, 4, 5, 5, 4, 3, 2, 2], [3, 4, 5, 5, 4, 3, 2, 1]],
+    [[1, 2, 3, 5, 5, 6, 5, 5], [5, 6, 5, 3, 2, 3, 2, 1]],
+    [[5, 5, 6, 5, 3, 3, 2, 2], [5, 5, 6, 5, 3, 2, 1, 1]],
+    [[1, 1, 3, 3, 5, 5, 6, 5], [6, 6, 5, 5, 3, 3, 2, 1]],
+    [[5, 3, 5, 6, 5, 3, 2, 3], [5, 3, 5, 6, 5, 2, 3, 1]],
+    [[3, 3, 2, 1, 2, 3, 5, 5], [3, 3, 2, 1, 2, 3, 2, 1]],
+    [[1, 3, 5, 8, 6, 5, 6, 5], [8, 6, 5, 3, 5, 3, 2, 1]],
+    [[6, 5, 3, 5, 6, 5, 3, 2], [6, 5, 3, 5, 3, 2, 1, 1]],
+  ];
+  function tuneFor(phrase, text) {
+    const [, section = "", line = "0"] = /^line\.(.*)\.(\d+)$/.exec(phrase.own_path || "") || [];
+    let h = 2166136261;  // (FNV-1a)
+    for (const c of `${section}|${String(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()}`) h = Math.imul(h ^ c.codePointAt(0), 16777619);
+    return TUNES[(h >>> 0) % TUNES.length][phrase.closes || Number(line) % 2 ? 1 : 0];
+  }
+  function blankTune(phrase, count, text = "") {
+    const b = phrase.bounds || {}, grid = b.min_duration || 0.25, tune = tuneFor(phrase, text);
+    const within = (d) => {  // an octave down or up where the song's range stops short of it
+      while (b.max_degree != null && d > b.max_degree && d - 7 >= (b.min_degree ?? -Infinity)) d -= 7;
+      while (b.min_degree != null && d < b.min_degree && d + 7 <= (b.max_degree ?? Infinity)) d += 7;
+      return d;
+    };
     const start = Math.max(0, b.min_onset ?? 0), end = b.max_end ?? phrase.duration_beats;
     const step = Math.min(1, Math.floor((end - start + 1e-8) / count / grid) * grid);
     if (step < grid || start + (count - 1) * step > (b.max_final_onset ?? end - grid) + 1e-8)
       throw new Error("These words need more room than this line has.");
     return Array.from({ length: count }, (_, i) => {
       const onset = start + i * step;
-      return { degree: count === 1 ? 1 : CONTOUR[Math.round(i * (CONTOUR.length - 1) / (count - 1))], onset,
+      return { degree: within(count === 1 ? 1 : tune[Math.round(i * (tune.length - 1) / (count - 1))]), onset,
         duration: i === count - 1 ? Math.min(end - onset, Math.max(step, 2)) : step };
     });
   }
@@ -598,7 +619,7 @@
     if (fit || phrase.own) {
       if (!phrase.own_path) throw new Error("Choose a sung line to write new words.");
       const count = String(text).replace(/\{[^{}]*\}/g, "").trim().split(/[\s-]+/u).filter(Boolean).length;
-      return { [phrase.own_path]: { words: text, notes: fit ? fitNotes(phrase, count) : writtenNotes(phrase.notes) } };
+      return { [phrase.own_path]: { words: text, notes: fit ? fitNotes(phrase, count, text) : writtenNotes(phrase.notes) } };
     }
     return { [phrase.lyric_path]: text };
   }

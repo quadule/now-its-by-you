@@ -273,7 +273,7 @@
         button("Fit notes to words", () => {
           try {
             d.words = input.value;
-            const notes = window.SongbirdModel.fitNotes({ ...p, notes: d.notes }, sylls(input.value));
+            const notes = window.SongbirdModel.fitNotes({ ...p, notes: d.notes }, sylls(input.value), input.value);
             d.notes = notes.map((n) => ({ ...n, pitch: (composition()?.tonic || 60) + scaleOffset(n.degree) + (n.alter || 0), edited: true }));
             p.notes = d.notes; state.note = null; d.error = null; paint(); told();
           } catch (error) { d.words = input.value; d.error = error.message; paint(); told(); }
