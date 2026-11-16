@@ -1181,3 +1181,10 @@ test("a note drawn into a blank line is the line's first syllable, its words to 
   assert.match(s.find(".sbc-own").textContent, /\/ 1 syllables/);
   assert.equal(s.commits.length, 0, "nothing in the song until its words are written");
 });
+
+test("the sketch's band players sound by their family, from their names", () => {
+  const { window } = setup();
+  const of = window.SongbirdComposer.family;
+  assert.deepEqual(["lute", "guitar", "harp", "bass", "upright-bass", "fiddle", "cello", "whistle", "accordion", "organ", "piano", "drone", "banjo"].map(of),
+    ["plucked", "plucked", "plucked", "bass", "bass", "bowed", "bowed", "blown", "blown", "keys", "keys", "drone", "plucked"]);
+});

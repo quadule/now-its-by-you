@@ -1295,7 +1295,54 @@
     const ctx = state.context;
     if (!ctx || !state.playback) return;
     if (note.drums) tone(ctx, note.key < 40 ? 90 : note.key < 50 ? 220 : 2400, when, 0.05, true);
-    else pluck(ctx, note.key, when, Math.max(0.08, note.d), 0.012 * (note.vel / 100), note.key < 48 ? "bass" : "strum");
+    else voiced(ctx, note.player === "chords" || !note.player ? (note.key < 48 ? "bass" : "") : note.player, note.key, when,
+      Math.max(0.08, note.d), 0.012 * (note.vel / 100));
+  }
+  // The sketch's band players by family, from a player's name: plucked (a quick fall), bowed (a swell, a slow
+  // vibrato), blown (a soft round tone), keys (struck, then held lower), bass (round and low), a drone (held, plain).
+  // A hint of the instrument, made at once: its own sound is Sung's, or a note's own (live.js).
+  function family(name = "") {
+    if (/bass/.test(name)) return "bass";
+    if (/fiddle|violin|viol|cello|string|bow/.test(name)) return "bowed";
+    if (/whistle|flute|pipe|horn|sax|clarinet|harmonica|accordion|melodica|reed|brass|trumpet|recorder/.test(name)) return "blown";
+    if (/piano|organ|keys|rhodes|harpsichord|celesta|bell|marimba|vibes|glock/.test(name)) return "keys";
+    if (/drone|pad|synth|string-pad/.test(name)) return "drone";
+    return "plucked";  // lute, guitar, harp, banjo, mandolin...
+  }
+  const FAMILY = {  // its wave, its filter (Hz, none for a pure tone), its attack (s), and its level against a pluck's
+    bowed: ["sawtooth", 2200, 0.08, 0.8], blown: ["sine", 0, 0.04, 2.4], keys: ["square", 1800, 0.004, 0.7], drone: ["triangle", 900, 0.2, 1.4],
+  };
+  function voiced(ctx, name, pitch, start, duration, peak) {
+    const kind = family(name);
+    if (kind === "plucked" || kind === "bass") { pluck(ctx, pitch, start, duration, peak, kind === "bass" ? "bass" : "strum"); return; }
+    const [wave, cutoff, attack, louder] = FAMILY[kind], level = peak * louder, length = Math.max(0.1, duration);
+    const oscillator = ctx.createOscillator(), gain = ctx.createGain();
+    oscillator.type = wave;
+    oscillator.frequency.value = 440 * 2 ** ((pitch - 69) / 12);
+    let out = oscillator, lfo = null;
+    if (cutoff && ctx.createBiquadFilter) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass"; filter.frequency.value = cutoff;
+      oscillator.connect(filter); out = filter;
+    }
+    if (kind === "bowed" && length > 0.3) {  // a bow's vibrato, from a little way into the note
+      lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = 5.5; depth.gain.value = oscillator.frequency.value * 0.004;
+      lfo.connect(depth); depth.connect(oscillator.frequency);
+      lfo.start(start + 0.15); lfo.stop(start + length + 0.03);
+      lfo.onended = () => { lfo.disconnect(); depth.disconnect(); };
+    }
+    const held = kind === "keys" ? level * 0.35 : level;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(level, start + attack);
+    if (kind === "keys") gain.gain.exponentialRampToValueAtTime(held, start + Math.min(0.4, length * 0.6));
+    gain.gain.setValueAtTime(held, start + Math.max(attack + 0.01, length - 0.06));
+    gain.gain.linearRampToValueAtTime(0.0001, start + length);
+    out.connect(gain); gain.connect(bus(ctx));
+    state.nodes.add(oscillator);
+    oscillator.onended = () => { state.nodes.delete(oscillator); oscillator.disconnect(); if (out !== oscillator) out.disconnect(); gain.disconnect(); };
+    oscillator.start(start); oscillator.stop(start + length + 0.03);
   }
   function pluck(ctx, pitch, start, duration, peak, kind = "strum") {
     const oscillator = ctx.createOscillator(), gain = ctx.createGain();
@@ -1336,7 +1383,7 @@
     for (const [, length, pitch, velocity = 96] of notes.slice(0, 4)) {
       if (bridge().note?.(state.player, pitch, velocity)) continue;
       if (drummer) for (const node of window.SongbirdDrums.play(ctx, [[0, length, pitch, velocity]], drummer, composition().tempo, bus(ctx))) state.nodes.add(node);
-      else tone(ctx, composition().tonic + pitch, ctx.currentTime + 0.005, Math.min(0.6, Math.max(0.12, length / 96 * unit)), false, velocity);
+      else voiced(ctx, state.player, composition().tonic + pitch, ctx.currentTime + 0.005, Math.min(0.6, Math.max(0.12, length / 96 * unit)), 0.03 * velocity / 96);
     }
   }
   // the notes the roll will likely sound next, asked of the studio once a section and player (where it makes them)
@@ -1500,8 +1547,8 @@
         hear: (notes, q = p) => {
           stop(); bridge().pauseAudio?.(); const ctx = audioContext(); if (!ctx) return;
           const unit = 60 / composition().tempo, origin = Math.min(0, ...notes.map((n) => n[0] / 96));
-          for (const [start, length, pitch, velocity] of notes) tone(ctx, composition().tonic + pitch,
-            ctx.currentTime + 0.03 + (start / 96 - origin) * unit, Math.min(length / 96, (q?.duration_beats ?? 4) - start / 96) * unit, false, velocity);
+          for (const [start, length, pitch, velocity] of notes) voiced(ctx, state.player, composition().tonic + pitch,
+            ctx.currentTime + 0.03 + (start / 96 - origin) * unit, Math.min(length / 96, (q?.duration_beats ?? 4) - start / 96) * unit, 0.03 * velocity / 96);
         },
         // a key, a note chosen, or notes just written: at once, over the loop (the instrument's own sound where it's here)
         sound: (notes) => sounded(notes), ready: (pitches) => prefetch(s, null, pitches) }) : el("div", {},
@@ -1655,7 +1702,7 @@
     [...(root()?.querySelectorAll(".sbc-chord") || [])].find((node) => node.dataset.chord === `${first.bar}.${first.slot}` && node.dataset.chordPhrase === String(k))?.focus({ preventScroll: true });
     return true;
   }
-  window.SongbirdComposer = { render, stop, replay, open, deselect, sketch, options, selection, noteState, chordState, chords,
+  window.SongbirdComposer = { render, stop, replay, open, deselect, sketch, options, selection, noteState, chordState, chords, family,
     hasDraft: (id) => sections().find((s) => s.id === id)?.phrases?.some((p) => drafts.has(p.own_path)) || false,
     playing: () => !!state.playback, mini: (index) => (sections()[index] ? miniNotes(sections()[index]) : null) };
 })();
