@@ -69,11 +69,31 @@ def score_for(genome, params, lyrics=None, speed: int = 100, key: int = 0, which
 
     if speed not in SPEEDS or key not in KEYS:
         raise ValueError(f"a guide is at {', '.join(map(str, SPEEDS))}% and {', '.join(map(str, KEYS))} semitones")
-    score = realize(genome, replace(params, tonic=params.tonic + key), lyrics=lyrics)
+    told: list = []
+    score = realize(genome, replace(params, tonic=params.tonic + key), lyrics=lyrics, told=told)
     beats = [[t, int(bar)] for t, bar in timeline(genome, params).beats()]
     data = {**score.to_dict(), "tempo": params.tempo, "seed": params.seed,
-            "transpose": params.tonic + key - choose_params(genome).tonic, "beats": beats}
+            "transpose": params.tonic + key - choose_params(genome).tonic, "beats": beats,
+            **lines_sung(score, told)}
     return slowed(slim(data), speed, key, which)
+
+
+def lines_sung(score, told: list) -> dict:
+    """What each sung note of a guide is, for a way of singing made from a take of it (tools/phrasing.py
+    sung_phrasing): "lines", every line sung, as {"key": the key a line a person wrote is kept under (a line of
+    its own, a blank clip's line), else null; "notes": each note's shape (songbird.phrasing.shape)}; and
+    "line_of", for each note of the voice in the order the guide sings them, [its line, its place in it]. Nothing
+    where the notes can't be told apart (they always can: realize tells them in the order they're sung)."""
+    voice = sorted(score.part("voice"), key=lambda n: n.start)
+    if len(voice) != len(told) or any(n.phrase != t["phrase"] for n, t in zip(voice, told)):
+        return {}
+    lines, line_of, at = [], [], {}
+    for t in told:
+        if t["index"] == 0 or (t["line"], t["of"]) != at.get("last"):
+            lines.append({"key": t["line"], "notes": [list(s) for s in t["of"]]})
+            at["last"] = (t["line"], t["of"])
+        line_of.append([len(lines) - 1, t["index"]])
+    return {"lines": lines, "line_of": line_of}
 
 
 def slim(data: dict) -> dict:
@@ -249,3 +269,28 @@ def melody(data: dict, a: float, b: float) -> tuple[bytes, int]:
         w.setframerate(half)
         w.writeframes(np.ascontiguousarray(pcm, dtype="<i2").tobytes())
     return buffer.getvalue(), half
+
+
+# ------------------------------------------------------------ how much of a way of singing a guide's version takes
+
+
+def applies(data: dict, phrasing) -> dict | None:
+    """How a way of singing (songbird.phrasing: a phrasing, or its file's JSON) sings the version a guide was laid
+    from, note by note, counted: "sung", notes sung as the take sang them; "matched", notes of a line rewritten
+    since, sung as the take sang the same note; "habit", notes sung by the singer's habits; "none", notes the
+    singer sings its own way. None for a guide that doesn't say what its notes are (the released one)."""
+    from collections import Counter
+
+    from songbird import phrasing as P
+
+    if isinstance(phrasing, dict) and "phrases" in phrasing:
+        phrasing = P.from_json(phrasing)
+    lines, line_of = data.get("lines"), data.get("line_of")
+    voice = sorted((n for n in data["notes"] if n["part"] == "voice"), key=lambda n: n["start"])
+    if not isinstance(lines, list) or not isinstance(line_of, list) or len(line_of) != len(voice):
+        return None
+    count = Counter({"sung": 0, "matched": 0, "habit": 0, "none": 0})
+    for n, (i, k) in zip(voice, line_of):
+        shapes = [tuple(s) for s in lines[i]["notes"]]
+        count[P.sung_gesture(phrasing, n["phrase"], lines[i]["key"], k, shapes)[1]] += 1
+    return dict(count)

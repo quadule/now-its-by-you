@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import pickle
 import sys
@@ -372,7 +373,7 @@ def measure(tools: Tools, request: dict) -> dict:
         if sung:
             lags.append(r["lag"])
             keys[r["key"]] += sung
-    notes = fitted(tools, str(request["song"]), notes)
+    notes = fitted(tools, str(request["song"]), notes, str(request["guide"]))
     if not any(n["onset"] is not None for n in notes):
         raise Refused("No note of the song was sung in that take: sing along with the words as they light up.")
     return {
@@ -389,17 +390,22 @@ def measure(tools: Tools, request: dict) -> dict:
     }
 
 
-def fitted(tools: Tools, song: str, notes: list[dict]) -> list[dict]:
+def fitted(tools: Tools, song: str, notes: list[dict], digest: str | None = None) -> list[dict]:
     """The notes measured, but any the song's phrases have no place for left unmeasured: a version someone brought
-    may sing a phrase the song doesn't, or a line written longer, and a way of singing is the song's, by phrase
-    and place in it."""
-    _, genome = tools.genome(song)
+    may sing a phrase the song doesn't, and a way of singing is the song's, by phrase and place in it. A note of a
+    line a person wrote (a line of its own, a blank clip's line: its guide says which, tools/phrasing.py
+    guide_lines) is kept whatever its tune line is: it is kept by that line."""
+    path, genome = tools.genome(song)
     phrases = genome.phrases
+    told = tools.T.guide_lines(path, digest, len(notes)) if digest else None
 
-    def fits(n):
+    def fits(k, n):
+        if told is not None and told["notes"][k][0] is not None:
+            return True
         return n["phrase"] in phrases and n["index"] < len(phrases[n["phrase"]].sung)
 
-    return [n if n["onset"] is None or fits(n) else {**n, "onset": None, "off": None, "gesture": None} for n in notes]
+    return [n if n["onset"] is None or fits(k, n) else {**n, "onset": None, "off": None, "gesture": None}
+            for k, n in enumerate(notes)]
 
 
 def peak_mb() -> int:
@@ -496,8 +502,12 @@ def take(tools: Tools, request: dict) -> dict:
                                          and isinstance(d.get("stamp"), dict)}
     made = phrasing(tools, {"song": song, "offered": sorted(offered), "measurements": [*earlier, measured["measurement"]]})
     left = len(request.get("earlier") or []) - len(earlier)
+    from . import guide as GD
+
+    sung_to = tools.kit.guide(song, str(request["guide"]))
+    told = GD.applies(json.loads(sung_to.read_text()), made["phrasing"]) if sung_to is not None else None
     return {**measured, **made, "templates": list(dict.fromkeys(tools.made)), "peak_mb": peak_mb(),
-            **({"left_out": left} if left else {})}
+            **({"left_out": left} if left else {}), **({"applies": told} if told is not None else {})}
 
 
 def melody(tools: Tools, request: dict) -> dict:
