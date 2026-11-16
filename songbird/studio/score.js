@@ -1075,7 +1075,7 @@
           style ? door("Style", style.value, style.detail, { kind: "style" }, style.mine) : null,
           singer ? door("Singer", singer.value, singer.detail, { kind: "singer" }, singer.mine) : null,
           band ? door("Band", band.value, who.length ? `${who.join(", ")}: yours in ${yoursCells.length} place${yoursCells.length === 1 ? "" : "s"}` : band.detail, { kind: "band" }, band.mine || yoursCells.length > 0) : null,
-          shape ? door("Shape", shape.value, off.length ? `add: ${off.slice(0, 4).join(" · ")}` : null, { kind: "shape" }, shape.mine || !!v.edits["form.order"]) : null,
+          shape ? door("Shape", shape.value, off.length ? `add: ${off.slice(0, 4).join(" · ")}` : null, { kind: "shape" }, shape.mine || !!v.edits["form.order"] || !!clipsView()?.stored) : null,
           mix ? door("Room", mix.value, mix.detail, { kind: "room" }, mix.mine) : null),
         line(card("variants"), "Melody", null, (card("variants")?.variants || []).length ? h("div", { class: "row" }, card("variants").variants.map((x) =>
           h("label", { class: "check" }, h("input", { type: "checkbox", checked: !!x.value, onchange: (e) => choose(x.path, e.target.checked, x.label) }), ` ${x.label}`))) : null),
@@ -1559,6 +1559,12 @@
         title: !flip ? "This part can't be changed in this arrangement" : !flip.allowed ? flip.why : null, onclick: () => { const was = now(); choose(`form.${part}`, !was, was ? `No ${s.parts[part].replace(/^(an?|the) /, "")}` : `With ${s.parts[part]}`); } }, s.parts[part]);
     });
     const release = () => { const next = copyEdits(); for (const p of Object.keys(next)) if (p.startsWith("form.")) delete next[p]; next["form.order"] = null; commitEdits(next, "Use the song's shape"); };
+    if (clipsView()?.stored) {  // a form of the person's own: its sections are Arrange's; null gives the song's back
+      shell({ kind: "shape", rubric: "The shape", mine: true, set: `${S.grid?.sections.length || 0} sections of your own`,
+        body: h("p", { class: "hint" }, "Your sections, in Arrange."),
+        why: [["you", "a form of your own"]], hear: hearSong, release: { label: "Use the song's form", action: () => releaseEdit("clips", "Use the song's form") } });
+      return true;
+    }
     shell({ kind: "shape", rubric: "The shape", mine: c.mine || !!v.edits["form.order"], set: c.value,
       body: arranged ? h("div", {}, h("p", { class: "hint" }, "In the order you set in Arrange."),
         h("button", { class: "btn quiet", type: "button", onclick: release }, "Use the song's shape"))

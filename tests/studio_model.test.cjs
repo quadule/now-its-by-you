@@ -210,7 +210,13 @@ test("phrase contents copy as portable local edits, including rests and inherite
   assert.equal(patch['part.fiddle.verse:0.0'], null);
   patch['part.guitar.verse:0.0'][0][0] = 100;
   assert.equal(p.part_notes.guitar[0][0], 0, "the source is immutable");
-  assert.throws(() => M.sectionPatch({ phrases: [p] }, { phrases: [q, q] }), /same number/);
+  assert.throws(() => M.sectionPatch({ phrases: [p] }, { phrases: [q, q] }), /These contents are 1 line: paste them into a section of 1\./);
+  // a blank line's contents are its chords and players' notes: the destination keeps its melody; a sung line's go into a blank one
+  const blank = { ...q, notes: [], lyric_text: "", own_path: "line.verse104:0.0", chords: [["IV"], ["IV"]], part_notes: { guitar: [[0, 48, 2, 80]] } };
+  assert.deepEqual(Object.keys(M.phrasePatch(blank, q)).sort(), ["chords.verse:0.0", "part.fiddle.verse:0.0", "part.guitar.verse:0.0"]);
+  const into = M.phrasePatch(p, { ...blank, place: "verse104:0.0", part_key: "verse104:0.0", tune_syllable_count: 0 });
+  assert.equal(into["line.verse104:0.0"].words, "Sing now");
+  assert.equal(into["line.verse104:0.0"].notes.length, 2);
 });
 
 test("a time of the section's roll belongs to the phrase that can sing a note there: a pickup past a line's last start is the next line's", () => {

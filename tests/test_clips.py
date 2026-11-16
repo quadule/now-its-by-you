@@ -377,3 +377,19 @@ def test_an_empty_song_is_one_blank_clip_the_rest_of_the_record_kept():
     view = C.view(G, r.params, r.lyrics)
     assert [s["clip"] for s in view["sections"]] == [clip]
     assert all(p["notes"] == [] and p["own_path"] for p in view["sections"][0]["phrases"])
+
+
+def test_an_empty_song_written_as_the_page_writes_it_is_sung_and_exported():
+    """The editor's Empty song, then a line's words with the notes the page fits to a blank line (model.js blankTune:
+    a syllable a beat, 3 5 4 3 1, the last held two beats) and one of its own drawn (a quarter-beat step)."""
+    made = op({}, op="empty", role="verse", bars=8, lines=4)
+    edits, clip = made["edits"], made["clip"]
+    edits[f"line.{clip}:0.0"] = {"words": "here is a new song", "notes": [
+        {"degree": d, "onset": k, "duration": 2 if k == 4 else 1} for k, d in enumerate([3, 5, 4, 3, 1])]}
+    edits[f"line.{clip}:0.2"] = {"words": "and on", "notes": [{"degree": 5, "onset": 0, "duration": 0.25},
+                                                                {"degree": 1, "onset": 0.25, "duration": 2}]}
+    r, problems = version(edits)
+    assert not problems
+    score, syllables = sung(r)
+    assert syllables == ["here", "is", "a", "new", "song", "and", "on"]
+    assert midi.from_score(G, r.params, score, lyrics=r.lyrics)

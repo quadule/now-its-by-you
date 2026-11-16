@@ -679,6 +679,7 @@
     const ratio = (target.duration_beats - b) / (source.duration_beats - a);
     const notes = writtenNotes(source.notes).map((n) => ({ ...n, onset: b + (n.onset - a) * ratio, duration: n.duration * ratio }));
     const limits = target.bounds || {}, count = notes.filter((n) => !n.slur).length;
+    if (isBlank(source)) return chordsAndParts(source, target, a, b, ratio);  // a blank line carries no melody: the destination's stays
     if ((!count && target.tune_syllable_count !== 0) || notes.some((n) => n.duration < (limits.min_duration || 0.25) - 1e-8 ||
       n.degree < limits.min_degree || n.degree > limits.max_degree) || notes.at(-1)?.onset > (limits.max_final_onset ?? target.duration_beats) + 1e-8)
       throw new Error("This melody doesn't fit that phrase.");
@@ -690,7 +691,11 @@
         throw new Error("Paste these words and notes into a sung phrase.");
       patch[target.place ? `tune.${target.place}` : target.path] = notes;
     }
-    const bars = target.chords?.length || 0;
+    return Object.assign(patch, chordsAndParts(source, target, a, b, ratio));
+  }
+  // a line's chords and players' notes, onto another line (its bars, its time)
+  function chordsAndParts(source, target, a, b, ratio) {
+    const patch = {}, bars = target.chords?.length || 0;
     if (bars && source.chords?.length) patch[target.place ? `chords.${target.place}` : target.chords_path] =
       Array.from({ length: bars }, (_, i) => [...source.chords[Math.floor(i * source.chords.length / bars)]]);
     // Custom instrumental notes are optional: absence restores procedural playing
@@ -702,9 +707,11 @@
     }
     return patch;
   }
+  // a section's contents onto another of as many lines; any other is refused, saying how many
   function sectionPatch(source, target) {
-    if (!source?.phrases?.length || source.phrases.length !== target.phrases?.length)
-      throw new Error("Choose a section with the same number of phrases to paste these contents.");
+    const n = source?.phrases?.length || 0;
+    if (!n || n !== target.phrases?.length)
+      throw new Error(`These contents are ${n} line${n === 1 ? "" : "s"}: paste them into a section of ${n}.`);
     return Object.assign({}, ...source.phrases.map((p, i) => phrasePatch(p, target.phrases[i])));
   }
 
