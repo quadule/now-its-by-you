@@ -2,12 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "karaoke",
+      "name": "recorder",
       "runtimeExecutable": "uv",
       "runtimeArgs": [
         "run",
         "python",
-        "tools/karaoke.py",
+        "tools/recorder.py",
         "songs/h-now-its-by-you.json"
       ],
       "port": 8765,

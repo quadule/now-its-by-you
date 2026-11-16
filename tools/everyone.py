@@ -4,7 +4,7 @@
     uv run python tools/everyone.py --render renders/review/contest.flac   # ...and the song sung that way, packed
     uv run python tools/everyone.py --stamp                  # also a dated copy, for a site build (--phrasing FILE)
 
-The karaoke page's "everyone's way, blended, with the lineage choir" does the same (tools/karaoke.py
+The recording page's "everyone's way, blended, with the lineage choir" does the same (tools/recorder.py
 render); this is it from the command line, for the contest render after singing closes. Every take
 ticked to count (tools/takes.py) goes into the lead's blend, each person counting once at each place
 in the song. The choir's CHOIR voices are the singers, each their own way; with more singers than

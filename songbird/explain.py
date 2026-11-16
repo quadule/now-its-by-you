@@ -799,6 +799,14 @@ def tempo_card(v: Version) -> dict:
 
 def shape_card(v: Version) -> dict:
     genome = v.context.genome
+    from . import clips as clips_mod
+
+    if clips_mod.stored(v.params) is not None:  # a person's own sections: how many, and their names in order
+        song, params, _ = clips_mod.resolved(genome, v.params)
+        named = clips_mod.labels(song, params.form) or []
+        n = len(named)
+        return _card(v, "shape", "Shape", f"{n} section{'s' if n != 1 else ''}", " · ".join(named),
+                     [{"kind": "you", "text": "your own sections"}], ["form."], parts={}, choices=[])
     parts = edits_mod.shape(genome, v.params.form)
     generated = edits_mod.shape(genome, v.generated.form) or {}
     parent = edits_mod.shape(genome, v.without("both").form) or {}
@@ -1130,6 +1138,19 @@ def words_card(v: Version) -> dict:
     lean = v.params.leanings or {}
     bank = genome.source.get("bank")
     c = variation.character(v.voice)
+    from . import clips as clips_mod
+
+    if clips_mod.stored(v.params) is not None:  # a person's own sections: the song's words in them, a person's own, or none
+        from .arrange import seed_lyrics
+        from .composition import authored
+
+        song, params, lyrics = clips_mod.resolved(genome, v.params, v.lyrics)
+        written = any(authored(song, params, lyrics if lyrics is not None else seed_lyrics(song, params.form)))
+        drawn = any(clip["sung"] and any(line["of"] is not None for line in clip["lines"])  # its section's own line
+                    for clip in clips_mod.view(genome, v.params)["clips"])
+        value = ("the song's words, with lines of yours" if drawn and written else "the song's words" if drawn
+                 else "your own words" if written else "no words")
+        return _card(v, "words", "The words", value, "", [], ["words."])
     if v.lyrics is None or not bank:
         return _card(v, "words", "The words", "the song's own words", "",
                      [{"kind": "song", "text": "this song has no store of other verses to draw from"}], [])
@@ -1416,6 +1437,34 @@ def words_view(v: Version) -> list[dict]:
     return out
 
 
+def clip_words(cards: list[dict], sung: dict) -> list[dict]:
+    """The words cards of a song in clips, in its order (sung: its composition view; cards: words_view's, of the
+    source form): a section a clip, its lines the clip's own as they read (a blank line ""), and the card's choices of
+    words where the clip sings its source section's lines as they are."""
+    clips = sung["clips"]
+    form = clips["value"]["form"]
+    ids = [f"{name}:{form[:k].count(name)}" for k, name in enumerate(form)]
+    by_index = {c["index"]: c for c in cards}
+    out = []
+    for section in sung["sections"]:
+        clip = next((c for c in clips["clips"] if section["index"] in c["instances"]), None)
+        src = by_index.get(ids.index(clip["source"])) if clip and clip["source"] in ids else None
+        phrases = section["phrases"]
+        is_sung = bool(clip["sung"]) if clip else bool(section["sung"])
+        lines = [readable(bare(p.get("lyric_text") or "")) for p in phrases if p.get("lyric_path") or p.get("lyric_text")]
+        authored = [i for i, p in enumerate(phrases) if p.get("authored")]
+        own = (src is not None and is_sung and not authored and len(lines) == len(src["lines"])
+               and all(a.replace("-", "") == b.replace("-", "") for a, b in zip(lines, src["lines"])))
+        item = dict(src) if own else {"how": (src or {}).get("how", ""), "tags": (src or {}).get("tags", []), "note": "",
+                                      "block": None, "nth": None, "id": None, "changeable": False, "path": None}
+        item.update({"index": section["index"], "name": section["name"], "label": section["label"], "sung": is_sung,
+                     "lines": src["lines"] if own else lines if is_sung else src["lines"] if src else ["played"],
+                     "authored": authored, "mine": (own and bool(src.get("mine"))) or bool(authored),
+                     "blank": clip is not None and not clip["source"], "clip": clip["id"] if clip else None})
+        out.append(item)
+    return out
+
+
 def _instrumental(name: str, lead: str | None) -> str:
     who = f"the {player(lead)}" if lead else "the band"
     return {"intro": f"{who} plays the tune in", "turn": "the band turns a line of the refrain over",
@@ -1465,6 +1514,7 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
         cards.insert(4, extra)
     cards += other_cards(v)
     cards.append(machine_card(v, ctx.machine_label(), ctx.quiet))
+    sung = composition.view(ctx.genome, v.params, as_sung(ctx.genome, v.params, v.lyrics))
     if v.offset:  # the same choices today: what moving the day changed, the person's edits and all
         today = ctx.version({k: val for k, val in v.edits.items() if k not in ("date", "phrasing")}, v.voice)
         for card in cards:
@@ -1477,7 +1527,7 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
         "day": v.day, "offset": v.offset, "when": distance(v.offset), "date": long_date(v.day),
         "from": ctx.from_words(), "by": ctx.machine_label(),
         "roll": v.edits.get("roll", 0),
-        "words": words_view(v),
+        "words": clip_words(words_view(v), sung) if (sung.get("clips") or {}).get("stored") else words_view(v),
         "cards": cards,
         "edits": v.edits,
         "applied": v.applied,
@@ -1486,7 +1536,7 @@ def view(ctx: Context, v: Version, phrasings: list[dict] | None = None) -> dict:
         "problems": v.problems,
         "marks": v.marks,
         "form": list(v.params.form),
-        "composition": composition.view(ctx.genome, v.params, as_sung(ctx.genome, v.params, v.lyrics)),
+        "composition": sung,
     }
 
 

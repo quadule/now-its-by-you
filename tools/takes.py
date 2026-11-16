@@ -189,7 +189,7 @@ def remove(take: Take) -> list[Path]:
 
 def remove_singer(who: str, song: str | None = None) -> list[Path]:
     """Delete one singer's takes (by folder name) of a song, or of every song, with what measuring
-    them kept, their phrasings (renders/phrasing/<song>.<who>.json) and the karaoke's renders of the
+    them kept, their phrasings (renders/phrasing/<song>.<who>.json) and the recording page's renders of the
     machine singing their way; their folder too, once nothing else is in it (without a song,
     everything in it goes). A blend of everyone's phrasings keeps what it learned until it's made
     again. Returns what was deleted."""
@@ -234,7 +234,7 @@ def keep(song: str, singer: str, wav: bytes, score: Path, **info) -> Take:
 def keep_sung(song: str, singer: str, wav: bytes, guide: str, recorded: time.struct_time | None = None,
               **info) -> Take:
     """Save a take by singer, sung to a guide already kept here (by its digest):
-    one just sung in the karaoke, or one fetched from the online page. recorded:
+    one just sung on the recording page, or one fetched from the online page. recorded:
     when it was sung, in local time (default now); a second take in the same
     second gets -2, -3... after its time."""
     when = recorded or time.localtime()

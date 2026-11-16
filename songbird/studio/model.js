@@ -213,27 +213,9 @@
     if (op.op === "delete") return ids[Math.min(op.at, ids.length - 1)] ?? null;
     return null;
   }
-  // The Page's sections, in the song's order: the view's words cards (view.words), which describe the source form;
-  // a song in clips has a section a clip, its lines the clip's own as the composition sings them (a blank line ""),
-  // the card's choices of words where the clip sings its source section's lines as they are.
+  // The Page's sections, in the song's order: the view's words cards (a song in clips has its own: explain.clip_words)
   function pageWords(view) {
-    const words = view?.words || [], c = view?.composition, clips = c?.clips;
-    if (!clips?.stored) return words;
-    const form = clips.value?.form || [];
-    const ids = form.map((n, k) => `${n}:${form.slice(0, k).filter((x) => x === n).length}`);
-    return (c.sections || []).map((s) => {
-      const at = clipAt(clips, s.index), clip = at?.clip || null;
-      const src = clip?.source ? words.find((w) => w.index === ids.indexOf(clip.source)) || null : null;
-      const phrases = s.phrases || [], sung = clip ? !!clip.sung : !!s.sung;
-      const sungLines = phrases.filter((p) => p.lyric_path || p.lyric_text).map((p) => p.lyric_text || "");
-      const authored = phrases.flatMap((p, i) => (p.authored ? [i] : []));
-      const plain = (l) => String(l).replace(/-/g, "");  // (the composition's words are split as sung: num-bers)
-      const own = !!src && sung && !authored.length && sungLines.length === src.lines.length && sungLines.every((l, i) => plain(l) === plain(src.lines[i]));
-      const lines = own ? src.lines : sung ? sungLines : src ? src.lines : ["played"];
-      return { ...(own ? src : { how: src?.how || "", tags: src?.tags || [], note: "" }), index: s.index, name: s.name, label: s.label, sung, lines,
-        authored, mine: (own && !!src.mine) || authored.length > 0, blank: !!clip && !clip.source, clip: clip?.id || null,
-        ...(own ? {} : { block: null, nth: null, id: null, changeable: false, path: null }) };
-    });
+    return view?.words || [];
   }
   // which editor a cell of the grid opens: the singer's row the melody, a player's its own roll or step grid, the
   // chords row the melody's chords; none for the voices before, or a player the notes don't have
@@ -655,10 +637,11 @@
   // line does, and what can't be (a paragraph or a line too many, words that don't fit).
   function lyricSheetPatch(targets, blocks, count) {
     const patch = {}, lines = [], errors = [];
-    if (blocks.length > targets.length) errors.push({ message: `This song has ${targets.length} sections of words; this has ${blocks.length} paragraphs.` });
+    const many = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+    if (blocks.length > targets.length) errors.push({ message: `This song has ${many(targets.length, "sung section")}, not ${blocks.length}.` });
     blocks.slice(0, targets.length).forEach((block, b) => {
       const t = targets[b];
-      if (block.lines.length > t.phrases.length) errors.push({ block: b, message: `${t.label} has ${t.phrases.length} lines; this paragraph has ${block.lines.length}.` });
+      if (block.lines.length > t.phrases.length) errors.push({ block: b, message: `${t.label} has ${many(t.phrases.length, "line")}, not ${block.lines.length}.` });
       block.lines.slice(0, t.phrases.length).forEach((line, i) => {
         const p = t.phrases[i], n = count(line.text), entry = { block: b, line: i, at: line.at, label: t.label, text: line.text,
           syllables: n, want: p.syllable_count, changed: line.text !== p.lyric_text, fitted: false, paths: [] };

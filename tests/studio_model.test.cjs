@@ -303,7 +303,9 @@ test("a lyric sheet: paragraphs onto the song's sections of words in order, brac
   assert.equal(two.patch["line.verse:0.1"].notes.length, 4);
   assert.equal(two.lines[1].fitted, true);
   const many = M.lyricSheetPatch(targets, M.parseLyricSheet("a b c\nd e f\ng h i"), count);
-  assert.match(many.errors[0].message, /Verse 1 has 2 lines; this paragraph has 3/);
+  assert.match(many.errors[0].message, /^Verse 1 has 2 lines, not 3\.$/);
+  const one = M.lyricSheetPatch(targets.slice(1), M.parseLyricSheet("la la la\nla la la\n\nla la la"), count);
+  assert.deepEqual(one.errors.map((e) => e.message), ["This song has 1 sung section, not 2.", "Refrain has 1 line, not 2."], "one section, one line: no plural");
   const long = M.lyricSheetPatch(targets, M.parseLyricSheet(Array(20).fill("la").join(" ")), count);
   assert.match(long.errors[0].message, /Verse 1, line 1: These words need more room/);
 });
@@ -454,26 +456,3 @@ test("a blank line's words get notes: a syllable a beat where there's room, home
   assert.equal(sheet.patch["line.verse111:0.1"].notes.length, 5);
 });
 
-test("the Page follows the clips: a section a clip, its own lines, the card's choices only where it sings its source's", () => {
-  const card = (index, name, lines, extra = {}) => ({ index, name, label: name, sung: true, block: name, nth: 0, lines, how: "handed down", tags: [], mine: false, changeable: true, path: `words.${name}.0`, ...extra });
-  const words = [{ index: 0, name: "intro", label: "Intro", sung: false, lines: ["the whistle plays"] }, card(1, "verse", ["They saved it as *numbers*", "and sent it"]), card(2, "refrain", ["Who *sang* this?"])];
-  const ph = (text, extra = {}) => ({ lyric_path: "lyrics.x", own_path: "line.x", lyric_text: text, notes: text ? [{}] : [], authored: false, ...extra });
-  const clips = { stored: true, value: { form: ["intro", "verse", "refrain"], order: ["verse104", "verse102", "intro101", "refrain103"], clips: {} },
-    clips: [{ id: "intro101", source: "intro:0", sung: false, instances: [2] }, { id: "verse102", source: "verse:0", sung: true, instances: [1] },
-      { id: "refrain103", source: "refrain:0", sung: true, instances: [3] }, { id: "verse104", source: null, sung: true, instances: [0] }] };
-  const view = { words, composition: { clips, sections: [
-    { index: 0, name: "verse104", label: "Verse 1", sung: true, phrases: [ph(""), ph("")] },
-    { index: 1, name: "verse102", label: "Verse 2", sung: true, phrases: [ph("They saved it as *num-bers*"), ph("and sent it")] },
-    { index: 2, name: "intro101", label: "Intro", sung: false, phrases: [{}] },
-    { index: 3, name: "refrain103", label: "Refrain", sung: true, phrases: [ph("Who *sang* this?", { authored: true })] }] } };
-  const page = M.pageWords(view);
-  assert.deepEqual(page.map((w) => [w.index, w.label, w.sung, w.blank]), [[0, "Verse 1", true, true], [1, "Verse 2", true, false], [2, "Intro", false, false], [3, "Refrain", true, false]]);
-  assert.deepEqual(page[0].lines, ["", ""]);
-  assert.equal(page[0].block, null, "a blank section has no bank words to choose");
-  assert.deepEqual(page[1].lines, ["They saved it as *numbers*", "and sent it"]);
-  assert.equal(page[1].block, "verse", "its source's lines as they are: the card's choices");
-  assert.deepEqual(page[2].lines, ["the whistle plays"]);
-  assert.equal(page[3].block, null, "a person's line in it: its own lines, no bank choices");
-  assert.ok(page[3].mine);
-  assert.equal(M.pageWords({ ...view, composition: { ...view.composition, clips: { ...clips, stored: false } } }), words, "without stored clips: the cards as they are");
-});

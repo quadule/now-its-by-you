@@ -1,4 +1,4 @@
-"""What a singer hears while they sing along: the guide mixes of the karaoke and the studio's Sing view.
+"""What a singer hears while they sing along: the guide mixes of the recording page and the studio's Sing view.
 
     full     the song as the machine sings it: its singer and its band, mixed and mastered
     melody   the tune alone, on the band's whistle played plainly, over a quiet pulse: every sung
@@ -369,7 +369,7 @@ def _read(path: Path) -> dict:
 
 
 def _write(path: Path, text: str) -> None:
-    """Whole or not at all, whoever else is writing it (the karaoke and a site build may both be)."""
+    """Whole or not at all, whoever else is writing it (the recording page and a site build may both be)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     part = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.part")
     part.write_text(text)

@@ -93,7 +93,7 @@ def test_a_program_without_singings_files_says_where_to_sing(home, monkeypatch):
 
 def test_a_studio_on_this_computer_sings_without_being_asked(home, monkeypatch):
     """`songbird studio` takes the Sing view by default; shared, only with --web-singing; it never starts the
-    karaoke page."""
+    recording page."""
     made = []
 
     class Stop(Exception):
@@ -114,4 +114,4 @@ def test_a_studio_on_this_computer_sings_without_being_asked(home, monkeypatch):
             S.run(args)
         assert (made[-1].singing is not None) == sings
         made[-1].close()
-    assert not hasattr(made[-1], "karaoke")
+    assert not hasattr(made[-1], "karaoke") and not hasattr(made[-1], "recorder")

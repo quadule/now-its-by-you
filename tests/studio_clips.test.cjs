@@ -75,7 +75,7 @@ function song({ stored = false, extra = [] } = {}) {
     clips: rows.map(([name, clip, label, bars, sung], k) => ({
       id: clip, label, role: name, source: k < 3 ? `${name}:0` : null, sung, bars, instances: [k], authored: false,
       lines: k < 3 ? [{ phrase: `${name[0]}1`, of: 0, bars: bars / 2 }, { phrase: `${name[0]}2`, of: 1, bars: bars / 2 }] : [{ phrase: `${clip}-0`, of: null, bars: 2 }, { phrase: `${clip}-1`, of: null, bars: 2 }],
-      can: { delete: true, duplicate: true, repeat: true, lines: true } })),
+      can: { delete: true, duplicate: true, repeat: true } })),
   };
   return { sections, clips };
 }
@@ -187,9 +187,29 @@ test("Duplicate, Repeat and Delete in the column; Ctrl/⌘ D and Delete on a sec
   assert.equal(page.clipAsks().length, n + 2);
 });
 
+// score.js clipOp: an operation asked for while the song's first (the one that stores its clips) is still on its way
+// names its section by the id the grid gave then ("intro:0"); run after the first, placeOf looks that id up among the
+// stored clips' instances ("intro101:0"), finds nothing, and the operation is dropped without a word.
+test("an operation asked for while the first on a song without clips is on its way is done after it", { todo: "score.js placeOf: the id is resolved when the operation runs, not when it is asked for" }, async () => {
+  const page = studio();
+  await page.open();
+  let land;
+  page.setAnswer((body) => new Promise((resolve) => { land = () => resolve({ edits: { ...body.edits,
+    clips: { form: ["intro", "verse", "refrain"], order: ["intro101", "verse102", "verse104", "refrain103"], clips: {}, next: 105 } }, clip: "verse104" }); }));
+  page.region("verse:0").dispatch("click");
+  page.button("Duplicate").dispatch("click");
+  await settle();
+  page.setAnswer((body) => ({ edits: { ...body.edits, deleted: true }, clip: null }));
+  page.region("intro:0").dispatch("click");
+  page.button("Delete").dispatch("click");  // while the duplicate is on its way
+  land();
+  await settle();
+  assert.deepEqual(page.clipAsks(), [{ op: "duplicate", clip: "verse102", at: 2 }, { op: "delete", at: 0 }]);
+});
+
 test("a refused operation is disabled, its reason the engine's sentence", async () => {
   const view = song();
-  view.clips.clips[1].can = { delete: "a song needs one clip", duplicate: "the song has as many clips as it can", repeat: true, lines: true };
+  view.clips.clips[1].can = { delete: "a song needs one clip", duplicate: "the song has as many clips as it can", repeat: true };
   const page = studio(view);
   await page.open();
   page.region("verse:0").dispatch("click");

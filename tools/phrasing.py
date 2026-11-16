@@ -8,7 +8,7 @@
     uv run songbird render songs/h-now-its-by-you.json --phrasing renders/phrasing/h-now-its-by-you.milo.json
 
 Sung takes. Someone sings along to the guide (--guide) on headphones, usually
-through tools/karaoke.py, which keeps each singer's takes apart
+through tools/recorder.py, which keeps each singer's takes apart
 (tools/takes.py): the whole song, or one section at a time, a take of one
 section holding only its window of the guide and only the notes inside that
 measured (measure_window). A take is placed against the guide it was sung to

@@ -508,8 +508,7 @@ def view(genome, params) -> dict:
             "can": {"delete": True if len(value["order"]) > 1 else "a song needs one clip",
                     "duplicate": True if room and len(value["clips"]) < MAX_CLIPS and value["next"] <= LAST and more
                     else "the song has as many clips as it can",
-                    "repeat": True if room and more else "the song has as many clips as it can",
-                    "lines": True}})
+                    "repeat": True if room and more else "the song has as many clips as it can"}})
     return {"value": value, "stored": is_stored, "clips": out, "roles": list(ROLES),
             "bounds": {"instances": MAX_INSTANCES, "clips": MAX_CLIPS, "lines": MAX_LINES, "line_bars": LINE_BARS,
                        "clip_bars": CLIP_BARS, "song_bars": SONG_BARS, "label": LABEL}}

@@ -338,7 +338,7 @@ def test_new_invites_are_links_and_list_shows_them(site, capsys):
     assert site.invites[made[0]["token"]]["state"] == "revoked"
 
 
-def test_fetch_keeps_takes_like_the_karaoke_and_empties_the_server(site, tmp_path, capsys):
+def test_fetch_keeps_takes_like_the_recording_page_and_empties_the_server(site, tmp_path, capsys):
     token = I.new(site.api, 1, "Ana from choir", 7, 30)[0]["token"]
     pinned()  # its guide score and the release as it read, pinned when the site was built
     named = site.add_take(token, "20261001T100000Z", name="Ana María")
@@ -356,7 +356,7 @@ def test_fetch_keeps_takes_like_the_karaoke_and_empties_the_server(site, tmp_pat
     assert by[noted].info["credit"] is False and by[noted].info["credit_as"] == ""  # no name to credit
     assert (ana.info["shift_ms"], ana.info["device_ms"], ana.info["rate"]) == (12, 40, 48000)
     assert sf.info(ana.path).samplerate == 48000
-    assert K.takes("h-now-its-by-you", "ana-maria")[0].path == ana.path  # the karaoke and phrasing tools see it
+    assert K.takes("h-now-its-by-you", "ana-maria")[0].path == ana.path  # the recording page and phrasing tools see it
     assert "not in guides" not in capsys.readouterr().out  # its guide score and release are here
     assert I.fetch(site.api) == []  # nothing left to fetch
 
@@ -383,7 +383,7 @@ def test_fetch_one_invitation_under_a_chosen_name(site):
 
 def test_different_people_never_share_a_folder(site):
     a, b, c, d, e = (inv["token"] for inv in I.new(site.api, 5, "choir, Tuesday", 7, 30))
-    K.keep_sung("h-now-its-by-you", "Milo", b"RIFF-here", GUIDE)  # sung here, in the karaoke
+    K.keep_sung("h-now-its-by-you", "Milo", b"RIFF-here", GUIDE)  # sung here, on the recording page
     ja = site.add_take(a, "20261001T100000Z", name="Jo")
     jb = site.add_take(b, "20261001T100100Z", name="Jo")  # someone else called Jo
     ja2 = site.add_take(a, "20261001T100200Z", name="Jo")  # the first Jo again
@@ -537,7 +537,7 @@ def test_credit_only_by_a_name_they_gave_and_asked_to_be_credited_by(site):
 
 def test_a_person_keeps_one_folder_and_two_people_never_share_one(site):
     group = online(site, people=20, note="choir, Tuesday")
-    K.keep_sung(SONG, "Milo", b"RIFF-here", GUIDE)  # sung here, in the karaoke
+    K.keep_sung(SONG, "Milo", b"RIFF-here", GUIDE)  # sung here, on the recording page
     (K.ROOT / "renders" / "phrasing").mkdir(parents=True)
     I.phrasing_path(SONG, "daniel").write_text("{}")  # a reading's phrasing, by a synthetic voice called Daniel
     jo = site.add_singer(group, name="Jo")
@@ -558,7 +558,7 @@ def test_a_person_keeps_one_folder_and_two_people_never_share_one(site):
     assert by[d] == K.slug(f"Milo ({milo[:6]})") and by[e] == K.slug(f"Words ({words[:6]})")
     assert by[f] == K.slug(f"Daniel ({daniel[:6]})")
     assert by[g] == K.slug(f"choir, Tuesday ({blank[:6]})") != by[h] == K.slug(f"choir, Tuesday ({blank2[:6]})")
-    K.keep_sung(SONG, "Jo", b"RIFF-here", GUIDE)  # now someone called Jo sings here, in the karaoke
+    K.keep_sung(SONG, "Jo", b"RIFF-here", GUIDE)  # now someone called Jo sings here, on the recording page
     later = site.add_sung(jo, "20260926T232001Z")
     third = site.add_singer(group, name="Jo")
     theirs = site.add_sung(third, "20260926T232101Z")
@@ -637,7 +637,7 @@ def test_a_singer_who_withdraws_leaves_nothing_here(site, capsys):
     site.add_words(ana, "a verse", "2026-09-26T23:20:00.000Z")
     site.add_words(jo, "another", "2026-09-26T23:21:00.000Z")
     I.sync(site.api, make=False)
-    K.keep_sung(SONG, "Jo", b"RIFF-here", GUIDE)  # a karaoke singer called Jo, in Jo's folder
+    K.keep_sung(SONG, "Jo", b"RIFF-here", GUIDE)  # a singer called Jo on the recording page, in Jo's folder
     takes = kept()
     for t in takes.values():
         for f in I.measurements(t.path):
@@ -647,7 +647,7 @@ def test_a_singer_who_withdraws_leaves_nothing_here(site, capsys):
     for who in ("ana", "jo", "lee", "everyone"):
         I.phrasing_path(SONG, who).write_text("{}")
         I.karaoke_render(SONG, who).write_bytes(b"fLaC")
-    I.phrasing_path(SONG, "choir.1").write_text("{}")  # the karaoke's choir: a blend of several singers
+    I.phrasing_path(SONG, "choir.1").write_text("{}")  # the recording page's choir: a blend of several singers
     solo, sung = I.karaoke_render(SONG, "jo"), I.karaoke_render(SONG, "plain")  # Jo's way alone; its own with the choir
     solo.with_suffix(".json").write_text(json.dumps({"choir_phrasings": None}))
     sung.write_bytes(b"fLaC")

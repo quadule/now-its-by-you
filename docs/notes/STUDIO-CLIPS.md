@@ -168,8 +168,8 @@ Read (`/api/song`, `composition`):
   bool, "clips": [{"id", "label", "role", "source" (a source section id or
   null), "sung", "bars", "lines" (each `{"phrase", "of", "bars"}`), "instances" (indexes in sections),
   "authored" (bool: the clip has words, notes, chords, parts or arrangement of
-  a person's), "can": {"delete", "duplicate", "repeat", "lines"}: true, or why
-  not}], "roles": [...], "bounds": {...}}`.
+  a person's), "can": {"delete", "duplicate", "repeat"}: true, or why
+  not; a clip's lines change within `bounds`}], "roles": [...], "bounds": {...}}`.
 - each section: `id` (`verse102:0`), `clip` (`verse102`), `instance` (0, 1...),
   `label`, and its phrases with the fields the editor reads already
   (`own_path`, `lyric_path`, `place`, `chords_path`, `part_key`, `bounds`,
@@ -246,19 +246,22 @@ What the score (`songbird/studio/score.js`, its pure parts in `model.js`) does w
 - **A blank sung line** opens empty in the melody roll: a note drawn into it, or **Write words**, starts its draft;
   words written first get notes (`model.js` `blankTune`: a syllable a beat where there's room, from the third up to
   the fifth and home to the tonic). On the Page it is an empty field; its words take their notes with them
-  (`line.`). The Page and its lyric sheet are the clips in order (`model.js` `pageWords`), a linked repeat written
-  once; a clip that sings its source's lines as they are keeps the bank's choices of words.
+  (`line.`). The Page and its lyric sheet are the clips in order (the view's `words`, `explain.clip_words`), each
+  line as it reads (no syllable hyphens, no says), a linked repeat written once; a clip that sings its source's
+  lines as they are keeps the bank's choices of words.
 - **Tools → Empty song** (`op empty`), once confirmed: one blank verse of 8 bars and 4 lines; key, tempo, style and
   band as they were.
-- **The Shape** with clips says the sections are Arrange's; its Reset is `clips: null`.
+- **The Shape** with clips is how many sections and their names in order, said to be Arrange's; its Reset is
+  `clips: null`. **The words** card says whose words the sections sing: the song's, with lines of yours, your own,
+  or none.
 - **Section contents** paste only into a section of as many lines (refused, saying how many); a blank line's
   contents are its chords and players' notes.
 
 ## Not changed by clips
 
-- The page's Words cards (which bank verse, couplet and stanza each section
-  draws) describe the source form: they choose the generated layer the clips
-  sing from.
+- The bank's choices of words (which verse, couplet and stanza each section
+  draws) are the source form's: they choose the generated layer the clips sing
+  from, and a clip that sings its source's lines offers its source's.
 - A whole render's record keeps the source form in `params.form` and the
   arrangement beside it; its lyric sheet is read from the score, as a record
   with a person's lines has it.

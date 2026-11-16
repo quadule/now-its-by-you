@@ -16,14 +16,14 @@ What it writes, all served by web/sing/src/worker.js:
                                       (pack.with_cover: the same audio, packet and id), and seed/words.json its words
                                       as it sang them, timed (seed_words()), shown as it plays
     seed/now-its-by-you-<date>.flac   every edition's file, as /history (history.html) offers them, newest first
-    karaoke.js, recorder.js           the timing core they share with the karaoke here (tools/karaoke.js)
+    karaoke.js, recorder.js           the timing core they share with the recording page here (tools/karaoke.js)
     song/song.json                    what's on offer (v2): the sets, keys and speeds, and for every spec
                                       its guide score's digest, its words' file, and each mix's MP3 and
                                       its length; the releases' digests. Small, as a phone reads it first.
                                       And each spec's earlier guides that place a take exactly as this one
                                       does ("was", earlier()): the worker takes a take sung to one of them
     song/<spec>.json                  a spec's words and notes as they come, its beats, and its sections,
-                                      each sung one with its window for recording it alone (karaoke.lyrics);
+                                      each sung one with its window for recording it alone (karaoke_words.lyrics);
                                       and each mix's opening loudness ("opening"), so the page can tell if
                                       an MP3 decoder put silence in front: fetched only for the spec chosen
     song/<spec>.<mix>.mp3             its guides (tools/guides.py), melody and full, encoded with ffmpeg in
@@ -40,7 +40,7 @@ Every spec is a set (tools/sets/<song>.json) in every key and at every speed
 renders/guide/<song>/, where each spec's MP3s are kept too, and used again while
 what they were made from holds: a build of fewer specs, or with a release changed,
 renders nothing. Once encoded, a spec's WAVs are let go (--keep-wavs keeps them for
-the karaoke here, about 130 MB a spec). A full build of H (6 sets, 90 specs) takes
+the recording page here, about 130 MB a spec). A full build of H (6 sets, 90 specs) takes
 about half an hour on this machine (--jobs 4, 32 GB).
 
 The worker serves song/ only to an open invitation. Each guide score is kept in
@@ -279,7 +279,7 @@ def render(job: dict) -> dict:
     beside the spec's mixes in renders/guide/<song>/ with a note of what it was made from
     (guides.made_from) and at which bitrates, and used again while that holds; otherwise the
     mixes are rendered (or found current) and encoded. Then, unless asked to keep them, the
-    spec's WAVs are let go (about 130 MB a spec; the karaoke renders them again when asked).
+    spec's WAVs are let go (about 130 MB a spec; the recording page renders them again when asked).
     Runs in a process of its own, so it's told where everything is."""
     M.GUIDES, M.SETS = Path(job["guides"]), Path(job["sets"])
     genome_path, spec, song = Path(job["genome"]), M.Spec.parse(job["spec"]), Path(job["out"]) / "song"
@@ -318,10 +318,10 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
     sets, keys, tempos: build only these (default all). jobs: specs rendered at once, each in a
     process of its own. phrasing:
     a phrasing file the machine's lead sings the full guides with. progress, if given, is told
-    each spec as it's done. keep_wavs: keep each spec's rendered mixes for the karaoke here
+    each spec as it's done. keep_wavs: keep each spec's rendered mixes for the recording page here
     (render()). preview: a render of the song as it stands (tools/everyone.py --render), put on
     the page as an MP3 for singers to hear before they sing (song.json "preview")."""
-    import karaoke  # tools/karaoke.py, for the words as they come
+    import karaoke_words  # tools/karaoke_words.py, for the words as they come
 
     from songbird import genome as G
 
@@ -377,7 +377,7 @@ def build(genome_path: Path, out: Path, rebuild: bool = False, bitrate: str = BI
         # each mix's opening loudness travels with the spec's words, fetched only when the spec is chosen:
         # in song.json, 90 specs' curves came to megabytes that a phone read before anything else
         opening = {mix: {"frame": m["frame"], "env": m["env"]} for mix, m in result["mixes"].items()}
-        words_json = {**karaoke.lyrics(data, genome.title, data["tempo"]), "guide": guide, "spec": data["spec"],
+        words_json = {**karaoke_words.lyrics(data, genome.title, data["tempo"]), "guide": guide, "spec": data["spec"],
                       "opening": opening}
         (out / "song" / f"{spec.id}.json").write_text(json.dumps(words_json, separators=(",", ":")) + "\n")
         mixes = {mix: {k: v for k, v in m.items() if k not in ("frame", "env")} for mix, m in result["mixes"].items()}
@@ -513,7 +513,7 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
     so a take sung to one of them, from a page loaded before this build was published, is measured
     against what its singer heard, and lies on this guide's timeline for their version: the worker
     takes it rather than asking them to reload and sing it again."""
-    import karaoke  # tools/karaoke.py
+    import karaoke_words  # tools/karaoke_words.py
 
     found: dict[str, list[str]] = {spec: [] for spec in now}
     for f in sorted(K.GUIDES.glob(f"{song}.*.score.json"), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -525,7 +525,7 @@ def earlier(song: str, title: str, now: dict[str, tuple[str, list]]) -> dict[str
         if spec not in now or named[1] == now[spec][0] or len(found[spec]) >= EARLIER:
             continue
         try:
-            same = placement(karaoke.lyrics(data, title, data["tempo"])) == now[spec][1]
+            same = placement(karaoke_words.lyrics(data, title, data["tempo"])) == now[spec][1]
         except (KeyError, TypeError, ValueError):  # a score from before sections had windows
             same = False
         if same:
@@ -779,7 +779,7 @@ def seed_words(flac: Path) -> dict | None:
     import tempfile
     from dataclasses import replace
 
-    import karaoke  # tools/karaoke.py
+    import karaoke_words  # tools/karaoke_words.py
     from songbird import genome as G, pack as P, phrasing as PH, variation
     from songbird.arrange import Lyrics
     from songbird.realize import Params, realize
@@ -799,7 +799,7 @@ def seed_words(flac: Path) -> dict | None:
                                   choir=[PH.from_json(d) for d in choir], lyrics=lyrics), params).to_dict()
     if P.words_as_sung(score, genome.title) != sung:
         return None
-    lines = karaoke.lyrics(score, genome.title, params.tempo)["lines"]
+    lines = karaoke_words.lyrics(score, genome.title, params.tempo)["lines"]
     return {"duration": round(float(record.get("duration") or score["duration"]), 3),
             "lines": [[round(line["start"], 3), round(line["end"], 3),
                        [[s["text"], round(s["start"], 3), round(s["end"], 3), int(s["word_end"])] for s in line["syllables"]]]
@@ -882,8 +882,8 @@ def main() -> None:
                     help="build only the pages (the home page, the history, their files) over the site as it was "
                          "last built, keeping its guides, or without guides if none was built here: seconds, not a render")
     ap.add_argument("--keep-wavs", action="store_true",
-                    help="keep every spec's rendered mixes for the karaoke here (about 130 MB a spec; else let go once "
-                         "encoded, and rendered again when the karaoke asks)")
+                    help="keep every spec's rendered mixes for the recording page here (about 130 MB a spec; else let go once "
+                         "encoded, and rendered again when the recording page asks)")
     ap.add_argument("--allow-missing-editions", action="store_true",
                     help="build without an edition this checkout lacks (left out, said) in place of stopping")
     args = ap.parse_args()

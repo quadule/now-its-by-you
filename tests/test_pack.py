@@ -620,7 +620,7 @@ def test_a_packet_carries_singing_and_its_program_runs_without_it(rendition, tmp
     assert {f"program/tools/{n}" for n in sing_bundle.TOOLS} | {f"program/webstudio/{n}" for n in sing_bundle.WEBSTUDIO} <= names
     assert {"program/web/studio-wasm/world/world.wasm", "program/web/studio-wasm/world/LICENSE.txt",
             "program/webstudio/sing.js", "program/tools/karaoke.js"} <= names
-    assert "program/tools/karaoke.py" not in names  # the artist's own singing page stays in the checkout
+    assert "program/tools/recorder.py" not in names  # the artist's own recording page stays in the checkout
     bare = tmp_path / "bare"
     (bare / "songbird").mkdir(parents=True)
     (bare / "songbird" / "__init__.py").write_text("")

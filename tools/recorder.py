@@ -1,8 +1,8 @@
-"""Karaoke: sing along to a song's guide and record takes for your phrasing (dev-only).
+"""The recording page: sing along to a song's guide and record takes for measuring your phrasing (dev-only).
 
-    uv run python tools/karaoke.py songs/h-now-its-by-you.json      # then open http://127.0.0.1:8765
+    uv run python tools/recorder.py songs/h-now-its-by-you.json      # then open http://127.0.0.1:8765
 
-A small server on this machine only. It serves one page (tools/karaoke.html)
+A small server on this machine only. It serves one page (tools/recorder.html)
 that plays a guide, shows the words as they come, and records the
 microphone in the same audio clock as the playback, so every take lines up
 with the guide exactly. The guide is the tune alone on a whistle over a quiet
@@ -56,10 +56,10 @@ PAGE = Path(__file__).with_suffix(".html")
 # what the page shares with the online one (web/sing): its timing, sync and drawing, and the take recorder
 SLOWER = 90  # the speed a singer starts at, a little slower than written (the artist's choice; as tools/sing_site.py)
 CHOIR = 3  # the choir's voices: its harmony has three lines, and more voices would only double them lower
-lyrics, sections, first_line, written, window, per_bar = (  # the karaoke's own names for them
+lyrics, sections, first_line, written, window, per_bar = (  # the recording page's own names for them
     karaoke_words.lyrics, karaoke_words.sections, karaoke_words.first_line, karaoke_words.written,
     karaoke_words.window, karaoke_words.per_bar)
-SCRIPTS = {"/karaoke.js": Path(__file__).with_suffix(".js"), "/recorder.js": Path(__file__).with_name("karaoke-recorder.js")}
+SCRIPTS = {"/karaoke.js": Path(__file__).with_name("karaoke.js"), "/recorder.js": Path(__file__).with_name("karaoke-recorder.js")}
 
 
 def where(score: dict, query: dict) -> dict:
@@ -104,7 +104,7 @@ def credited(takes: list) -> str | None:
     return takes[-1].info.get("credit_as", takes[-1].singer) or None
 
 
-class Karaoke(BaseHTTPRequestHandler):
+class Recorder(BaseHTTPRequestHandler):
     genome_path: Path
     genome = None
     phrasing: Path | None = None  # what the machine sings the specs' full guides with (--phrasing)
@@ -316,11 +316,11 @@ def main() -> None:
     ap.add_argument("--phrasing", help="a phrasing file the machine's singer sings the specs' full guides with, "
                                        "everyone's say (the words and the takes stay on the grid)")
     args = ap.parse_args()
-    Karaoke.phrasing = Path(args.phrasing).resolve() if args.phrasing else None
-    Karaoke.genome_path = Path(args.genome).resolve()
-    Karaoke.genome = G.load(Karaoke.genome_path)
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Karaoke)
-    print(f"Karaoke for {Karaoke.genome.title}: open http://127.0.0.1:{args.port}  (Ctrl-C to stop)")
+    Recorder.phrasing = Path(args.phrasing).resolve() if args.phrasing else None
+    Recorder.genome_path = Path(args.genome).resolve()
+    Recorder.genome = G.load(Recorder.genome_path)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), Recorder)
+    print(f"Recording {Recorder.genome.title}: open http://127.0.0.1:{args.port}  (Ctrl-C to stop)")
     server.serve_forever()
 
 

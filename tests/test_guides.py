@@ -1,4 +1,4 @@
-"""The karaoke's guides: one score, three mixes (tools/guides.py)."""
+"""The recording page's guides: one score, three mixes (tools/guides.py)."""
 
 import json
 import sys

@@ -6,7 +6,7 @@
 // A module the studio adds to its page only when it takes singing (--web-singing, or the site built for the device).
 // It reaches the studio's page through window.songbirdStudio (studio.js's last section) and window.SongbirdScore (the
 // views), and reuses the karaoke's timing, drawing and take recorder (tools/karaoke.js, tools/karaoke-recorder.js)
-// rather than its own: a take here is cut, synced and written exactly as one sung in the karaoke or on the online
+// rather than its own: a take here is cut, synced and written exactly as one sung on the recording page or the online
 // page, so it is measured the same way.
 //
 // The guide is made from the version as the page has it each time the view is opened or the version changes (POST
@@ -79,7 +79,7 @@ function build() {
   const line = tool.querySelector("p");
   line.textContent = "The song learns your timing.";
   line.removeAttribute("title");
-  const old = $("sing"), button = old.cloneNode(true);  // the studio's own listener (the karaoke page) stays with the old one
+  const old = $("sing"), button = old.cloneNode(true);  // the studio's own listener (where else to sing) stays with the old one
   button.textContent = "Sing";
   old.replaceWith(button);
   button.addEventListener("click", () => {
