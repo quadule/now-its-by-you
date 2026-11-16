@@ -149,9 +149,20 @@ def lineage(parent: dict | None) -> dict:
             "ancestry": [*(parent.get("ancestry") or []), parent.get("id")]}
 
 
+# Singing in the studio (docs/WEB-SINGING.md): the Sing view, the measuring process and what it imports, and WORLD
+# in wasm with its licence (webstudio/standins.py: where pyworld isn't installed). The song's program runs without
+# any of it; a studio takes singing when it is here.
+SINGING = tuple(f"tools/{n}" for n in ("phrasing.py", "speech_to_song.py", "align.py", "takes.py", "guides.py",
+                                        "intelligibility.py", "karaoke_words.py", "wer_suite.py", "karaoke.js",
+                                        "karaoke-recorder.js")) + \
+    tuple(f"webstudio/{n}" for n in ("__init__.py", "kit.py", "worker.py", "guide.py", "singing.py", "standins.py",
+                                     "world_wasmtime.py", "sing.js", "sing.css", "released.json")) + \
+    ("web/studio-wasm/py/sing_dtw.py", "web/studio-wasm/world/world.wasm", "web/studio-wasm/world/LICENSE.txt")
+
+
 def program_files(root: Path = ROOT) -> dict[str, bytes]:
     """The program as it travels: every file of the songbird package (source and data, without caches),
-    and pyproject.toml, under program/."""
+    pyproject.toml, and singing's files where they are (SINGING), under program/."""
     files = {}
     for path in sorted((root / "songbird").rglob("*")):
         rel = path.relative_to(root)
@@ -161,6 +172,9 @@ def program_files(root: Path = ROOT) -> dict[str, bytes]:
         files[f"program/{rel.as_posix()}"] = path.read_bytes()
     for name in ("pyproject.toml", "LICENSE", "CREDITS.md"):  # the license and the credits travel with the program
         if (root / name).exists():
+            files[f"program/{name}"] = (root / name).read_bytes()
+    for name in SINGING:
+        if (root / name).is_file():
             files[f"program/{name}"] = (root / name).read_bytes()
     total = sum(len(b) for b in files.values())
     if total > LIMIT:

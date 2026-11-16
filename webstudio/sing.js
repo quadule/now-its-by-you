@@ -56,16 +56,16 @@ const WORDS = {
   device: [  // measured in this browser: the consent's own version (studio_device.py DEVICE_CONSENT)
     ["Your singing is recorded and measured on this device, then deleted. It is not sent anywhere.",
       "It is not saved, played to anyone or used to copy a voice. A take waits in this page's memory until you use it or record again."],
-    ["What is kept, in this browser, is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it.",
-      "They stay in this browser until you choose Forget my singing."],
+    ["What is kept, in this browser, is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it, and their averages over notes alike.",
+      "The averages sing the notes you didn't sing. They stay in this browser until you choose Forget my singing."],
     ["A version you share contains those numbers and no recording of you. Forget my singing deletes them from this browser.",
       "It can't remove them from a version you already exported or shared."],
   ],
   server: [  // measured on the computer serving the studio (webstudio/singing.py CONSENT)
     ["Your take is sent to the computer that runs this studio, measured there, then deleted.",
       "It is not saved, played to anyone or used to copy a voice."],
-    ["What is kept is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it.",
-      "They are stored in this browser and on the computer that runs this studio, with no name or address attached. That copy is deleted {days} days after its last use."],
+    ["What is kept is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it, and their averages over notes alike.",
+      "The averages sing the notes you didn't sing. They are stored in this browser and on the computer that runs this studio, with no name or address attached. That copy is deleted {days} days after its last use."],
     ["A version you export contains those numbers and no recording of you. Forget my singing deletes them.",
       "From this browser and from the computer that runs this studio. It can't remove them from a file you already exported."],
   ],
@@ -125,6 +125,9 @@ function build() {
       h("h3", {}, "Your way"),
       h("p", { class: "sing-portrait", id: "singPortrait" }),
       h("p", { class: "hint", id: "singTakes" }),
+      h("p", { class: "hint", id: "singApplies", hidden: true }),
+      h("label", { class: "check hint", id: "singHabitsLine", hidden: true, title: "Notes you didn't sing take how you sang notes like them. Without this, the singer sings them its own way." },
+        h("input", { type: "checkbox", id: "singHabits" }), " Your way on notes you didn't sing"),
       h("div", { class: "actions" },
         h("button", { class: "btn primary", type: "button", id: "singHear" }, "▶ Hear it"),
         h("button", { class: "btn", type: "button", id: "singToRecord" }, "Export"),
@@ -167,6 +170,7 @@ function build() {
   $("singHear").addEventListener("click", () => ST.listen("you", null));
   $("singToRecord").addEventListener("click", () => ST.revealRecording(true));
   $("singForget").addEventListener("click", forget);
+  $("singHabits").addEventListener("change", habits);
   K.fullScreen($("singStage"), $("singFull"), () => { if (S.mode === "idle" && S.view) resting(); });
   document.addEventListener("keydown", (e) => {
     if (e.code === "Space" && S.mode !== "idle" && !["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) {
@@ -219,8 +223,9 @@ function asking() {
   // the version's edits but the way it's sung (a phrasing moves no note of the tune: the guide is on its grid)
   const edits = { ...ST.state.edits };
   delete edits.phrasing;
+  const way = S.which === "page" ? (kept().phrasing || {}).name : null;  // how much of it this version takes
   return { which: S.which, speed: Number($("singSpeed").value), key: Number($("singKey").value),
-           edits: S.which === "page" ? edits : {} };
+           edits: S.which === "page" ? edits : {}, ...(way ? { way } : {}) };
 }
 
 async function guideWords() {
@@ -241,6 +246,8 @@ async function guideWords() {
   if (S.asked !== sig) return;
   const was = S.part;
   S.lyrics = lyrics;
+  S.applies = lyrics.applies || null;
+  showYours();
   S.sections = K.sungSections(lyrics);
   const same = was && was.index !== null ? S.sections.find((s) => s.name === was.name && s.title === was.title) : null;
   choosePart(was && was.index === null ? null : same ? same.index : S.sections.length ? S.sections[0].index : null, !!was);
@@ -578,11 +585,30 @@ async function measure() {
   }
   if (result.refused) { say(result.refused, true); return; }
   const measurements = [...earlier, result.measurement];
-  keep({ measurements, phrasing: { name: result.name, json: result.phrasing, portrait: result.portrait } });
-  own(result.name, result.phrasing);
-  ST.setEdit("phrasing", result.name, "Sing it your way");
+  keep({ measurements, phrasing: { name: result.name, exact: result.exact || null, json: result.phrasing, portrait: result.portrait } });
+  S.applies = result.applies || null;
+  own(chosen(), result.phrasing);
+  ST.setEdit("phrasing", chosen(), "Sing it your way");
   showYours();
   say("The song follows your timing now.");
+}
+
+function chosen() {
+  // the way the song is sung: with the singer's habits on notes they didn't sing, unless they turned that off
+  const p = kept().phrasing || {};
+  return kept().habits === false && p.exact ? p.exact : p.name;
+}
+
+function said(a) {
+  // how much of the way this version takes, plainly: "38 notes as you sang them, 12 by your habits, 3 the singer's"
+  if (!a) return "";
+  const n = (k) => `${k} note${k === 1 ? "" : "s"}`;
+  const parts = [];
+  if (a.sung) parts.push(`${n(a.sung)} as you sang them`);
+  if (a.matched) parts.push(`${n(a.matched)} as you sang them before the line changed`);
+  if (a.habit) parts.push(`${n(a.habit)} the way you sing notes like them`);
+  if (a.none) parts.push(`${n(a.none)} the singer's own way`);
+  return parts.length ? `In this version: ${parts.join(", ")}.` : "";
 }
 
 function own(name, json) {
@@ -602,6 +628,19 @@ function showYours() {
   $("singPortrait").title = portrait.includes("\nTake ") ? portrait : "";
   $("singTakes").textContent = `From ${n} take${n === 1 ? "" : "s"}.`;
   $("singTakes").title = `Each take you use joins it, up to ${MAX_TAKES}.`;
+  const line = said(S.applies);
+  $("singApplies").textContent = line;
+  $("singApplies").hidden = !line;
+  $("singHabitsLine").hidden = !k.phrasing.exact;
+  $("singHabits").checked = k.habits !== false;
+}
+
+function habits() {
+  keep({ habits: $("singHabits").checked ? null : false });
+  if (ST.state.edits.phrasing && ST.state.edits.phrasing.startsWith("sung-")) {
+    own(chosen(), (kept().phrasing || {}).json);
+    ST.setEdit("phrasing", chosen(), "Sing it your way");
+  }
 }
 
 async function forget() {
@@ -614,11 +653,14 @@ async function forget() {
   }
   delete button.dataset.sure;
   button.textContent = "Forget my singing";
-  const name = (kept().phrasing || {}).name;
-  try { if (name) await ST.api("/api/sing/forget", { name }); } catch (e) { say(`It couldn't be forgotten: ${e.message}`, true); return; }
-  keep({ measurements: null, phrasing: null });
+  const { name, exact } = kept().phrasing || {};
+  try {
+    for (const n of [name, exact]) if (n) await ST.api("/api/sing/forget", { name: n });
+  } catch (e) { say(`It couldn't be forgotten: ${e.message}`, true); return; }
+  keep({ measurements: null, phrasing: null, habits: null });
+  S.applies = null;
   ST.ownPhrasings.splice(0, ST.ownPhrasings.length);
-  if (ST.state.edits.phrasing === name) ST.setEdit("phrasing", null, "Forget my singing");
+  if (ST.state.edits.phrasing && [name, exact].includes(ST.state.edits.phrasing)) ST.setEdit("phrasing", null, "Forget my singing");
   else ST.renderCards();
   showYours();
   say("Forgotten.");
@@ -631,14 +673,15 @@ async function restore() {
   // fingerprint for a while after it was last used; this browser is where it lives)
   const k = kept();
   if (!k.phrasing || !k.phrasing.json) return;
-  own(k.phrasing.name, k.phrasing.json);
+  own(chosen(), k.phrasing.json);
   try {
+    const was = chosen();
     const r = await ST.api("/api/sing/keep", { phrasing: k.phrasing.json });
-    if (r.name !== k.phrasing.name) {
-      keep({ phrasing: { ...k.phrasing, name: r.name, json: r.phrasing } });
-      own(r.name, r.phrasing);
-      if (ST.state.edits.phrasing === k.phrasing.name) ST.setEdit("phrasing", r.name, "Sing it your way");
-    } else if (ST.state.edits.phrasing === r.name) {
+    if (r.name !== k.phrasing.name || (r.exact || null) !== (k.phrasing.exact || null)) {
+      keep({ phrasing: { ...k.phrasing, name: r.name, exact: r.exact || null, json: r.phrasing } });
+      own(chosen(), r.phrasing);
+      if (ST.state.edits.phrasing === was) ST.setEdit("phrasing", chosen(), "Sing it your way");
+    } else if (ST.state.edits.phrasing === chosen()) {
       ST.refresh();
     }
   } catch (e) { /* the studio says why on its card */ }
@@ -658,6 +701,24 @@ function offered() {
   $("singWhich").hidden = !o.released;
 }
 
+function offerFetch(f) {
+  // what measuring lacks on this computer, fetched once when the person asks (webstudio/standins.py): what, how big,
+  // from where and into where, said before anything is fetched
+  const button = h("button", { class: "btn primary", type: "button" }, `Fetch it (about ${f.mb} MB)`);
+  const line = h("p", { class: "hint" }, `It fetches ${f.what} from ${f.from} into ${f.into}, once. Nothing is installed into your system.`);
+  $("singWhy").after(line, h("div", { class: "actions" }, button));
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Fetching…";
+    let o;
+    try { o = await ST.api("/api/sing/fetch", {}); } catch (e) { o = { available: false, why: e.message }; }
+    if (o.available) { location.reload(); return; }
+    $("singWhy").textContent = o.why || "Singing couldn't be set up here.";
+    line.remove();
+    button.parentElement.remove();
+  });
+}
+
 async function init() {
   build();
   try { S.offer = await ST.api("/api/sing/offer"); } catch (e) { S.offer = { available: false, why: e.message }; }
@@ -670,6 +731,7 @@ async function init() {
   if (!S.offer.available) {
     $("singWhy").textContent = S.offer.why || "Singing isn't available here.";
     $("singNote").textContent = $("singWhy").textContent;
+    if (S.offer.fetch) offerFetch(S.offer.fetch);
     return;
   }
   $("singWhy").hidden = true;

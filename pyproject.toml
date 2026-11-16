@@ -31,6 +31,7 @@ dev = [
     "faster-whisper>=1.2.1",
     "pyworld>=0.3.5",
     "setuptools<81",
+    "wasmtime>=50.0.1",
 ]
 # Singing in a studio run from a checkout (webstudio/, songbird studio --web-singing): measuring a sung take.
 # Never in a packet; studio.itsby.you measures in the browser instead. No speech recogniser: sung takes don't need one.

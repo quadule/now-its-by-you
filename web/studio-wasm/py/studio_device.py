@@ -45,7 +45,7 @@ from songbird import studio as studio_mod
 from songbird.studio import Busy, NotFound, Studio
 
 NOT_YET = "Singing here isn't available yet."
-DEVICE_CONSENT = 4  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
+DEVICE_CONSENT = 6  # the consent's version on the device (webstudio.singing.CONSENT is the server's): its words differ
 THINKING = 300.0  # seconds the program may take to read a version brought here: a server's 40 is for its own CPU, and
 # a slow phone shouldn't be refused for being slow
 KEY = b"songbird-device"  # a version's id here: not secret (there is no one to hide it from on one's own device)

@@ -605,7 +605,8 @@ def clean_params(data, genome) -> dict:
 
 def _phrasing(v, what: str):
     """A way of singing as a record carries it (phrasing.to_json), rebuilt from its numbers alone: every gesture
-    held to its bounds (phrasing.reduce), nothing else of it kept."""
+    held to its bounds (phrasing.reduce), its lines and habits to theirs (phrasing.checked_extras), nothing else
+    of it kept."""
     from . import phrasing as phrasing_mod
 
     if v is None:
@@ -625,8 +626,9 @@ def _phrasing(v, what: str):
         for r in rows:
             for x in r:
                 _number(x, what)
+    extras = {k: v[k] for k in ("lines", "habits") if v.get(k)}  # a person's lines and habits, checked as read
     try:
-        return phrasing_mod.to_json(phrasing_mod.from_json({"fields": names, "phrases": v["phrases"]}))
+        return phrasing_mod.to_json(phrasing_mod.from_json({"fields": names, "phrases": v["phrases"], **extras}))
     except Exception as e:  # noqa: BLE001
         raise Refused(f"Its record's {what} isn't one this program reads: {_why(e)}") from None
 

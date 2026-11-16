@@ -93,7 +93,7 @@ def phrased(phrasing, k: float):
             early=g.early * k, hold=1.0 - (1.0 - g.hold) * min(k, 1.0), level=g.level * k, swell=g.swell * k,
             scoop=g.scoop * k, bend=g.bend * k, fall=g.fall * k, vibrato=g.vibrato * k if g.vibrato >= 0 else -1.0,
             tune=g.tune * k))
-    return {pid: tuple(one(g) for g in row) for pid, row in phrasing.items()}
+    return phrasing_mod.mapped(phrasing, one)
 
 
 # ---------------------------------------------------------------- where things fall

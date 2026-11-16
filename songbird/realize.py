@@ -18,7 +18,7 @@ from . import heteronyms
 from . import variants as variants_mod
 from .band import Band
 from .genome import Genome, Meter, Phrase, sung_words, turn
-from .phrasing import Gesture, Phrasing, gesture
+from .phrasing import Gesture, Phrasing, gesture, shape as note_shape, sung_gesture
 from .score import Note, Score
 from . import style as style_mod
 from .style import Style
@@ -365,14 +365,18 @@ def timeline(genome: Genome, params: Params) -> Clock:
 
 
 def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | None = None,
-            choir: list[Phrasing | None] | None = None, lyrics=None) -> Score:
+            choir: list[Phrasing | None] | None = None, lyrics=None, told: list | None = None) -> Score:
     """The timed score. With a phrasing, the voice sings each note its way:
     early or late against the grid, held longer or shorter, and carrying the
     note's gesture on to the singer for loudness and pitch. choir: a phrasing
     for each lineage voice that joins in (None, or missing: that voice follows
     the lead's timing with no gestures of its own). lyrics: words drawn from
     the song's bank for this form (arrange.Lyrics), sung in place of the seed's
-    verses and fixed blocks; without them the seed's own words are sung."""
+    verses and fixed blocks; without them the seed's own words are sung. told: a
+    list given each sung note of the lead, in the order they are sung, as
+    {phrase, index, line (the key a line a person wrote is kept under, or None),
+    shape (phrasing.shape), of (every shape of its line), how (where its gesture came
+    from: sung_gesture)}."""
     if lyrics is not None and verses is not None:
         raise ValueError("realize sings verses or lyrics, not both")
     from .clips import resolved
@@ -485,6 +489,11 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             played = composed_notes(phrase, params)
         else:
             played = variants_mod.realized(phrase, sung_variants) if sung_variants else None
+        # each note's shape as it is sung here (onset and length in beats, semitones above the tonic): what a
+        # gesture of a line a person wrote, and a habit, are found by
+        shapes = [note_shape((played[k] if played else n).onset / meter.beat, (played[k] if played else n).dur / meter.beat,
+                             degree_semitones(played[k].degree if played else n.degree, params.mode, n.alter))
+                  for k, n in enumerate(sung)]
         for k, (note, (syllable, word, word_len)) in enumerate(zip(sung, words)):
             v = played[k] if played else None
             u = start + lead + (v.onset if v else note.onset)
@@ -517,10 +526,13 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
                     choir=genome.section(section_name).choir and j not in in_round,
                     index=k,
                     composed=composed,
-                    # a line of its own sings with the singer's own timing: a gesture is kept by note, and these
-                    # aren't the notes it was kept for
-                    gesture=None if phrase.own else gesture(phrasing, phrase.id, k),
+                    # a tune line's note takes its gesture by its place; a line of its own takes one only from a
+                    # take of that line (songbird.phrasing.sung_gesture); either, failing that, the singer's habit
+                    **dict(zip(("gesture", "how"), sung_gesture(phrasing, phrase.id, phrase.own, k, shapes))),
                     own=bool(phrase.own),
+                    wrote=phrase.own,
+                    shape=shapes[k],
+                    of=tuple(shapes),
                     **({"melisma": tuple((off, params.tonic + degree_semitones(d, params.mode)) for off, d in turns)}
                        if turns else {}),
                     **({"round": in_round[j][0], "line": in_round[j][1]} if j in in_round else {}),
@@ -559,6 +571,9 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
             )
             sung_note = sung_as(unphrased, m["gesture"], beat)
             deliveries["voice"].append((unphrased, sung_note))
+            if told is not None:
+                told.append({"phrase": m["phrase"], "index": m["index"], "line": m["wrote"], "shape": m["shape"],
+                             "how": m["how"], "of": m["of"]})
             # the lineage joins, each voice on its own harmony line, plain as harmony is sung
             for v, pitch in enumerate(choirs[i]):
                 own = choir[v] if choir and v < len(choir) else None

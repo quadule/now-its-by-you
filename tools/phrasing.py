@@ -772,6 +772,12 @@ def bounded(g: P.Gesture) -> P.Gesture:
 
 
 def sung_phrasing(genome_path: Path, genome, takes, measurements: list[dict] | None = None):
+    """sightings()' gestures, contexts and weights, and portrait."""
+    seen, (words, weights), portrait, _ = sightings(genome_path, genome, takes, measurements)
+    return seen, (words, weights), portrait
+
+
+def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None = None):
     """Gestures from one or more sung takes (paths, or kept takes): every
     sighting of every note of the tune, scaled as a phrasing keeps them, what
     each was sung to, and a portrait of each take. A note a take didn't sing
@@ -781,33 +787,102 @@ def sung_phrasing(genome_path: Path, genome, takes, measurements: list[dict] | N
     once at each place in the song, however many of their takes sang it: a
     take of the whole song sings every place, a take of one section its own.
     measurements: the takes already measured (measured()'s dicts, one for each take, in order), for takes that
-    were never kept as files (webstudio/: a take sung in the web studio is measured and its audio deleted)."""
+    were never kept as files (webstudio/: a take sung in the web studio is measured and its audio deleted).
+    Last, what the sightings are: each key's kind of note, sighting by sighting (songbird.phrasing.kind), and the
+    shapes of each line a person wrote, as the latest take sang it."""
     seen: dict[tuple[str, int], list[P.Gesture]] = defaultdict(list)
     words: dict[tuple[str, int], list[str]] = defaultdict(list)  # who sang it to what: singer|syllable
     weights: dict[tuple[str, int], list[float]] = defaultdict(list)
     who = [t.who if isinstance(t, K.Take) else "" for t in takes]
     data = measurements if measurements is not None else [measured(genome_path, genome, take) for take in takes]
-    heard = Counter((singer, place) for singer, d in zip(who, data)
-                    for n, place in zip(d["notes"], places(d)) if n["gesture"] is not None)
+    # a note on a line a person wrote (its guide says which: guide_lines) is a sighting of that line's note, kept
+    # by the line's key, never of the tune line it stands in for; its shape is the one the latest take sang it in
+    told = [guide_lines(genome_path, d["stamp"]["guide"], len(d["notes"])) for d in data]
+    latest = {}
+    for t in told:
+        for key, shapes in (t or {}).get("wrote", {}).items():
+            latest[key] = shapes
+    keyed = [[sighting_key(n, t, k, latest) for k, n in enumerate(d["notes"])] for d, t in zip(data, told)]
+    heard = Counter((singer, key, place) for singer, d, keys in zip(who, data, keyed)
+                    for n, key, place in zip(d["notes"], keys, places(d)) if n["gesture"] is not None and key)
     portrait = []
+    kinds: dict[tuple[str, int], list[str | None]] = defaultdict(list)
     now, tonic = written(genome), choose_params(genome).tonic
-    for d, singer in zip(data, who):
+    for d, singer, keys, t in zip(data, who, keyed, told):
         gestures = gestures_of(d)
         sung_to = guide(genome_path, genome, d["stamp"]["guide"]).notes
         shift = transposed(genome_path, d["stamp"]["guide"])
-        for n, note, ge, place in zip(d["notes"], sung_to, gestures, places(d)):
-            if n["gesture"] is None:
+        for k, (n, note, ge, place, key) in enumerate(zip(d["notes"], sung_to, gestures, places(d), keys)):
+            if n["gesture"] is None or key is None:
                 continue
-            key = (n["phrase"], n["index"])
-            if key in now and round(note.pitch) - tonic - shift != now[key]:
+            if not key[0].startswith(LINE) and key in now and round(note.pitch) - tonic - shift != now[key]:
                 ge = replace(ge, tune=NAN)  # the tune has another note here now: this one's tuning was against the old
             seen[key].append(bounded(scaled(ge, SUNG)))
+            shapes = t["notes"][k][2] if t is not None else written_shapes(genome, key[0])
+            at = t["notes"][k][1] if t is not None else key[1]
+            kinds[key].append(P.kind(list(shapes), at) if at < len(shapes) else None)
             words[key].append(f"{singer}|{(note.syllable or '').lower()}")
-            weights[key].append(1.0 / heard[(singer, place)])  # only takes that actually sang this place
+            weights[key].append(1.0 / heard[(singer, key, place)])  # only takes that actually sang this place
         sung = [k for k, n in enumerate(d["notes"]) if n["gesture"] is not None]
         portrait.append((d["take"], d["lag"], d["key"], [gestures[k] for k in sung],
                          [d["notes"][k]["off"] for k in sung]))
-    return seen, (words, weights), portrait
+    return seen, (words, weights), portrait, (kinds, latest)
+
+
+# ---------------------------------------------------------------- lines a person wrote, and habits
+#
+# docs/notes/SINGING-AFTER-REWRITING.md. A guide made by the studio (webstudio/guide.py lines_sung) says what each
+# of its notes is: its line, its place there, and every note's shape. A sighting on a line a person wrote is kept
+# under that line's key (LINE + its key), so it never stands in for the tune line it replaces; every sighting, of
+# either kind, also counts towards the singer's habits by the kind of note it is (songbird.phrasing.kind).
+
+LINE = "line:"
+HABIT_MIN = 8  # sightings a kind of note needs before it is a habit
+HABIT_NOTES = 4  # of at least this many different notes of the song
+
+
+@functools.cache
+def _guide_file(path: str, mtime: float) -> dict:
+    return json.loads(Path(path).read_text())
+
+
+def guide_lines(genome_path: Path, digest: str | None, count: int) -> dict | None:
+    """What a guide says about its notes (lines_sung): for each of its count notes, its line's key (None for a
+    tune line), its place and its line's shapes; and "wrote", each line a person wrote's shapes. None for a guide
+    that doesn't say (the released one, the tools' own guides), whose notes are all the tune's."""
+    path = K.guide_score(genome_path.stem, digest)
+    if path is None:
+        return None
+    data = _guide_file(str(path), path.stat().st_mtime)
+    lines, line_of = data.get("lines"), data.get("line_of")
+    if not isinstance(lines, list) or not isinstance(line_of, list) or len(line_of) != count:
+        return None
+    notes = []
+    for i, k in line_of:
+        line = lines[i]
+        notes.append((line["key"], int(k), tuple(tuple(x) for x in line["notes"])))
+    return {"notes": notes, "wrote": {key: shapes for key, _, shapes in notes if key}}
+
+
+def sighting_key(n: dict, told: dict | None, k: int, latest: dict) -> tuple[str, int] | None:
+    """The key a measured note is a sighting of: its tune line's (phrase, place), or a line a person wrote's
+    (LINE + its key, place) where that line is sung in the shape the latest take sang it; None for a note of an
+    earlier shape of a line since rewritten."""
+    if told is None or told["notes"][k][0] is None:
+        return (n["phrase"], n["index"])
+    key, place, shapes = told["notes"][k]
+    return (LINE + key, place) if latest.get(key) == shapes else None
+
+
+def written_shapes(genome, pid: str) -> tuple:
+    """A tune line's notes' shapes as written (songbird.phrasing.shape), for a guide that doesn't say."""
+    from songbird.theory import degree_semitones
+
+    phrase = genome.phrases.get(pid)
+    if phrase is None:
+        return ()
+    mode, beat = choose_params(genome).mode, genome.meter.beat
+    return tuple(P.shape(x.onset / beat, x.dur / beat, degree_semitones(x.degree, mode, x.alter)) for x in phrase.sung)
 
 
 def written(genome) -> dict[tuple[str, int], int]:
@@ -927,10 +1002,14 @@ def shrunk(seen: dict, contexts: dict | None = None, floor: P.Gesture | None = N
             for k, v in seen.items()}
 
 
-def features(genome, key: tuple[str, int]) -> np.ndarray:
+def features(genome, key: tuple[str, int], wrote: dict | None = None) -> np.ndarray:
     """What a note of the tune is, as a singer might treat it: where it falls in its line and its bar,
-    how long it is, and how it's reached and left (by leap or step, up or down)."""
+    how long it is, and how it's reached and left (by leap or step, up or down). A note of a line a person
+    wrote (LINE + its key) is read from its shapes there (wrote: each such line's)."""
     from songbird.theory import degree_semitones
+
+    if key[0].startswith(LINE):
+        return shaped_features(genome, wrote[key[0][len(LINE):]], key[1])
 
     mode = choose_params(genome).mode
     m = genome.meter
@@ -951,8 +1030,26 @@ def features(genome, key: tuple[str, int]) -> np.ndarray:
     ], dtype=float)
 
 
+def shaped_features(genome, shapes, k: int) -> np.ndarray:
+    """features() for note k of a line given as its notes' shapes (songbird.phrasing.shape)."""
+    m = genome.meter
+    onset, beats, _ = shapes[k]
+    onset *= m.beat
+    at = [x[2] for x in shapes]
+    into = at[k] - at[k - 1] if k else 0
+    out = at[k + 1] - at[k] if k + 1 < len(shapes) else 0
+    return np.array([
+        k == 0, k == len(shapes) - 1, onset < 0,
+        k / max(len(shapes) - 1, 1),
+        abs(onset % m.bar) < 1e-6, abs(onset % m.foot) < 1e-6,
+        np.log2(max(beats, 0.25)), beats >= 1.5,
+        into >= 3, 0 < into < 3, -3 < into < 0, into <= -3,
+        out > 0, out < 0,
+    ], dtype=float)
+
+
 def ruled(genome, seen: dict, contexts: dict | None = None, floor: P.Gesture | None = None,
-          weights: dict | None = None, ridge: float = 4.0) -> dict:
+          weights: dict | None = None, ridge: float = 4.0, wrote: dict | None = None) -> dict:
     """Every note's gesture from a singer's rules as well as the note itself.
 
     A singer treats notes alike when they're alike: leans on downbeats, scoops
@@ -962,7 +1059,7 @@ def ruled(genome, seen: dict, contexts: dict | None = None, floor: P.Gesture | N
     note; each note is then pulled toward that rather than toward one habit
     for all, and keeps its own way only as far as the evidence goes (shrunk)."""
     keys = list(seen)
-    X = np.array([features(genome, k) for k in keys])
+    X = np.array([features(genome, k, wrote) for k in keys])
     mu, sd = X.mean(axis=0), X.std(axis=0) + 1e-9
     Z = (X - mu) / sd
     prior: dict = {k: {} for k in keys}
@@ -989,7 +1086,7 @@ def ruled(genome, seen: dict, contexts: dict | None = None, floor: P.Gesture | N
         # rules' depth; on a long note never heard held, the rules' depth; otherwise the machine's own
         judged = any(np.isfinite(g.vibrato) for g in seen[k])
         left = judged and vibrato_vote(seen[k], weights[k] if weights else None) < 0
-        held = features(genome, k)[7] > 0
+        held = features(genome, k, wrote)[7] > 0
         depth = v[0].vibrato if np.isfinite(v[0].vibrato) else NAN
         vibrato = -1.0 if left or not (judged or held) or np.isnan(depth) else max(depth, 0.0)
         made[k] = [replace(v[0], vibrato=vibrato)]
@@ -1009,10 +1106,15 @@ def singer_phrasing(genome_path: Path, genome, takes, credit: str | None = None,
     singer's, or, given several singers' takes, everyone's at once, each
     person counting once and each voice's own errors averaging away.
     measurements: as sung_phrasing's."""
-    seen, (words, weights), portrait = sung_phrasing(genome_path, genome, takes, measurements)
+    seen, (words, weights), portrait, (kinds, wrote) = sightings(genome_path, genome, takes, measurements)
     if not seen:  # takes of part of the song that stopped before a note, or of a stretch with no singing
         raise ValueError("none of these takes sang a whole note of the tune")
-    phrasing = gather(genome, ruled(genome, seen, words, floor_for(SUNG), weights))
+    made = ruled(genome, seen, words, floor_for(SUNG), weights, wrote=wrote)
+    phrasing = gather(genome, made)
+    lines = gather_lines(made, wrote)
+    found = habits(seen, weights, kinds, floor_for(SUNG)) if any(k for ks in kinds.values() for k in ks) else {}
+    if lines or found:
+        phrasing = P.Way(phrasing, lines, found)
     detail = f"{len(takes)} sung take(s)" + (f" by {credit}" if credit else "") + sung_to(takes)
     return phrasing, P.to_json(phrasing, source="song", source_detail=detail, scale=SUNG), portrait
 
@@ -1182,6 +1284,58 @@ def gather(genome, seen) -> P.Phrasing:
         if any((pid, j) in seen for j in range(count)):
             phrasing[pid] = tuple(P.average(seen[(pid, j)]) if (pid, j) in seen else P.Gesture() for j in range(count))
     return phrasing
+
+
+def gather_lines(made: dict, wrote: dict) -> dict[str, P.Line]:
+    """One gesture per note of every line a person wrote that a take sang (None for its notes no take sang)."""
+    out = {}
+    for key, shapes in wrote.items():
+        rows = [made.get((LINE + key, j)) for j in range(len(shapes))]
+        if any(rows):
+            out[key] = P.Line(tuple(shapes), tuple(P.average(r) if r else None for r in rows))
+    return out
+
+
+def habits(seen: dict, weights: dict, kinds: dict, floor: P.Gesture) -> dict[str, P.Gesture]:
+    """The singer's way with each kind of note (songbird.phrasing.HABITS), from every sighting of every note of
+    that kind: the mean of each field, kept only as far as it stands out from what measuring it gets wrong (the
+    noise of one sighting, which more sightings average away, and the extractor's error at one note, floor, which
+    only other notes average away), shrunk toward no habit at all when the evidence is thin. A kind needs
+    HABIT_MIN sightings of HABIT_NOTES different notes; "*" is every note. Each person counts once (weights)."""
+    cells: dict[str, list] = defaultdict(list)
+    for key, gs in seen.items():
+        for g, w, kd in zip(gs, weights[key], kinds.get(key, [])):
+            if kd is not None:
+                cells[kd].append((g, w, key))
+                cells["*"].append((g, w, key))
+    out = {}
+    for kd in P.HABITS:
+        rows = cells.get(kd, [])
+        if len(rows) < HABIT_MIN or len({key for _, _, key in rows}) < HABIT_NOTES:
+            continue
+        values = {}
+        for f in fields(P.Gesture):
+            if f.name == "vibrato":
+                values["vibrato"] = vibrato_vote([g for g, _, _ in rows], [w for _, w, _ in rows])
+                continue
+            x = np.array([getattr(g, f.name) for g, _, _ in rows], dtype=float)
+            w = np.array([w for _, w, _ in rows], dtype=float)
+            ok = np.isfinite(x)
+            if ok.sum() < HABIT_MIN:
+                values[f.name] = f.default
+                continue
+            x, w = x[ok], w[ok]
+            notes = len({key for (_, _, key), good in zip(rows, ok) if good})
+            mean = float(np.average(x, weights=w))
+            var = float(np.average((x - mean) ** 2, weights=w))
+            n_eff = w.sum() ** 2 / (w**2).sum()
+            error = var / n_eff + getattr(floor, f.name) ** 2 / notes
+            d = mean - f.default
+            values[f.name] = f.default + (d * max(0.0, 1.0 - error / d**2) if d else 0.0)
+        g = P.reduce(P.Gesture(**values))
+        if g != P.Gesture():
+            out[kd] = g
+    return out
 
 
 def write(data: dict, phrasing: P.Phrasing, out) -> None:

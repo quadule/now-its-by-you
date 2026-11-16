@@ -20,6 +20,8 @@ The studio makes one of these (Studio.enable_web_singing) and asks it first abou
                                               the way of singing made from them all
     POST /api/sing/keep  {phrasing}           a way of singing this browser keeps, kept here again (by fingerprint)
     POST /api/sing/forget {name}              and forgotten here
+    POST /api/sing/fetch                      what measuring lacks here fetched (wasmtime, into ~/.songbird: the
+                                              offer says what and how big first), then the offer again
 
 What is kept, and where: the take's audio nowhere (it waits in memory for its turn, then goes to the measuring
 process, which holds a piece of it in a temporary file while it reads it and removes it at once); the numbers
@@ -40,7 +42,6 @@ import json
 import pickle
 import re
 import secrets
-import select
 import subprocess
 import sys
 import threading
@@ -50,7 +51,7 @@ from pathlib import Path
 
 from songbird.public import network
 
-from . import guide as GD
+from . import guide as GD, standins
 from .kit import KEEP_DAYS as KIT_DAYS, ROOT, Kit
 
 HERE = Path(__file__).resolve().parent
@@ -58,7 +59,7 @@ FILES = {"/sing.js": (HERE / "sing.js", "text/javascript; charset=utf-8"),
          "/sing.css": (HERE / "sing.css", "text/css; charset=utf-8"),
          "/karaoke.js": (ROOT / "tools" / "karaoke.js", "text/javascript; charset=utf-8"),
          "/recorder.js": (ROOT / "tools" / "karaoke-recorder.js", "text/javascript; charset=utf-8")}
-CONSENT = 3  # the consent's version: the page asks again when what it says changes
+CONSENT = 5  # the consent's version: the page asks again when what it says changes (studio_device's is its own)
 MAX_TAKE_BYTES = 40 * 2**20  # a whole song at 48 kHz, 16-bit mono, is about 23 MB
 MAX_META_BYTES = 2**20  # where it was sung, and the takes before it as numbers (about 40 kB each)
 MAX_WAITING_TAKES = 3  # takes held in memory waiting for the measuring process, at once
@@ -113,15 +114,24 @@ class Measurer:
                 self._end()
                 raise RuntimeError("the measuring process couldn't start") from None
             del request  # the audio, if it was in it, is the process's now
-            ready, _, _ = select.select([self.proc.stdout], [], [], self.timeout)
-            if not ready:
+            got: dict = {}
+
+            def read(out=self.proc.stdout):  # in a thread of its own, so it can be waited for on any system
+                try:
+                    got["answer"] = receive(out)
+                except (EOFError, OSError, ValueError, pickle.UnpicklingError):
+                    got["broken"] = True
+
+            reader = threading.Thread(target=read, daemon=True, name="songbird-measuring-answer")
+            reader.start()
+            reader.join(self.timeout)
+            if reader.is_alive():
                 self._end()
                 raise RuntimeError("measuring took too long, and was stopped")
-            try:
-                status, value = receive(self.proc.stdout)
-            except (EOFError, OSError, pickle.UnpicklingError):
+            if "answer" not in got:
                 self._end()
-                raise RuntimeError("the measuring process stopped halfway (perhaps for want of memory)") from None
+                raise RuntimeError("the measuring process stopped halfway (perhaps for want of memory)")
+            status, value = got["answer"]
             self.last = time.time()
             if self.idle <= 0:  # a public studio: its memory back at once, before the next render
                 self._end()
@@ -132,9 +142,14 @@ class Measurer:
         raise RuntimeError(value)
 
     def _begin(self) -> None:
-        """python -m webstudio.worker, from the program's folder, talking on its standard input and output."""
+        """python -m webstudio.worker, from the program's folder, talking on its standard input and output (with
+        the program's folder and a fetched wasmtime on its path: standins)."""
+        import os
+
+        paths = [str(ROOT), *filter(None, [standins.path_entry()]), *filter(None, [os.environ.get("PYTHONPATH")])]
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(paths)}
         self.proc = subprocess.Popen([sys.executable, "-m", "webstudio.worker", str(self.kit.root)], cwd=ROOT,
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0, env=env)
         self.last = time.time()
 
     def _end(self) -> None:
@@ -222,6 +237,17 @@ class Store:
 
     def keep(self, data) -> tuple[str, dict]:
         data = self.normal(data)
+        return self._keep(data)
+
+    def keep_both(self, data) -> tuple[str, dict, str | None]:
+        """A way kept, and the same way without its habits (a note nobody sang takes the singer's own way), so a
+        page can offer either: its name, its JSON, and the other's name (None for a way without habits)."""
+        name, data = self.keep(data)
+        if not data.get("habits"):
+            return name, data, None
+        return name, data, self._keep({k: v for k, v in data.items() if k != "habits"})[0]
+
+    def _keep(self, data: dict) -> tuple[str, dict]:
         body = json.dumps(data, sort_keys=True)
         name = "sung-" + hashlib.sha256(body.encode()).hexdigest()[:16]
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -296,8 +322,10 @@ class Singing:
         self.melody_lock = threading.Lock()  # one stretch of melody made at a time
         self.stale: str | None = None
         self.pruned = 0.0
+        self.fetching = threading.Lock()
         self.tidy()
-        if check:
+        self.checks = check
+        if check and self.lacks() is None:
             threading.Thread(target=self.check, daemon=True, name="songbird-singing-check").start()
 
     def tidy(self, every: float = PRUNE_EVERY) -> None:
@@ -321,7 +349,15 @@ class Singing:
 
     # ------------------------------------------------------------ what it offers
 
+    def lacks(self) -> str | None:
+        """What measuring needs that isn't here and can be fetched (standins.missing), unless a page can't fetch it
+        (the device measures in the browser, with what it carries). None when it has it."""
+        return None if not isinstance(self.measurer, Measurer) else standins.missing()
+
     def why_not(self) -> str | None:
+        if self.stale is None and self.lacks():
+            return (f"Singing here needs wasmtime (about {standins.WASMTIME_MB} MB), fetched once into "
+                    f"{standins.folder().parent}.")
         return self.stale
 
     def available(self) -> dict:
@@ -330,6 +366,10 @@ class Singing:
 
     def offer(self) -> dict:
         why = self.why_not()
+        if why and self.stale is None and self.lacks():  # it can be fetched: the page says what, and asks
+            return {"available": False, "why": why,
+                    "fetch": {"what": f"wasmtime {standins.WASMTIME}", "mb": standins.WASMTIME_MB, "from": "PyPI",
+                              "into": str(standins.folder().parent)}}
         if why:
             return {"available": False, "why": why}
         return {"available": True, "speeds": list(GD.SPEEDS), "speed": GD.SPEED, "keys": list(GD.KEYS),
@@ -342,6 +382,24 @@ class Singing:
         """The studio's page with the singing added: its stylesheet and script, nothing else changed."""
         return (html.replace("</head>", '<link rel="stylesheet" href="/sing.css">\n</head>', 1)
                     .replace("</body>", '<script type="module" src="/sing.js"></script>\n</body>', 1))
+
+    def fetch(self) -> dict:
+        """What measuring lacks, fetched (standins.fetch), then checked as at the start; the offer again. If it can't
+        be, singing here says why and where else to sing."""
+        if self.lacks() is None:
+            return self.offer()
+        if getattr(self.studio, "shared", False):  # never fetched for a visitor
+            raise Refused("Singing here isn't set up; the computer serving this studio can set it up.")
+        with self.fetching:
+            if self.lacks() is not None:
+                why = standins.fetch()
+                if why is not None or self.lacks() is not None:
+                    self.stale = (f"Singing couldn't be set up here: {why or 'wasmtime is still missing'}. "
+                                  "Sing at https://studio.itsby.you.")
+                    return self.offer()
+            if self.checks:
+                self.check()
+        return self.offer()
 
     # ------------------------------------------------------------ what is sung to
 
@@ -371,7 +429,13 @@ class Singing:
         name, text = GD.digest(data), GD.text(data)
         path = self.kit.keep_guide(self.song, name, text)
         self.tidy()
-        return {**GD.words(data, title, name), "which": which}, str(path)
+        # how much of the way the page sings it (body "way": its name) this version takes, for the Sing view
+        way = self.store.path(str(body.get("way") or ""))
+        told = None
+        if way is not None:
+            with contextlib.suppress(OSError, ValueError, KeyError, TypeError):
+                told = GD.applies(data, json.loads(way.read_text()))
+        return {**GD.words(data, title, name), "which": which, **({"applies": told} if told else {})}, str(path)
 
     def melody(self, query: dict, by: tuple[str, str] | None = None) -> bytes:
         """A stretch of a guide's melody (GET /api/sing/melody), made by the measuring process the first time and
@@ -452,10 +516,12 @@ class Singing:
         if path == "/api/sing/guide":
             return self.guide(studio or self.studio, body)[0]
         if path == "/api/sing/keep":
-            name, data = self.store.keep(body.get("phrasing"))
-            return {"name": name, "phrasing": data}
+            name, data, exact = self.store.keep_both(body.get("phrasing"))
+            return {"name": name, "phrasing": data, **({"exact": exact} if exact else {})}
         if path == "/api/sing/forget":
             return {"forgotten": self.store.forget(str(body.get("name", "")))}
+        if path == "/api/sing/fetch":
+            return self.fetch()
         raise Refused("not found")
 
     # ------------------------------------------------------------ a take
@@ -623,10 +689,12 @@ class Singing:
         finally:
             request = None  # the audio: never kept past this
         self.measurer.learn(result.get("audio_seconds", seconds), result.get("seconds", 0.0))
-        name, phrasing = self.store.keep(result["phrasing"])
+        name, phrasing, exact = self.store.keep_both(result["phrasing"])
         return {"measurement": result["measurement"], "name": name, "phrasing": phrasing,
                 "portrait": result["portrait"], "skipped": result.get("skipped", []),
-                "seconds": result.get("seconds"), "audio_seconds": result.get("audio_seconds")}
+                "seconds": result.get("seconds"), "audio_seconds": result.get("audio_seconds"),
+                **({"exact": exact} if exact else {}),
+                **({"applies": result["applies"]} if result.get("applies") else {})}
 
     # ------------------------------------------------------------ the studio's versions
 

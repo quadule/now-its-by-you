@@ -601,3 +601,27 @@ def test_unpacking_refuses_more_than_the_bootstrap_allows(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="more than"):
         pack.unpack(big, tmp_path / "out")
     assert not (tmp_path / "out" / "filler").exists()
+
+
+def test_a_packet_carries_singing_and_its_program_runs_without_it(rendition, tmp_path):
+    """The Sing view, its measuring and WORLD in wasm with its licence travel beside the program (pack.SINGING),
+    every file the browser's measuring takes too; a program whose folder hasn't them is the songbird package alone."""
+    import sys as _sys
+
+    _sys.path.insert(0, str(ROOT / "web" / "studio-wasm" / "tools"))
+    import sing_bundle
+
+    flac, _, record = rendition
+    pack.pack(flac, record, GENOME)
+    with zipfile.ZipFile(flac) as z:
+        names = set(z.namelist())
+        for name in pack.SINGING:
+            assert z.read(f"program/{name}") == (ROOT / name).read_bytes()
+    assert {f"program/tools/{n}" for n in sing_bundle.TOOLS} | {f"program/webstudio/{n}" for n in sing_bundle.WEBSTUDIO} <= names
+    assert {"program/web/studio-wasm/world/world.wasm", "program/web/studio-wasm/world/LICENSE.txt",
+            "program/webstudio/sing.js", "program/tools/karaoke.js"} <= names
+    assert "program/tools/karaoke.py" not in names  # the artist's own singing page stays in the checkout
+    bare = tmp_path / "bare"
+    (bare / "songbird").mkdir(parents=True)
+    (bare / "songbird" / "__init__.py").write_text("")
+    assert set(pack.program_files(bare)) == {"program/songbird/__init__.py"}

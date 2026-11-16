@@ -208,7 +208,7 @@ def test_a_packet_opens_as_the_parent(home):
 
 def test_the_studio_runs_from_an_unpacked_packet_alone(home):
     """As the file's bootstrap runs it: the packet's own program (PYTHONPATH), in a folder with no checkout
-    around it, opening the rendition the packet came from; the checkout's extras aren't there."""
+    around it, opening the rendition the packet came from; of the checkout's extras, only singing's travel."""
     import os
     import socket
 
@@ -236,7 +236,9 @@ def test_the_studio_runs_from_an_unpacked_packet_alone(home):
         status, _, page = ask(port, "GET", "/")
         token = re.search(rb'name="studio-token" content="([^"]+)"', page).group(1).decode()
         start = json.loads(ask(port, "GET", "/api/start")[2])
-        assert start["title"] == genome.title and not start["sing"]["available"] and start["phrasings"] == []
+        assert start["title"] == genome.title and start["phrasings"] == []
+        # the packet carries singing: the Sing view is there (pyworld, or wasmtime, is in this test's Python)
+        assert start["sing"]["available"] and start["sing"].get("web")
         assert start["out"] == "."  # recordings go where it was run from
         status, _, data = ask(port, "POST", "/api/song", {"edits": {"tempo": 90}},
                               {"Content-Type": "application/json", "X-Studio": token})
