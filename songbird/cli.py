@@ -124,6 +124,9 @@ def choir_of(parent: dict | None, singer: VoiceParams) -> tuple[list[dict], list
 ARTIST = "The Volunteers"  # the FLAC tag: who the song is by (the artist's decision; the program stays Songbird)
 
 
+NUMBERS = ("phrases", "fields", "lines", "habits")  # a phrasing's numbers: in the record's performance, not its description
+
+
 def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyrics=None, phrasing_json=None,
                choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent: dict | None = None,
                midi_file: bool = False,
@@ -181,8 +184,8 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
         "lineage_singers": lineage_singers,  # who sings in the choir: the earlier versions, the parent's first
         "voice": voice.to_dict() if voice is not None else None,
         "drift": drift.to_dict() if drift is not None else None,
-        "phrasing": {k: v for k, v in phrasing_json.items() if k not in ("phrases", "fields")} if phrasing_json else None,
-        "choir_phrasings": [{k: v for k, v in d.items() if k not in ("phrases", "fields")} for d in choir_json] or None,
+        "phrasing": {k: v for k, v in phrasing_json.items() if k not in NUMBERS} if phrasing_json else None,
+        "choir_phrasings": [{k: v for k, v in d.items() if k not in NUMBERS} for d in choir_json] or None,
         "performance": {"lead": phrasing_mod.to_json(phrasing) if phrasing is not None else None,
                         "choir": [phrasing_mod.to_json(ph) for ph in choir]},
         "mix": mixing.to_dict(),
@@ -287,7 +290,7 @@ def credited(gestures: dict | None, about: dict | None) -> dict | None:
     keeps all but the gestures as the record's phrasing); the gestures alone where it says nothing."""
     if not gestures or not isinstance(about, dict):
         return gestures
-    return {**{k: v for k, v in about.items() if k not in ("phrases", "fields")}, **gestures}
+    return {**{k: v for k, v in about.items() if k not in NUMBERS}, **gestures}
 
 
 def replay_command(args: argparse.Namespace, genome) -> int:
