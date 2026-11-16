@@ -190,6 +190,15 @@
         return;
       }
       if (queued && !swap) { const q = queued; queued = null; take(q.buf, q.loop, q.key); }
+      if (b0 + next * s.length - s.head < t - 0.05) {  // a time round's start passed unscheduled (a hidden tab's slow
+        // timers): it joins where it is, and those before it are let go
+        const { k, offset } = offsetAt(t, b0, s);
+        if (k >= next) {
+          for (const v of voices) fade(v, t, SWAP_FADE);
+          voice(buffer, t, offset, k, SWAP_FADE);
+          next = k + 1;
+        }
+      }
       while (b0 + next * s.length - s.head - t < AHEAD) round(next);
     }
     // the new audio at the next bar line (or the next time round, when its length differs: a tempo changed)

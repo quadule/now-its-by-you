@@ -321,3 +321,18 @@ test("the first audio is made when the loop is played, wherever; its view may co
   h.k.want({ key: "a" }); h.run();
   assert.deepEqual(h.started.map((t) => t.target.key), ["a"]);
 });
+
+test("a time round whose start passed unscheduled (a hidden tab) joins where it is, once", () => {
+  const ctx = fakeContext();
+  let tick = null;
+  const loop = L.looper(ctx, { tick: (f) => { tick = f; return 1; }, untick: () => {} });
+  loop.play(buf("a"), VERSE, "a", 0);
+  const before = ctx.sources.length;
+  ctx.currentTime = VERSE.start + 3 * VERSE.length + 2; tick();  // three times round later
+  const joined = ctx.sources.slice(before);
+  assert.equal(joined.length, 1, "the one sounding now: never the ones missed");
+  assert.ok(Math.abs(joined[0].started[0] - ctx.currentTime) < 1e-9);
+  assert.ok(Math.abs(joined[0].started[1] - (VERSE.start + 2)) < 1e-9);
+  ctx.currentTime = VERSE.start + 4 * VERSE.length - VERSE.head - 0.2; tick();
+  assert.equal(ctx.sources.length, before + 2, "and the next time round in its turn");
+});
