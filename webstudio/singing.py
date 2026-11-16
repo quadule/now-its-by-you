@@ -374,6 +374,7 @@ class Singing:
             return {"available": False, "why": why}
         return {"available": True, "speeds": list(GD.SPEEDS), "speed": GD.SPEED, "keys": list(GD.KEYS),
                 "released": GD.has_released(), "consent": CONSENT, "keep_days": KEEP_DAYS, "max_seconds": 360,
+                "local": not getattr(self.studio, "shared", False),  # this computer's alone: the page says so
                 "max_bytes": MAX_TAKE_BYTES, "takes_an_hour": getattr(getattr(self.studio, "public", None), "takes", None),
                 "measuring": {"per_second": round(self.measurer.per_second, 3), "start": self.measurer.start,
                               "cold": COLD}}

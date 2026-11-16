@@ -68,7 +68,11 @@ visitor.
   - *A version you share contains those numbers and no recording of you. Forget my singing deletes them from this
     browser.* (it can't remove them from a version already exported or shared)
 
-  A computer's studio says instead that the take is sent to the computer that runs the studio, measured there, then
+  A studio on the person's own computer, not shared (the offer's `local`), says: *Your singing is recorded and
+  measured on this computer, then deleted. It is not sent anywhere.*; that the numbers are stored in this browser
+  and on this computer, deleted 30 days after their last use; and that an exported version contains them.
+
+  A shared or public studio says instead that the take is sent to the computer that runs the studio, measured there, then
   deleted; that the numbers are also stored there with no name or address attached, and deleted 30 days after their
   last use; and that an exported version contains them. Its consent is version 5, the device's 6 (webstudio/singing.py
   `CONSENT`, studio_device.py `DEVICE_CONSENT`); a page asks again when the words change. The words show only once

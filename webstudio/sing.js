@@ -61,6 +61,14 @@ const WORDS = {
     ["A version you share contains those numbers and no recording of you. Forget my singing deletes them from this browser.",
       "It can't remove them from a version you already exported or shared."],
   ],
+  local: [  // measured on the person's own computer, by the studio they run there (the offer's "local")
+    ["Your singing is recorded and measured on this computer, then deleted. It is not sent anywhere.",
+      "It is not saved, played to anyone or used to copy a voice."],
+    ["What is kept is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it, and their averages over notes alike.",
+      "The averages sing the notes you didn't sing. They are stored in this browser and on this computer. That copy is deleted {days} days after its last use."],
+    ["A version you export contains those numbers and no recording of you. Forget my singing deletes them.",
+      "From this browser and this computer. It can't remove them from a file you already exported."],
+  ],
   server: [  // measured on the computer serving the studio (webstudio/singing.py CONSENT)
     ["Your take is sent to the computer that runs this studio, measured there, then deleted.",
       "It is not saved, played to anyone or used to copy a voice."],
@@ -692,7 +700,7 @@ function offered() {
   // must not show a server's words, even for a moment)
   const o = S.offer, k = kept();
   const days = String(o.keep_days || 30);
-  $("singPromises").replaceChildren(...WORDS[o.device ? "device" : "server"].map(([line, more]) =>
+  $("singPromises").replaceChildren(...WORDS[o.device ? "device" : o.local ? "local" : "server"].map(([line, more]) =>
     h("li", {}, line, h("small", { class: "more" }, more.replace("{days}", days)))));  // all of it read before "I understand"
   for (const speed of o.speeds) $("singSpeed").append(h("option", { value: String(speed) }, speed === 100 ? "as written" : `${speed}%`));
   for (const key of o.keys) $("singKey").append(h("option", { value: String(key) }, key ? K.keyLabel(key) : "as written"));

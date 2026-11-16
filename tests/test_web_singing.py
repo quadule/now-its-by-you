@@ -159,6 +159,10 @@ def test_the_page_gets_the_singing_and_the_karaokes_own_code(singing):
     offer = json.loads(ask(port, "GET", "/api/sing/offer")[2])
     assert offer["available"] and offer["keep_days"] == W.KEEP_DAYS and offer["released"]
     assert offer["speeds"] == [100, 90, 80] and offer["speed"] == 90 and 0 in offer["keys"]
+    assert offer["local"] is (not studio.shared)  # this computer's alone says so (sing.js WORDS.local)
+    words = (ROOT / "webstudio" / "sing.js").read_text()
+    assert "measured on this computer, then deleted. It is not sent anywhere." in words
+    assert 'o.device ? "device" : o.local ? "local" : "server"' in words
     status, _, body = ask(port, "GET", f"/api/sing/melody?guide={GUIDE}&from=0.000&to=60.000")
     assert status == 200 and body[:4] == b"RIFF"
     assert studio.singing.kit.audio(GUIDE, 0.0, 60.0).is_file()  # kept: asked again, it isn't made again
@@ -290,7 +294,7 @@ def test_a_public_studio_counts_takes_against_each_visitors_limits(home):
     try:
         cookie = {"Cookie": f"songbird-visitor-{port}=someone-singing-here"}
         offer = json.loads(ask(port, "GET", "/api/sing/offer", headers=cookie)[2])
-        assert offer["takes_an_hour"] == 1
+        assert offer["takes_an_hour"] == 1 and offer["local"] is False  # a public studio: the server's words
         fake.release.clear()
         status, job = take(port, studio, **cookie)
         assert status == 200
