@@ -394,15 +394,29 @@ function lockCount(held) {
   return new Set((held || []).filter((p) => !p.startsWith("words.")).map((p) => p.match(cell)?.[1] || p)).size;
 }
 
+// what an edit's path changes, in words (an undo's label, a refusal): never the path itself
 function describePath(path) {
   const m = path.match(/^words\.(verse|refrain)\.(\d+)$/);
   if (m) return `your ${m[1]} ${Number(m[2]) + 1}`;
-  const place = path.match(/^(tune|chords)\.([A-Za-z0-9_-]+):(\d+|last)\.(\d+)$/);  // one place of the form
-  if (place) return `your ${place[1]} for ${place[3] === "last" ? `the last ${place[2]}` : `${place[2]} ${Number(place[3]) + 1}`}, line ${Number(place[4]) + 1}`;
-  if (path.startsWith("chords.")) return "your chords for a line of the tune";
-  const part = path.match(/^part\.([a-z0-9-]+)\.([A-Za-z0-9_-]+):(\d+)\.(\d+)$/);  // notes in (perform.js)
-  if (part) return `your ${part[1]} in ${part[2]} ${Number(part[3]) + 1}, line ${Number(part[4]) + 1}`;
   const where = (sid) => sid.replace(/^(\w+?)(2)?:(\d+)$/, (_, name, two, n) => `${two ? "second " : ""}${name} ${Number(n) + 1}`);
+  const place = path.match(/^(tune|chords)\.([A-Za-z0-9_-]+?)(2)?:(\d+|last)\.(\d+)$/);  // one place of the form
+  if (place) {
+    const name = `${place[3] ? "second " : ""}${place[2]}`;
+    return `your ${place[1]} for ${place[4] === "last" ? `the last ${name}` : `${name} ${Number(place[4]) + 1}`}, line ${Number(place[5]) + 1}`;
+  }
+  if (path.startsWith("chords.")) return "your chords for a line of the tune";
+  if (path.startsWith("tune.")) return "your tune for a line";
+  // a lyric line, by its words' key (verse:wire, refrain:0): its words, or its words and its tune together
+  const lyric = path.match(/^(line|lyrics)\.([a-z]+?)(2)?:[A-Za-z0-9_-]+\.(\d+)$/);
+  if (lyric) {
+    const whose = { refrain: "the refrain", bridge: "the bridge", tag: "the tag" }[lyric[2]] || `a ${lyric[2]}`;
+    return `your ${lyric[1] === "line" ? "words and tune" : "words"} for line ${Number(lyric[4]) + 1} of ${lyric[3] ? "the second bridge" : whose}`;
+  }
+  const part = path.match(/^part\.([a-z0-9-]+)\.([A-Za-z0-9_-]+:\d+)\.(\d+)$/);  // notes in (perform.js), the rolls
+  if (part) {
+    const player = state.view?.composition?.players?.find((x) => x.name === part[1])?.label || part[1];
+    return `your ${player.toLowerCase()} in ${where(part[2])}, line ${Number(part[3]) + 1}`;
+  }
   const cell = path.match(/^arrange\.([A-Za-z0-9_-]+:\d+)\.([a-z0-9]+)\.(level|pattern|from|fill)$/);  // the score's grid
   if (cell) return `your ${cell[2]} in ${where(cell[1])}`;
   const sec = path.match(/^arrange\.([A-Za-z0-9_-]+:\d+)\.(bars|sung|build|round)$/);
@@ -412,7 +426,11 @@ function describePath(path) {
   const sound = path.match(/^(sound|mix)\.([a-z0-9]+)\.(\w+)$/);
   if (path === VOICES) return "the voice's mute";
   if (sound && !["space", "width", "forward", "intimacy", "rt60", "predelay"].includes(sound[2])) return `your ${sound[2]}'s ${sound[3]}`;
-  return { "name": "your title", "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge", "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day" }[path] || `your ${path.replace(/^\w+\./, "").replace(/_/g, " ")}`;
+  const named = { "name": "your title", "words.refrain": "your refrain's words", "words.bridge": "your bridge's words", "words.bridge2": "your second bridge",
+    "words.tag": "your tag", "phrasing": "the singer's way", "date": "the day", "tempo": "the tempo", "tempo.free": "the tempo", "mode": "the mode",
+    "tonic": "the key", "form.order": "the order of the sections" }[path];
+  const rest = path.replace(/^\w+\./, "").replace(/_/g, " ");
+  return named || (/[:.\d]/.test(rest) ? "a choice" : `your ${rest}`);
 }
 
 // ------------------------------------------------------------------ the words

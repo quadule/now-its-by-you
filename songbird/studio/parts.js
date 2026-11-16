@@ -113,8 +113,9 @@
   }
   const line = () => current?.lines[current.focus];
   const chosenOf = (s = current) => [...s.selected].filter((i) => i < (s.lines[s.focus]?.notes.length || 0)).sort((a, z) => a - z);
-  // a phrase's notes saved as its part edit; `keep`, the notes to select after, by their start and pitch
-  function save(notes, keep = [], pi = current?.focus) {
+  // a phrase's notes saved as its part edit; `keep`, the notes to select after, by their start and pitch; `label`,
+  // what an undo of it says
+  function save(notes, keep = [], label = "Change notes", pi = current?.focus) {
     const s = current, x = s?.lines[pi];
     if (!x) return;
     try {
@@ -123,7 +124,7 @@
       s.selected = new Set(keep.map((k) => clean.findIndex((n) => n[0] === k[0] && n[2] === k[2])).filter((i) => i >= 0));
       if (!unchanged) {  // nothing changed: no edit, no undo step (the program's notes stay the program's)
         x.notes = clean; x.ready = true; x.mine = true;
-        bridge().setEdit(x.path, clean);
+        bridge().setEdit(x.path, clean, label);
       }
       s.paint();
     } catch (error) { s.error = error.message; s.paint(); }
@@ -141,23 +142,23 @@
     const n = [clamp(Math.round(start / grid) * grid, x.bounds.start, x.bounds.end - 1), Math.max(grid, Math.round((length ?? grid) / grid) * grid),
       clamp(Math.round(pitch ?? last?.[2] ?? 0), x.bounds.low, x.bounds.high), 96];
     s.focusNote = true;
-    save([...x.notes, n], [n]);
+    save([...x.notes, n], [n], "Add a note");
   }
   function change(index, changes) {
     const notes = copy(line().notes), n = notes[index];
     if (!n) return;
-    Object.assign(n, changes); save(notes, [n]);
+    Object.assign(n, changes); save(notes, [n], 0 in changes ? "Move a note" : 1 in changes ? "Change a note's length" : 2 in changes ? "Change a note's pitch" : "Change a note's velocity");
   }
   function remove() {
     const x = line(), chosen = new Set(chosenOf());
     if (!x || !chosen.size) return;
-    save(x.notes.filter((_, i) => !chosen.has(i)));
+    save(x.notes.filter((_, i) => !chosen.has(i)), [], chosen.size > 1 ? "Delete notes" : "Delete a note");
   }
   function move(dt, dp) {
     const x = line(), chosen = chosenOf();
     if (!x || !chosen.length) return;
     const notes = shifted(x.notes, chosen, dt, dp, x.bounds);
-    save(notes, chosen.map((i) => notes[i]));
+    save(notes, chosen.map((i) => notes[i]), chosen.length > 1 ? "Move notes" : "Move a note");
   }
   function selectAll() { const s = current, x = line(); if (!x?.notes.length) return; s.selected = new Set(x.notes.map((_, i) => i)); s.focusNote = true; s.paint(); }
   function copyNotes(quiet = false) {
@@ -169,25 +170,25 @@
   }
   function paste(at = null) {
     const s = current, x = line(); if (!clipboard || !x?.ready) return;
-    if (clipboard.whole && at === null) { save(clipboard.notes.map((n) => [n[0] + x.bounds.start, n[1], n[2], n[3]]).filter((n) => n[0] < x.bounds.end)); return; }
+    if (clipboard.whole && at === null) { save(clipboard.notes.map((n) => [n[0] + x.bounds.start, n[1], n[2], n[3]]).filter((n) => n[0] < x.bounds.end), [], "Paste notes"); return; }
     const chosen = chosenOf(), end = chosen.length ? Math.max(...chosen.map((i) => x.notes[i][0] + x.notes[i][1])) : 0;
     try {
       const { notes, put } = pasted(x.notes, clipboard, at ?? (s.cursor?.pi === s.focus ? s.cursor.t : chosen.length ? end : 0), x.bounds, !s.player.poly);
-      s.focusNote = true; save(notes, put);
+      s.focusNote = true; save(notes, put, "Paste notes");
     } catch (error) { bridge().toast?.(error.message); }
   }
   function duplicate() {
     const x = line(), chosen = chosenOf();
     if (!chosen.length) { bridge().toast?.("Select notes to duplicate."); return; }
     const clip = clipOf(x.notes, chosen), end = Math.max(...chosen.map((i) => x.notes[i][0] + x.notes[i][1]));
-    try { const { notes, put } = pasted(x.notes, clip, end, x.bounds, !current.player.poly); current.focusNote = true; save(notes, put); }
+    try { const { notes, put } = pasted(x.notes, clip, end, x.bounds, !current.player.poly); current.focusNote = true; save(notes, put, "Duplicate notes"); }
     catch (error) { bridge().toast?.("No room to duplicate here."); }
   }
   function quantize() {
     const s = current, x = line(); if (!x?.ready || !x.notes.length) return;
     const chosen = chosenOf(), all = chosen.length ? chosen : x.notes.map((_, i) => i);
     const notes = quantized(x.notes, all, Math.max(1, Math.round(s.snap * PPB)), x.bounds);
-    save(notes, chosen.map((i) => notes[i]));
+    save(notes, chosen.map((i) => notes[i]), "Quantize");
   }
   function shortcut(e) {
     const key = window.SongbirdModel?.rollKey?.(e);
@@ -238,7 +239,7 @@
     const finish = (event) => {
       target.removeEventListener("pointermove", motion); target.removeEventListener("pointerup", finish); target.removeEventListener("pointercancel", cancel);
       if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-      if (current === s && moved) save(preview, group.map((i) => preview[i]));
+      if (current === s && moved) save(preview, group.map((i) => preview[i]), resize ? "Change a note's length" : group.length > 1 ? "Move notes" : "Move a note");
       setTimeout(() => { if (s.drag?.moved !== undefined) s.drag = null; }, 0);
     };
     const cancel = (event) => { moved = false; preview = copy(x.notes); draw(); finish(event); };
@@ -353,8 +354,8 @@
         button("Copy notes", () => copyNotes(), { disabled: !x.ready, title: "Copy the selected notes, or the phrase (Ctrl+C)" }),
         button("Paste notes", () => paste(), { disabled: !clipboard, title: "Paste (Ctrl+V)" }),
         button("Quantize", quantize, { disabled: !x.ready, title: "Put the selected notes, or the phrase, on the snap" }),
-        button(x.ready ? "Clear notes" : "Start empty", () => save([])),
-        button("Reset part", () => { bridge().releaseEdit(x.path); current = null; s.paint(); }, { disabled: !x.mine })),
+        button(x.ready ? "Clear notes" : "Start empty", () => save([], [], x.ready ? "Clear notes" : "Start empty")),
+        button("Reset part", () => { bridge().releaseEdit(x.path, "Reset the part"); current = null; s.paint(); }, { disabled: !x.mine })),
       el("p", { class: "notes-foot", role: "status" }, s.error || (s.loading ? "Loading the instrument's notes…" : x.mine ? "Your notes" : "The program's notes"),
         s.error ? button("Retry", () => { s.error = null; s.loading = true; load(s); s.paint(); }) : null),
       ready || s.lines.some((y) => y.ready) ? roll(s) : null,

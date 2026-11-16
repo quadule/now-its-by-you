@@ -180,10 +180,11 @@
     if (other.id !== p.id || where(kind, p) !== "line") return false;
     return !ownHere(kind, other);
   }
-  function commit(path, value) {
+  // an edit, with what an undo of it says ("Undid: Move notes")
+  function commit(path, value, label) {
     stop();
-    if (value === null && bridge().releaseEdit) bridge().releaseEdit(path); // an inherited choice released, explicitly
-    else if (bridge().setEdit) bridge().setEdit(path, value);
+    if (value === null && bridge().releaseEdit) bridge().releaseEdit(path, label); // an inherited choice released, explicitly
+    else if (bridge().setEdit) bridge().setEdit(path, value, label);
   }
   function serializeNotes(notes, own = false) {
     // Keep untouched expressive and compound-meter timing exact. A third of a
@@ -218,7 +219,7 @@
     const notes = p.notes.map((x) => ({ ...x }));
     notes.splice(i, 1, { ...n, duration: half }, { ...n, onset: n.onset + half, duration: n.duration - half, slur: true, syllable: "", alter: 0, pitch: n.pitch - (n.alter || 0) });
     state.note = i + 1;
-    commitNotes(notes, "Note split: the second half is sung on the same syllable. Move it to make a melisma.");
+    commitNotes(notes, "Note split: the second half is sung on the same syllable. Move it to make a melisma.", "Split a note");
   }
   // ---- a line with its own count (docs/notes/OWN-COUNT-LINES.md): a note split into a new syllable, or a syllable
   // merged into the one before; the line's words are written for the new count before it is sung
@@ -232,7 +233,7 @@
     notes.splice(i, 1, { ...n, duration: half }, { ...n, onset: n.onset + half, duration: n.duration - half, slur: false, syllable: "?", word: "", pitch: n.pitch });
     delete notes[i + 1].slur;
     state.note = i + 1;
-    commitNotes(notes, "A new syllable: write the line's words for it.");
+    commitNotes(notes, "A new syllable: write the line's words for it.", "Add a syllable");
   }
   function mergeSyllable() {
     const p = phrase(), i = state.note, n = note();
@@ -241,7 +242,7 @@
     notes[i - 1].duration = n.onset + n.duration - notes[i - 1].onset;  // the note before holds on through its time
     notes.splice(i, 1);  // (any notes slurred onto it go on from the one before)
     state.note = i - 1;
-    commitNotes(notes, "Merged into the syllable before: write the line's words for one fewer.");
+    commitNotes(notes, "Merged into the syllable before: write the line's words for one fewer.", "Merge syllables");
   }
   const sylls = (text) => window.SongbirdAuthor?.say?.syllables ? window.SongbirdAuthor.say.syllables(text)
     : String(text || "").replace(/\{[^{}]*\}/g, "").trim().split(/[\s-]+/u).filter(Boolean).length;
@@ -276,7 +277,7 @@
   }
   async function applyDraft(p, d) {
     const value = { words: d.words, notes: serializeNotes(d.notes, true) }, snapshot = bridge().snapshot?.();
-    if (!snapshot) { state.draft = null; commit(p.own_path, value); return; }
+    if (!snapshot) { state.draft = null; commit(p.own_path, value, "Write a line"); return; }
     d.busy = true; d.error = null; paint(); told();
     try {
       const edits = { ...snapshot.edits, [p.own_path]: value };
@@ -289,7 +290,7 @@
       if (drafts.get(p.own_path) !== d) return; // cancelled while pronunciation was checked
       if (bridge().snapshot().revision !== snapshot.revision) throw new Error("The song changed. Use these words again.");
       if (d.words === value.words && JSON.stringify(serializeNotes(d.notes, true)) === JSON.stringify(value.notes)) drafts.delete(p.own_path);
-      bridge().replaceEdits(edits, "Write a line and its melody");
+      bridge().replaceEdits(edits, "Write a line");
     } catch (error) { d.error = error.message; }
     finally { d.busy = false; paint(); told(); }
   }
@@ -316,7 +317,7 @@
     const newNote = { degree, onset, duration, syllable: "?", alter: degree === pitch?.degree ? pitch.alter || 0 : 0 };
     notes.push(newNote); notes.sort((a, z) => a.onset - z.onset); state.note = notes.indexOf(newNote);
     state.focusNote = true;  // the new note takes the keys: Delete and the arrows are its own
-    commitNotes(notes, "Note added. Write the words for this line.");
+    commitNotes(notes, "Note added. Write the words for this line.", "Add a note");
   }
   // ---- several notes at once: the selected note (state.note) and any chosen with it (state.chosen), all in the
   // selected phrase; a move, a nudge, a transposition, a deletion or a paste of them is one edit, one undo step
@@ -348,13 +349,14 @@
     if (chosen.length < 2 && n.slur) { joinNote(); return; }
     const notes = window.SongbirdModel.deleteNotes(p.notes, chosen);
     const left = notes.filter((x) => !x.slur).length;
-    if (left === p.notes.filter((x) => !x.slur).length) { pick(Math.min(i, notes.length - 1)); commitNotes(notes, "Joined into the notes before."); return; }
+    if (left === p.notes.filter((x) => !x.slur).length) { pick(Math.min(i, notes.length - 1)); commitNotes(notes, "Joined into the notes before.", "Join notes"); return; }
     if (!p.own_path || left < 1) {
       bridge().toast?.(p.own_path ? "A sung line keeps at least one syllable."
         : "Choose a sung line to change how many notes it has."); return;
     }
     pick(Math.min(chosen[0], notes.length - 1));
-    commitNotes(notes, chosen.length > 1 ? `${chosen.length} notes deleted; the gaps are rests.` : "Note deleted; the gap is a rest.");
+    commitNotes(notes, chosen.length > 1 ? `${chosen.length} notes deleted; the gaps are rests.` : "Note deleted; the gap is a rest.",
+      chosen.length > 1 ? "Delete notes" : "Delete a note");
   }
   // the clipboard: the selected notes, or the whole phrase when none (or all) are selected. A whole phrase pasted
   // takes another phrase's place, fitted to its length; a few notes go in at the cursor, after the selection, or at
@@ -367,12 +369,12 @@
     if (!quiet) { paint(); bridge().toast?.(whole ? "The phrase's notes copied." : `${chosen.length} note${chosen.length === 1 ? "" : "s"} copied.`); }
     return true;
   }
-  function pasteAt(notes, added, p = phrase(), message = "Notes pasted. Undo restores the phrase.") {
+  function pasteAt(notes, added, p = phrase(), message = "Notes pasted.", label = "Paste notes") {
     if (!p.own_path && (notes.filter((n) => !n.slur).length !== p.notes.filter((n) => !n.slur).length || notes.some((n) => n.alter && !n.slur))) {
       bridge().toast?.("Choose a sung line to paste a different syllable count or chromatic notes."); return;
     }
     pick(added[0] ?? 0, added); state.focusNote = true;
-    commitNotes(notes, message); told();
+    commitNotes(notes, message, label); told();
   }
   function pasteNotes(at = null) {
     const p = phrase(); if (!clipboard || !p) return;
@@ -401,7 +403,7 @@
     try {
       const notes = window.SongbirdModel.quantizeNotes(p.notes, all, state.snap, bounds(p));
       if (chosen.length) pick(state.note, chosen);
-      commitNotes(notes, `${chosen.length > 1 ? `${chosen.length} notes` : chosen.length ? "The note" : "The phrase"} on the ${fmt(round(state.snap))}-beat grid.`);
+      commitNotes(notes, `${chosen.length > 1 ? `${chosen.length} notes` : chosen.length ? "The note" : "The phrase"} on the ${fmt(round(state.snap))}-beat grid.`, "Quantize");
     } catch (error) { bridge().toast?.(error.message); }
   }
   function cutNotes() {
@@ -414,7 +416,7 @@
     const clip = window.SongbirdModel.clipOf(p.notes, chosen), last = p.notes[chosen.at(-1)];
     try {
       const { notes, added } = window.SongbirdModel.pasteAt(p.notes, clip, last.onset + last.duration, bounds(p));
-      pasteAt(notes, added, p, `${chosen.length} note${chosen.length === 1 ? "" : "s"} duplicated.`);
+      pasteAt(notes, added, p, `${chosen.length} note${chosen.length === 1 ? "" : "s"} duplicated.`, "Duplicate notes");
     } catch (error) { bridge().toast?.("No room to duplicate here."); }
   }
   // Ctrl or ⌘ with C, X, V, D or A in the roll (model.js rollKey: never in a text field)
@@ -457,7 +459,7 @@
     notes[i - 1].duration = n.onset + n.duration - notes[i - 1].onset;
     notes.splice(i, 1);
     state.note = i - 1;
-    commitNotes(notes, "Joined into the note before.");
+    commitNotes(notes, "Joined into the note before.", "Join notes");
   }
   // a phrase's notes as the page draws them after an edit: each syllable's words found again by syllable
   function sung(updated, was, shape) {
@@ -469,7 +471,7 @@
       return { ...(shape ? was[index] : {}), ...n, index, syllable: n.slur ? "" : own.syllable, word: own.word, edited: true };
     });
   }
-  function commitNotes(notes, message) {
+  function commitNotes(notes, message, label = "Change the melody") {
     const p = phrase();
     if (!p || !notes.length) return;
     const shape = notes.length === p.notes.length && notes.every((n, index) => !n.slur === !p.notes[index].slur);
@@ -488,7 +490,7 @@
       if (count === p.syllable_count && (p.own || chromatic) && state.draft?.path !== p.own_path) {
         // drawn at once, as a tune line's change is, wherever the lyric line is sung, its words kept by syllable
         for (const s of sections()) for (const same of s.phrases || []) if (same.own_path === p.own_path) same.notes = sung(updated, same.notes, shape);
-        commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated, true) });
+        commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated, true) }, label);
       } else {  // its words wait to be written for the new count (ownCard)
         state.draft = { ...state.draft, path: p.own_path, notes: updated, was: state.draft?.was || p.notes };
         p.notes = updated.map((n, index) => ({ ...n, index, edited: true }));
@@ -499,7 +501,7 @@
       return;
     }
     for (const s of sections()) for (const shared of s.phrases || []) if (sharesScope("tune", p, shared)) shared.notes = sung(updated, shared.notes, shape);
-    commit(scopedPath("tune", p), serializeNotes(updated));
+    commit(scopedPath("tune", p), serializeNotes(updated), label);
     paint();
     if (message) announce(message);
   }
@@ -526,12 +528,14 @@
     if ("duration" in changes && next.duration !== original.duration) next.duration = clamp(quantize(next.duration), b.min_duration, followingStart - next.onset);
     return next;
   }
+  // what an undo of a note's change says
+  const changed = (changes) => ("onset" in changes ? "Move a note" : "duration" in changes ? "Change a note's length" : "Change a note's pitch");
   function changeNote(changes, snap) {
     const p = phrase();
     if (!p || state.note === null) return;
     const notes = keepSlurs(p.notes.map((n, index) => index === state.note ? limitedNote(index, changes, p, snap) : { ...n }),
       "onset" in changes ? state.note : -1);
-    commitNotes(notes, noteTitle(notes[state.note], state.note));
+    commitNotes(notes, noteTitle(notes[state.note], state.note), changed(changes));
   }
   function transpose(steps) {  // the selected notes, or the whole phrase, by steps of the scale
     const p = phrase(), b = bounds();
@@ -542,7 +546,8 @@
       bridge().toast?.("That would go beyond this melody’s singing range."); return;
     }
     if (chosen) pick(state.note, [...chosen]);
-    commitNotes(notes, chosen ? `${chosen.size} notes transposed.` : Math.abs(steps) < 7 ? "Phrase transposed." : "Phrase moved an octave.");
+    commitNotes(notes, chosen ? `${chosen.size} notes transposed.` : Math.abs(steps) < 7 ? "Phrase transposed." : "Phrase moved an octave.",
+      chosen ? "Transpose notes" : "Transpose the phrase");
   }
   // The selection moved together: by rows (a line of its own's notes by semitones, respelled; a tune line's by the
   // scale steps its anchor moves) and by dt beats (the anchor landing on the grid, no note passing one not chosen).
@@ -567,7 +572,7 @@
   function moveGroup(rows, dt) {
     const p = phrase(), chosen = picked(), anchor = state.note;
     pick(anchor, chosen);
-    commitNotes(movedGroup(p, chosen, rows, dt, anchor), `${chosen.length} notes moved.`);
+    commitNotes(movedGroup(p, chosen, rows, dt, anchor), `${chosen.length} notes moved.`, "Move notes");
   }
   // The grid a phrase's rhythm lives on: halves of a beat where every note sits on them, thirds where they sit
   // on thirds (a six feel, a triplet lilt), quarters otherwise; each with the finer grids of its kind after it.
@@ -595,7 +600,7 @@
       const at = (i) => (first + i * step) / parts;
       if (step < least || end - at(n - 1) < b.min_duration - 1e-9) continue;
       const notes = p.notes.map((note, i) => ({ ...note, onset: at(i), duration: i === n - 1 ? end - at(i) : at(i + 1) - at(i) }));
-      commitNotes(notes, `Notes evened to ${fmt(round(step / parts))} of a beat each, on the phrase's grid; the ending held.`);
+      commitNotes(notes, `Notes evened to ${fmt(round(step / parts))} of a beat each, on the phrase's grid; the ending held.`, "Even the rhythm");
       return;
     }
     bridge().toast?.("This phrase is too tightly packed to space evenly while keeping every syllable singable.");
@@ -609,7 +614,7 @@
     for (let i = notes.length - 2; i >= 0; i--) {
       notes[i].degree = clamp(notes[i].degree, Math.max(b.min_degree, notes[i + 1].degree - 2), Math.min(b.max_degree, notes[i + 1].degree + 2));
     }
-    commitNotes(notes, "Large leaps softened; phrase ending preserved.");
+    commitNotes(notes, "Large leaps softened; phrase ending preserved.", "Soften leaps");
   }
 
   function moveSection(from, to) {
@@ -623,7 +628,7 @@
     }
     const order = reordered.map((s) => s.id);
     state.section = to; state.phrase = 0; state.note = null;
-    commit("form.order", order);
+    commit("form.order", order, `Move ${moved.label}`);
     announce(`Moved ${sections()[from].label} to position ${to + 1}.`);
   }
   function miniNotes(s) {
@@ -698,7 +703,7 @@
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Move selected section" },
           button("← Earlier", () => moveSection(state.section, state.section - 1), { disabled: state.section === 0 }),
           button("Later →", () => moveSection(state.section, state.section + 1), { disabled: state.section === sections().length - 1 }),
-          button("Restore order", () => commit("form.order", null), { class: "sbc-button sbc-quiet", title: "Remove your arrangement override and restore this song’s inherited order" }))));
+          button("Restore order", () => commit("form.order", null, "Restore the order"), { class: "sbc-button sbc-quiet", title: "Remove your arrangement override and restore this song’s inherited order" }))));
   }
 
   function transport() {
@@ -948,10 +953,10 @@
       target.removeEventListener("pointermove", move); target.removeEventListener("pointerup", finish); target.removeEventListener("pointercancel", cancel);
       if (target.hasPointerCapture(upEvent.pointerId)) target.releasePointerCapture(upEvent.pointerId);
       target.classList.remove("is-dragging");
-      if (drag.moved && group) { pick(index, group); commitNotes(drag.notes, `${group.length} notes moved.`); audition(drag.notes[index].pitch); }
+      if (drag.moved && group) { pick(index, group); commitNotes(drag.notes, `${group.length} notes moved.`, "Move notes"); audition(drag.notes[index].pitch); }
       else if (drag.moved) {
         const notes = keepSlurs(p.notes.map((n, i) => i === index ? drag.preview : { ...n }), drag.preview.onset !== original.onset ? index : -1);
-        commitNotes(notes, noteTitle(drag.preview, index)); audition(drag.preview.pitch ?? pitchFor(original, drag.preview.degree));
+        commitNotes(notes, noteTitle(drag.preview, index), drag.resizing ? "Change a note's length" : "Move a note"); audition(drag.preview.pitch ?? pitchFor(original, drag.preview.degree));
       }
       // A pointer's synthetic click must not audition the old pitch after a drag.
       setTimeout(() => { if (state.drag === drag) state.drag = null; }, 0);
@@ -1046,11 +1051,11 @@
     const tones = chordPitches(symbol);
     if (tones.length) pluck(ctx, within(tones[{ 1: 0, 3: 1, 5: 2, 7: 3 }[bass.bass] || 0] % 12, 36), ctx.currentTime + 0.01, 1.2, 0.08, "bass");
   }
-  function commitChords(bars, message) {
+  function commitChords(bars, message, label = "Change a chord") {
     const p = phrase();
     if (!p) return;
     if (JSON.stringify(bars) === JSON.stringify(lineChords(p))) { paint(); return; }
-    commit(scopedPath("chords", p), bars);
+    commit(scopedPath("chords", p), bars, label);
     announce(message);
   }
   function setChord(symbol) {
@@ -1068,7 +1073,7 @@
     // each new chord is the one sounding where it starts: splitting a bar adds a chord to change; joining keeps the first
     bars[at.bar] = Array.from({ length: count }, (_, j) => old[Math.floor(j * old.length / count)]);
     state.chord = { bar: at.bar, slot: Math.min(at.slot * count / old.length | 0, count - 1) };
-    commitChords(bars, count > old.length ? "Bar split: change the new chord to add a passing chord." : "Bar joined.");
+    commitChords(bars, count > old.length ? "Bar split: change the new chord to add a passing chord." : "Bar joined.", count > old.length ? "Split a bar" : "Join a bar");
   }
   function chordCard() {
     const p = phrase(), h = chosenChord(p), c = composition(), choices = c?.chord_choices;
@@ -1108,7 +1113,7 @@
         button("♪", () => strum(h.symbol), { class: "sbc-button sbc-audition", "aria-label": `Hear ${h.name}` })),
       el("div", { class: "sbc-chord-row" },
         el("span", { class: "sbc-muted" }, reach),
-        button(scope === "line" ? "Restore chords" : "Restore chords here", () => { state.chord = null; commit(scopedPath("chords", p), null); },
+        button(scope === "line" ? "Restore chords" : "Restore chords here", () => { state.chord = null; commit(scopedPath("chords", p), null, "Restore the chords"); },
           { class: "sbc-button sbc-quiet", disabled: !held("chords", p),
             title: scope === "line" ? "Give this line back the song's own chords, everywhere" : "Give this place back the line's chords" }),
         button("Done", () => { state.chord = null; paint(); }, { class: "sbc-button sbc-quiet" })));
@@ -1177,7 +1182,7 @@
           button("↑ Step", () => transpose(1), { title: "Transpose the whole phrase up one scale step" })),
         button("Soften leaps", smoothMelody, { title: "Bring notes within two scale steps of their neighbors, preserving the ending" }),
         button("Even rhythm", evenRhythm, { title: "Spread the existing syllables evenly across their current phrase span" }),
-        button(where("tune", p) === "line" ? "Restore phrase" : "Restore phrase here", () => { state.note = null; commit(scopedPath("tune", p), null); }, { class: "sbc-button sbc-quiet", title: where("tune", p) === "line" ? "Remove your melody override and restore this song’s inherited phrase" : "Give this place back the line's own tune" })),
+        button(where("tune", p) === "line" ? "Restore phrase" : "Restore phrase here", () => { state.note = null; commit(scopedPath("tune", p), null, "Restore the phrase"); }, { class: "sbc-button sbc-quiet", title: where("tune", p) === "line" ? "Remove your melody override and restore this song’s inherited phrase" : "Give this place back the line's own tune" })),
       health(),
       el("p", { id: "sbc-drag-value", class: "sbc-visually-hidden", "aria-live": "off" }));
   }
@@ -1486,9 +1491,9 @@
       why: reasons(n.edited, p.own ? "your words and melody, wherever this lyric line occurs" : scope === "line" ? "yours: this line is sung this way everywhere" : "yours, in this place only",
         [["song", "the tune as it was written, and as the versions before have sung it"], ["rule", "notes and words are kept together; gaps between notes are rests"]]),
       release: p.own ? { label: "Use the tune's line", disabled: false,
-        action: () => { state.note = null; state.draft = null; commit(p.own_path, null); told(); } }
+        action: () => { state.note = null; state.draft = null; commit(p.own_path, null, "Use the tune's line"); told(); } }
         : { label: scope === "line" ? "Reset" : "Reset here", disabled: !held("tune", p),
-        action: () => { state.note = null; commit(scopedPath("tune", p), null); told(); } },
+        action: () => { state.note = null; commit(scopedPath("tune", p), null, "Restore the phrase"); told(); } },
       hear: () => audition(pitchFor(n)),
     };
   }
@@ -1509,7 +1514,7 @@
       why: reasons(mine, scope === "line" ? "yours: this line's chords, everywhere it's sung" : "yours, in this place only",
         [["song", "the song's own harmony, as it was written"], ["rule", "the band, the voices before and the backing voices follow it; the tune stays"]]),
       release: { label: scope === "line" ? "Reset" : "Reset here", disabled: !held("chords", p),
-        action: () => { state.chord = null; commit(scopedPath("chords", p), null); told(); } },
+        action: () => { state.chord = null; commit(scopedPath("chords", p), null, "Restore the chords"); told(); } },
       hear: () => strum(h.symbol),
     };
   }

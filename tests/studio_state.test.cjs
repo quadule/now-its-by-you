@@ -372,3 +372,22 @@ test('a slow paste cannot overwrite a newer edit', async () => {
   await assert.rejects(pending, /song changed/);
   assert.equal(s.run('state.edits.tempo'), 100);
 });
+
+test('an edit is said in words, never by its path: the rolls, the lines, the parts, the tempo and the mode', () => {
+  const { run } = studio();
+  run('state.view = {composition: {players: [{name: "drummachine", label: "Drum machine"}]}}');
+  const said = (path) => run(`describePath(${JSON.stringify(path)})`);
+  assert.equal(said('line.verse:wire.0'), 'your words and tune for line 1 of a verse');
+  assert.equal(said('lyrics.refrain:0.2'), 'your words for line 3 of the refrain');
+  assert.equal(said('line.bridge2:0.0'), 'your words and tune for line 1 of the second bridge');
+  assert.equal(said('tune.a1'), 'your tune for a line');
+  assert.equal(said('tune.verse:1.0'), 'your tune for verse 2, line 1');
+  assert.equal(said('chords.bridge2:last.1'), 'your chords for the last second bridge, line 2');
+  assert.equal(said('part.drummachine.verse:1.0'), 'your drum machine in verse 2, line 1');
+  assert.equal(said('tempo'), 'the tempo');
+  assert.equal(said('mode'), 'the mode');
+  assert.equal(said('tonic'), 'the key');
+  for (const path of ['line.verse:wire.0', 'part.fiddle.refrain:0.3', 'tune.b2', 'chords.a1', 'tempo', 'mode', 'tune.chorus:0.x.y', 'something:odd.3']) {
+    assert.doesNotMatch(said(path), /[:.]\w|\.\d/, path);
+  }
+});

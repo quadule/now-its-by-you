@@ -156,7 +156,7 @@
     } catch (error) { if (current === s && s.loading) s.error = error.message; }
     if (current === s) { s.loading = false; s.paint(); }
   }
-  function save(notes) {
+  function save(notes, label = "Change the drum part") {  // `label`: what an undo of it says
     const s = current;
     if (!s) return;
     try {
@@ -164,7 +164,7 @@
       s.error = null; s.loading = false;
       if (s.ready && same(clean, s.notes)) { s.paint(); return; }  // nothing changed: no edit, no undo step
       s.notes = clean; s.ready = true; s.mine = true;
-      bridge().setEdit(s.path, clean);
+      bridge().setEdit(s.path, clean, label);
       s.paint();
     } catch (error) { s.error = error.message; s.paint(); }
   }
@@ -185,15 +185,15 @@
     if (e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {  // the stroke's level
       if (!here.length) return;
       const now = levelOf(s.notes[here[0]][3]), next = clamp(now + (e.key === "ArrowUp" ? 1 : -1), 0, 2);
-      level = next; save(setVelocity(s.notes, here, LEVELS[next].velocity));
+      level = next; save(setVelocity(s.notes, here, LEVELS[next].velocity), "Change a stroke's level");
     } else if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {  // how long it is held
       if (!here.length) return;
-      save(setLength(s.notes, here, s.notes[here[0]][1] + (e.key === "ArrowRight" ? step : -step)));
+      save(setLength(s.notes, here, s.notes[here[0]][1] + (e.key === "ArrowRight" ? step : -step)), "Change a stroke's length");
     } else if (moves[e.key]) focusCell(row + moves[e.key][0], col + moves[e.key][1]);
     else if (e.key === "Home") focusCell(row, 0);
     else if (e.key === "End") focusCell(row, s.cols.length - 1);
-    else if (e.key === " " || e.key === "Enter") save(setCell(s.notes, s.cols, row, col, !here.length, step, LEVELS[level].velocity));
-    else if (e.key === "Delete" || e.key === "Backspace") save(setCell(s.notes, s.cols, row, col, false, step, 0));
+    else if (e.key === " " || e.key === "Enter") save(setCell(s.notes, s.cols, row, col, !here.length, step, LEVELS[level].velocity), here.length ? "Clear a stroke" : "Strike a drum");
+    else if (e.key === "Delete" || e.key === "Backspace") save(setCell(s.notes, s.cols, row, col, false, step, 0), "Clear a stroke");
     else return;
     e.preventDefault(); e.stopPropagation();
   }
@@ -207,14 +207,15 @@
     const step = stepOf(s.snap), here = hitsAt(s.notes, s.cols, row, col);
     if (here.length && (e.shiftKey || e.altKey)) {
       const next = clamp(levelOf(s.notes[here[0]][3]) + (e.shiftKey ? 1 : -1), 0, 2);
-      level = next; save(setVelocity(s.notes, here, LEVELS[next].velocity));
+      level = next; save(setVelocity(s.notes, here, LEVELS[next].velocity), "Change a stroke's level");
       return;
     }
     const on = !here.length, grid = e.currentTarget.closest(".sbc-drum-grid");
     let notes = setCell(s.notes, s.cols, row, col, on, step, LEVELS[level].velocity);
     const mark = (cell) => cell.classList.toggle("is-hit", on);
     mark(e.currentTarget);
-    if (e.pointerType === "touch") { save(notes); return; }  // a finger strikes one cell; a drag scrolls
+    const label = on ? "Strike a drum" : "Clear a stroke";
+    if (e.pointerType === "touch") { save(notes, label); return; }  // a finger strikes one cell; a drag scrolls
     grid.setPointerCapture(e.pointerId);
     const move = (event) => {
       const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-drum-cell]");
@@ -227,7 +228,7 @@
     const finish = (event) => {
       grid.removeEventListener("pointermove", move); grid.removeEventListener("pointerup", finish); grid.removeEventListener("pointercancel", cancel);
       if (grid.hasPointerCapture(event.pointerId)) grid.releasePointerCapture(event.pointerId);
-      if (current === s) save(notes);
+      if (current === s) save(notes, label);
     };
     const cancel = (event) => { notes = s.notes; finish(event); };
     grid.addEventListener("pointermove", move); grid.addEventListener("pointerup", finish); grid.addEventListener("pointercancel", cancel);
@@ -276,15 +277,15 @@
     const here = s.ready ? hitsAt(s.notes, s.cols, s.focus.row, s.focus.col) : [];
     const shown = here.length ? levelOf(s.notes[here[0]][3]) : level;
     const levels = el("span", { class: "sbc-button-group", role: "group", "aria-label": "Velocity" },
-      LEVELS.map((lv, k) => button(lv.label, () => { level = k; if (here.length) save(setVelocity(s.notes, here, lv.velocity)); else s.paint(); },
+      LEVELS.map((lv, k) => button(lv.label, () => { level = k; if (here.length) save(setVelocity(s.notes, here, lv.velocity), "Change a stroke's level"); else s.paint(); },
         { class: `sbc-button${shown === k ? " is-on" : ""}`, "aria-pressed": shown === k ? "true" : "false" })));
     const pasteable = clipboard?.player === name;
     return el("div", { class: "sbc-part-editor sbc-drum-editor" },
       el("div", { class: "notes-foot", role: "group", "aria-label": "Edit the part" },
         button("Copy", () => { clipboard = { player: name, notes: copy(s.notes) }; s.paint(); }, { disabled: !s.ready }),
-        button("Paste", () => save(fit(clipboard.notes, player.drums.length, s.bounds)), { disabled: !pasteable }),
-        button(s.ready ? "Clear" : "Start empty", () => save([])),
-        button("Reset part", () => { bridge().releaseEdit(s.path); current = null; s.paint(); }, { disabled: !s.mine }),
+        button("Paste", () => save(fit(clipboard.notes, player.drums.length, s.bounds), "Paste strokes"), { disabled: !pasteable }),
+        button(s.ready ? "Clear" : "Start empty", () => save([], s.ready ? "Clear the part" : "Start empty")),
+        button("Reset part", () => { bridge().releaseEdit(s.path, "Reset the part"); current = null; s.paint(); }, { disabled: !s.mine }),
         s.ready ? levels : null),
       el("p", { class: "notes-foot", role: "status" }, s.error || (s.loading ? "Loading the part…" : s.mine ? "Your part" : "The program's part"),
         s.error ? button("Retry", () => { s.error = null; s.loading = true; load(s); s.paint(); }) : null),

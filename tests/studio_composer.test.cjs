@@ -1095,6 +1095,7 @@ test("a chromatic move of two notes is one undo step, drawn at once; the song's 
   h.run('travelHistory("undo")');
   assert.deepEqual(clone(h.run("state.edits")), {});
   assert.equal(h.run("state.undo.length"), 0);
+  assert.equal(h.toasts.at(-1), "Undid: Move notes", "said as what was done, never the edit's path");
 });
 test("an instrument's notes already on the snap, quantized, are no edit: the program's part stays the program's", () => {
   const view = writableScore(), c = view.composition, [a, b] = c.sections[1].phrases;
