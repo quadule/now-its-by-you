@@ -242,6 +242,26 @@
     return null;
   }
 
+  // ------------------------------------------------------------------ a roll's scale and its notes (composer.js, parts.js, drums.js)
+  // Pixels a beat: "fit" puts the whole span in the width (at least `least`); a number is a zoom on a scale where an
+  // eighth note is wide enough to read its syllable (`base` pixels a beat, or the fit where that is wider), the roll
+  // scrolling past the width.
+  const ROLL_BEAT = 64;
+  function rollUnit(zoom, available, span, { least = 12, base = ROLL_BEAT } = {}) {
+    const fit = Math.max(least, available / Math.max(1, span));
+    return zoom === "fit" ? fit : Math.max(fit, base) * (Number(zoom) || 1);
+  }
+  const zoomOf = (value) => (value === "fit" ? "fit" : Number(value) || 1);  // a Zoom menu's value
+  // A note's resize handle on its right edge, in pixels: a quarter of a note's width, 4 to 9 pixels; none on a note
+  // narrower than 20, whose whole face moves it (⌥-drag, ⇧←→ or the Length field change its length).
+  function grip(width) { return width < 20 ? 0 : Math.max(4, Math.min(9, Math.round(width / 4))); }
+  // Whether a note's label is drawn whole in `width` pixels (about `char` a character, `pad` of padding): a label
+  // that doesn't fit isn't drawn cut short; the note's name and tooltip carry it.
+  function labelFits(text, width, { char = 5.6, pad = 8 } = {}) {
+    const n = [...String(text ?? "")].length;
+    return n > 0 && n * char + pad <= width + 1e-9;
+  }
+
   // ------------------------------------------------------------------ the section's roll (composer.js)
   // The phrase a time of the section's roll belongs to. spans: each phrase's { off: its bar line, start: its earliest
   // note, end: its latest, final: its last note's latest start }, in beats from the section's start. Where the next
@@ -513,7 +533,8 @@
 
   const api = { LEVELS, KIND_WORDS, grid, look, whoseWords, cellLabel, lockPatch, releasePatch, levelPatch, optionLock,
     moveOrder, movedIds, seamWords, seamToggle, seamOver, seamLength, seamLengths, scopeOptions, scopeStart, selectionKey, defaultHow, playTarget,
-    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, phraseAt, semitone, spell, moveRows,
+    neighbour, sectionAtBeat, position, sketchOffset, sketchFrom, inField, keyAction, ROLL_BEAT, rollUnit, zoomOf, grip, labelFits,
+    phraseAt, semitone, spell, moveRows,
     withSyllables, shiftLimit, deleteNotes, clipOf, pasteAt, quantizeNotes, rollKey, saidCell, fitNotes, writtenNotes, lyricPatch,
     lyricTargets, lyricSheet, parseLyricSheet, lyricSheetPatch, phrasePatch, sectionPatch };
   if (typeof window !== "undefined") window.SongbirdModel = api;

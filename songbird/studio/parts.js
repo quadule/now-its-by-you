@@ -218,7 +218,7 @@
     const s = current, target = e.currentTarget, rect = target.getBoundingClientRect();
     if (focusLine(pi) || !s.selected.has(index)) { s.selected = new Set([index]); }
     const x = line(), group = chosenOf(), n = x.notes[index].slice(), x0 = e.clientX, y0 = e.clientY;
-    const resize = e.clientX > rect.right - Math.min(10, rect.width / 3);
+    const handle = window.SongbirdModel.grip(rect.width), resize = e.altKey || (handle > 0 && e.clientX > rect.right - handle);
     let preview = copy(x.notes), moved = false;
     s.drag = { moved: false };
     target.setPointerCapture(e.pointerId);
@@ -294,7 +294,7 @@
       final: x.off + x.bounds.end / PPB }));
     const start = Math.min(0, ...lines.map((x) => x.start)), end = Math.max(...lines.map((x) => x.end));
     const g = { low, high, row: 19, top: 28, left: 58, start, lines,
-      unit: Math.max(32, ((document.getElementById("studio-composer")?.clientWidth || 700) - 100) / Math.max(1, end - start)) * s.zoom };
+      unit: window.SongbirdModel.rollUnit(s.zoom, (document.getElementById("studio-composer")?.clientWidth || 700) - 100, end - start) };
     const width = g.left + (end - start) * g.unit, height = g.top + (high - low + 1) * g.row;
     const box = el("div", { class: "sbc-roll", style: { width: `${width}px`, height: `${height}px` } });
     const plot = el("div", { class: "sbc-grid", style: { left: `${g.left}px`, top: `${g.top}px`, width: `${width - g.left}px`, height: `${height - g.top}px`, backgroundSize: `${g.unit * s.snap}px ${g.row}px` },
@@ -312,10 +312,14 @@
     for (let beat = Math.ceil(start); beat <= end; beat++) box.append(el("span", { class: `sbc-ruler-label${beat >= 0 && beat % s.perBar === 0 ? " is-bar" : ""}`, style: { left: `${g.left + (beat - start) * g.unit}px` } },
       beat < 0 ? "↗" : beat % s.perBar === 0 ? beat / s.perBar + 1 : "·"));
     s.lines.forEach((x, pi) => x.notes.forEach((n, i) => {
-      const on = pi === s.focus && s.selected.has(i);
-      box.append(button(pitchName(n[2] + s.tonic), (e) => choose(e, pi, i), { class: `sbc-note${x.mine ? " is-edited" : ""}${on ? " is-selected" : ""}`,
-        "data-part-note": `${pi}.${i}`, "aria-pressed": String(on), "aria-label": `${pitchName(n[2] + s.tonic)}, phrase ${pi + 1}, beat ${(n[0] / PPB + 1).toFixed(2)}, velocity ${n[3]}`,
-        style: noteStyle(n, g, x.off), onpointerdown: (e) => drag(e, pi, i, g), onkeydown: (e) => moveKey(e, pi, i) }));
+      const on = pi === s.focus && s.selected.has(i), name = pitchName(n[2] + s.tonic), style = noteStyle(n, g, x.off);
+      const wide = parseFloat(style.width), handle = window.SongbirdModel.grip(wide);
+      const item = button(window.SongbirdModel.labelFits(name, wide - handle, { char: 6.2 }) ? name : "", (e) => choose(e, pi, i), {
+        class: `sbc-note${x.mine ? " is-edited" : ""}${on ? " is-selected" : ""}`, title: `${name}. Drag to move; drag its right edge, or ⌥-drag, to change its length.`,
+        "data-part-note": `${pi}.${i}`, "aria-pressed": String(on), "aria-label": `${name}, phrase ${pi + 1}, beat ${(n[0] / PPB + 1).toFixed(2)}, velocity ${n[3]}`,
+        style, onpointerdown: (e) => drag(e, pi, i, g), onkeydown: (e) => moveKey(e, pi, i) });
+      if (handle) item.append(el("span", { class: "sbc-resize", "aria-hidden": "true", style: { width: `${handle}px` } }));
+      box.append(item);
     }));
     return el("div", { class: "sbc-roll-scroll", id: "sbc-part-roll", tabindex: "0", "aria-label": `${s.player.label} piano roll`, onkeydown: shortcut }, box);
   }

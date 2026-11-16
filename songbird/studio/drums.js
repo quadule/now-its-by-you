@@ -234,7 +234,7 @@
   }
   function grid(s) {
     const step = stepOf(s.snap), cols = s.cols, pieces = s.player.drums;
-    const unit = Math.max(42, ((document.getElementById("studio-composer")?.clientWidth || 700) - 100) / s.phrase.duration_beats) * s.zoom;
+    const unit = window.SongbirdModel.rollUnit(s.zoom, (document.getElementById("studio-composer")?.clientWidth || 700) - 100, s.phrase.duration_beats, { least: 42 });
     const width = (k) => ((cols[k + 1] ?? s.bounds.end) - cols[k]) / PPB * unit;
     const template = `var(--sbc-drum-label) ${cols.map((_, k) => `${width(k)}px`).join(" ")}`;
     const bar = s.perBar * PPB, hits = new Map();

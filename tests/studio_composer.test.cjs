@@ -1022,3 +1022,35 @@ test("an instrument's roll is the whole section too: its phrases' notes each the
   assert.deepEqual(s.commits.at(-1), { path: "part.fiddle.verse:0.1", value: [[0, 96, 1, 90], [96, 96, 3, 90]] },
     "one note at a time: the long note gives way to the pasted ones");
 });
+
+test("a narrow note is moved from its middle, resized from its edge or with ⌥, and its syllable shown only whole", () => {
+  const s = setup(writableScore());
+  s.find("#sbc-zoom").emit("change", { target: { value: "fit" } });
+  const item = () => s.find('[data-note="1"]');
+  item().style.width = "21px";  // as narrow as an eighth note at Fit on a long section
+  let rect = item().getBoundingClientRect();
+  item().emit("pointerdown", { clientX: rect.left + 10, clientY: 150 });
+  item().emit("pointermove", { clientX: rect.left + 10, clientY: 127 });
+  item().emit("pointerup", { clientX: rect.left + 10, clientY: 127 });
+  let moved = s.commits.at(-1).value.notes[1];
+  assert.deepEqual([moved.degree, moved.alter, moved.duration], [4, 1, 1], "a press in its middle moves it: up a row, its length kept");
+  const count = s.commits.length;
+  s.window.SongbirdComposer.render(writableScore());
+  rect = item().getBoundingClientRect();
+  item().emit("pointerdown", { clientX: rect.left + 2, clientY: 150, altKey: true });
+  item().emit("pointermove", { clientX: rect.left + 2 - 30, clientY: 150, altKey: true });
+  item().emit("pointerup", { clientX: rect.left + 2 - 30, clientY: 150, altKey: true });
+  assert.equal(s.commits.length, count + 1);
+  moved = s.commits.at(-1).value[1];
+  assert.equal(moved.onset, 0, "⌥-drag: its start kept");
+  assert(moved.duration < 1, "and its length changed");
+  // a wide note's handle is a quarter of it; a label that doesn't fit isn't drawn cut short
+  const handle = item().querySelector(".sbc-resize");
+  assert(handle && parseFloat(handle.style.width) <= parseFloat(item().style.width) / 4 + 1);
+  const view = writableScore();
+  view.composition.sections[1].phrases[0].notes[1].syllable = "everlasting";
+  s.root.clientWidth = 300;  // a narrow page: the note about 50 pixels wide
+  s.window.SongbirdComposer.render(view);
+  assert.equal(item().querySelector(".sbc-note-word").textContent, "", "no broken fragment");
+  assert.match(item().getAttribute("aria-label"), /everlasting/, "its name still says it");
+});

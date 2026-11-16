@@ -99,6 +99,7 @@ function editor(saved) {
     getElementById: () => ({ clientWidth: 900 }), querySelector: () => null,
   };
   win.StudioBridge = { getEdits: () => ({}), setEdit: (p, v) => edits.push([p, v]), releaseEdit: (p) => edits.push([p, null]) };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/model.js"), "utf8"), { window: win });
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../songbird/studio/drums.js"), "utf8"), { window: win, document: doc, Node, fetch: () => new Promise(() => {}) });
   const player = { name: "drum", label: "Drum", poly: true, drums: ["bass", "tip", "mute", "rim", "top"].map((name, index) => ({ index, name, label: name })) };
   const view = { composition: { players: [player], beats_per_bar: 4 } };

@@ -312,3 +312,24 @@ test("quantize puts the chosen notes' starts and ends on the grid, keeping a mel
   assert.deepEqual(M.quantizeNotes(notes, [3], 1, b).map((n) => [n.onset, n.duration]).slice(3), [[1, 2], [3.4, 0.6]], "only the chosen; the others as they were");
   assert.throws(() => M.quantizeNotes(notes, [4], 0.5, { ...b, max_final_onset: 3.4 }), /finer snap/, "the last note past the next line's pickup");
 });
+
+test("a roll's scale: Fit puts the span in the width; a zoom starts where an eighth note's syllable can be read", () => {
+  assert.equal(M.rollUnit("fit", 900, 64), 14.0625, "a long section, whole in the width");
+  assert.equal(M.rollUnit("fit", 900, 300), 12, "never narrower than 12 a beat");
+  assert.equal(M.rollUnit(1, 900, 64), M.ROLL_BEAT, "100%: an eighth note 32 pixels wide, the roll scrolling");
+  assert.equal(M.rollUnit(2, 900, 64), 2 * M.ROLL_BEAT);
+  assert.equal(M.rollUnit(1, 900, 4.5), 200, "a short section is as wide as the width at 100%");
+  assert.equal(M.zoomOf("fit"), "fit");
+  assert.equal(M.zoomOf("1.5"), 1.5);
+});
+
+test("a note's resize handle is a quarter of it, 4 to 9 pixels, and none on a narrow note; a label is drawn whole or not at all", () => {
+  assert.equal(M.grip(12), 0);
+  assert.equal(M.grip(19), 0);
+  assert.equal(M.grip(21), 5, "an eighth note at the old fit: its middle moves it");
+  assert.equal(M.grip(40), 9);
+  assert.equal(M.grip(200), 9);
+  assert.equal(M.labelFits("su", 21), true);
+  assert.equal(M.labelFits("sunlight", 21), false);
+  assert.equal(M.labelFits("", 100), false);
+});

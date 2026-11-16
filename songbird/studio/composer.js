@@ -10,6 +10,8 @@
     mixolydian: [0, 2, 4, 5, 7, 9, 10], aeolian: [0, 2, 3, 5, 7, 8, 10],
     locrian: [0, 1, 3, 5, 6, 8, 10],
   };
+  // the rolls' zoom: the whole section in the width, or a scale an eighth note's syllable can be read at (model.js rollUnit)
+  const ZOOMS = [["fit", "Fit"], [1, "100%"], [1.5, "150%"], [2, "200%"], [3, "300%"]];
   const state = {
     view: null, section: -1, phrase: 0, snap: 0.25, zoom: 1, player: "voice",
     loop: false, metronome: false, scope: "phrase", drag: null, chords: true, bass: true, chord: null,
@@ -738,7 +740,7 @@
     const start = Math.min(0, ...sung.map((x) => x.start)), end = Math.max(s?.duration_beats || 0, ...sung.map((x) => x.end));
     const row = 23, left = 58, ruler = spans.some((x) => x.p.chords?.length) ? 54 : 28;
     const available = Math.max(500, (root()?.clientWidth || 950) - 44);
-    const unit = Math.max(32, (available - left) / Math.max(1, end - start)) * state.zoom;
+    const unit = M().rollUnit(state.zoom, available - left, end - start);
     return { spans, low, high, start, end, row, left, ruler, unit, width: left + (end - start) * unit, height: ruler + (high - low + 1) * row };
   }
   const xAt = (g, beat) => g.left + (beat - g.start) * g.unit;  // a beat of the section, on the roll
@@ -795,16 +797,18 @@
     for (const span of g.spans) {
       const q = span.p, here = span.i === state.phrase, chosen = here ? new Set(picked()) : new Set();
       q.notes.forEach((n, index) => {
-        const picked = chosen.has(index);
+        const picked = chosen.has(index), style = noteStyle(n, g, span.off), wide = parseFloat(style.width), handle = M().grip(wide);
+        const word = n.slur ? "‿" : displayWords(n.syllable) || "♪";
         const item = el("button", { type: "button", class: `sbc-note${picked ? " is-selected" : ""}${index === q.notes.length - 1 ? " is-cadence" : ""}${n.edited ? " is-edited" : ""}${n.slur ? " is-slur" : ""}${here && chosenChord()?.rubs?.includes(index) ? " is-rub" : ""}`,
           "aria-label": noteTitle(n, index, q), "aria-pressed": picked ? "true" : "false", "data-note": index, "data-phrase": span.i,
-          title: `${noteTitle(n, index, q)}. Drag to move; drag right edge to resize. Arrow keys move; Shift + left/right changes length.`,
-          style: noteStyle(n, g, span.off), onclick: (event) => {
+          title: `${noteTitle(n, index, q)}. Drag to move; drag its right edge, or ⌥-drag, to change its length.`,
+          style, onclick: (event) => {
             if (state.drag?.moved) return;
             if (event.shiftKey) { toggleNote(span.i, index); return; }
             selectNote(span.i, index); audition(pitchFor(n));
           }, onpointerdown: (event) => startNoteDrag(event, span.i, index, g), onkeydown: (event) => noteKey(event, index, span.i),
-        }, el("span", { class: "sbc-note-word" }, n.slur ? "‿" : displayWords(n.syllable) || "♪"), el("span", { class: "sbc-resize", "aria-hidden": "true" }, ""));
+        }, el("span", { class: "sbc-note-word" }, M().labelFits(word, wide - handle, { char: 5.4 }) ? word : ""),
+        handle ? el("span", { class: "sbc-resize", "aria-hidden": "true", style: { width: `${handle}px` } }, "") : null);
         roll.append(item);
       });
     }
@@ -905,7 +909,9 @@
     stop();
     let target = event.currentTarget;
     const rect = target.getBoundingClientRect();
-    const resizing = event.target.classList.contains("sbc-resize") || event.clientX > rect.right - Math.min(10, rect.width / 3);
+    // its right edge (as wide as its handle: none on a narrow note) or ⌥ anywhere on it changes its length
+    const handle = M().grip(rect.width);
+    const resizing = event.altKey || (handle > 0 && event.clientX > rect.right - handle);
     // a note of the selection drags the whole selection (its click, without a drag, chooses it alone)
     const group = !resizing && pi === state.phrase && several() && picked().includes(index) ? picked() : null;
     if (!group) selectNote(pi, index);
@@ -1160,7 +1166,7 @@
       el("div", { class: "sbc-row sbc-editor-heading" },
         el("div", {}, el("h3", {}, section().label, el("span", { class: "sbc-muted" }, " / Melody")), el("p", { class: "sbc-muted" }, where("tune") === "line" ? "Edit a phrase once; every appearance follows." : "This change stays in this place.")),
         el("div", { class: "sbc-editor-settings" }, select("Snap", state.snap, [[0.25, "¼ beat"], [0.5, "½ beat"], [1, "1 beat"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
-          select("Zoom", state.zoom, [[1, "Fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" }))),
+          select("Zoom", state.zoom, ZOOMS, (value) => { state.zoom = M().zoomOf(value); paint(); }, { id: "sbc-zoom" }))),
       phraseStrip(), scopeChoice("tune"), editTools(), pianoRoll(), ownCard(), state.chord && state.note === null ? null : inspector(), chordCard(),
       el("div", { class: "sbc-tools" }, el("span", { class: "sbc-overline" }, "Shape phrase"),
         el("div", { class: "sbc-button-group", role: "group", "aria-label": "Transpose phrase" },
@@ -1426,7 +1432,7 @@
         }, { id: "sbc-part" }),
         part ? el("span", { class: "hint" }, drummer ? "This phrase only" : "This section only") : scopeSwitch("tune"),
         el("span", { class: "settings" }, select("Snap", state.snap, [[0.25, "¼"], [0.5, "½"], [1, "1"]], (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
-          select("Zoom", state.zoom, [[1, "fit"], [1.5, "150%"], [2, "200%"], [3, "300%"]], (value) => { state.zoom = Number(value); paint(); }, { id: "sbc-zoom" })),
+          select("Zoom", state.zoom, ZOOMS, (value) => { state.zoom = M().zoomOf(value); paint(); }, { id: "sbc-zoom" })),
         button("Close", () => page()?.closeNotes?.(), { class: "sbc-button sbc-quiet", id: "sbc-close", title: "Close the notes (Esc)" }),
         !part && p?.notes?.length ? health() : null),
       (s.phrases || []).length ? phraseStrip() : null,

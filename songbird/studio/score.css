@@ -399,8 +399,8 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .sbc-note.is-slur { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 2px dotted var(--card); }
 .sbc-note.is-rub { outline: 2px dotted var(--red); outline-offset: 1px; }
 .sbc-note.is-dragging { cursor: grabbing; opacity: .85; }
-.sbc-note-word { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
-.sbc-resize { position: absolute; top: 0; right: 0; width: 9px; height: 100%; cursor: ew-resize; border-right: 2px solid #ffffff40; }
+.sbc-note-word { display: block; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.sbc-resize { position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: ew-resize; border-right: 2px solid #ffffff40; }
 .sbc-playhead { width: 2px; background: var(--red); z-index: 6; pointer-events: none; }
 .sbc-harmony-label { position: absolute; left: 4px; top: 29px; font-size: 9px; color: var(--ink-3); }
 button.sbc-chord { position: absolute; top: 27px; height: 21px; padding-left: 6px; border: 0; border-left: 1px solid var(--rule); border-radius: 0; text-align: left; font: 600 10px/21px var(--sans); color: var(--gold); background: color-mix(in srgb, var(--gold) 8%, var(--card)); white-space: nowrap; overflow: hidden; z-index: 1; }
