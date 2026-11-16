@@ -422,6 +422,7 @@ can be replayed.
 | Path | Value | Acts on |
 |---|---|---|
 | `form.order` | section occurrence IDs (`verse:0`, `refrain:0`, …) | validated arrangement order, inherited in children |
+| `clips` | `{form, order, clips, next}`: the song's sections as independent clips, or null for its own form | the song's form: blank, duplicated, repeated, deleted, reordered and reshaped sections ([Independent clips](notes/STUDIO-CLIPS.md)); inherited in children |
 | `tune.<phrase>` | `{degree, onset, duration}` for each note, in beats (`"slur": true` on a melisma's later notes) | pitch/rhythm of every appearance of that phrase |
 | `tune.<section>:<n>.<i>`, `tune.<section>:last.<i>` | as `tune.<phrase>` | one place's line ("This place only, or everywhere") |
 | `chords.<phrase>` | a list of chords a bar (`[["vi"], ["IV/3", "Vsus4"]]`), or null for the song's own | the harmony of every appearance of that phrase: the band, the choir, the backing voices ("Changing the chords") |
@@ -1280,6 +1281,21 @@ finer grid of the same kind only if the notes can't fit.
   singer sings it a little louder and lifts it: docs/history/DELIVERY.md). The
   editor explains them beside the lines.
 - **The stems are named after their recording**: "MIDI and stems", above.
+
+## Independent clips
+
+A version's sections can be clips of its own form: duplicated (the copy
+independent of the original), repeated as linked instances, deleted (the last
+refrain too), inserted blank with a chosen length in bars and number of lines,
+reordered freely, and given other lines. One edit, `clips`, holds the whole
+arrangement; `POST /api/clips` makes each operation and answers the whole edits
+map it leaves. A clip's id is its section's name in the song as sung
+(`verse102`), so the paths above name a clip by its instance (`verse102:0`)
+wherever it moves, and words written on a clip stay with it in every
+descendant. With clips, `form.*` and `form.order` are refused, and so is a path
+that names a section of the source form by its place (the operations rewrite
+those). The design, the stored format, bounds and the editor's fields:
+[docs/notes/STUDIO-CLIPS.md](notes/STUDIO-CLIPS.md).
 
 ## Arrangement control
 

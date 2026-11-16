@@ -84,7 +84,9 @@ def lyric_keys(genome, form, lyrics=None) -> list[str | None]:
             out.append(None)
             continue
         verse = next(sung).id if sung is not None else None
-        if block == "verse":
+        if genome.section(name).clip:  # a clip's lines are the clip's, every time it comes (songbird.clips)
+            out.append(f"{name}:0")
+        elif block == "verse":
             out.append(f"{name}:{verse}" if verse else None)
         elif block == "refrain" and seen[name] == total[name] - 1:
             out.append(f"{name}:{LAST}")
@@ -118,7 +120,10 @@ def lyric_target(genome, path: str) -> tuple[str, int, str]:
         raise ValueError(f"there is no section called {name}")
     if not section.lyrics:
         raise ValueError("this section is instrumental; write words in a sung section")
-    if section.lyrics == "verse":
+    if section.clip:  # (songbird.clips)
+        if which != "0":
+            raise ValueError(f"a clip's lines are named for the clip: lyrics.{name}:0.<line>")
+    elif section.lyrics == "verse":
         if which.isdigit():
             raise ValueError("a verse's lines go with the verse they're written for, named for it, "
                              "not its place; choose the line again where it's sung")
@@ -152,6 +157,8 @@ def check_lyric(genome, path: str, value, target: int | None = None) -> str | No
     if any(not part for word in text.split() for part in heteronyms.bare(word).split("-")):
         raise ValueError("put syllable hyphens inside words, like car-ry")
     target = len(genome.phrases[pid].sung) if target is None else target  # a line of its own: its notes' count
+    if not target:
+        raise ValueError("this line has no notes yet; write its words with its notes")
     for word in text.split():
         why = heteronyms.problem(word, len([p for p in heteronyms.bare(word).split("-") if p]))
         if why:
@@ -208,9 +215,7 @@ def authored(genome, params, lyrics=None) -> list[dict]:
     if not lines and not placed:
         return [{} for _ in params.form]
     if lines and lyrics is None:
-        from .arrange import seed_lyrics
-
-        lyrics = seed_lyrics(genome, params.form)
+        lyrics = _seed(genome, params)
     keys = lyric_keys(genome, params.form, lyrics) if lines else [None] * len(params.form)
     return [{**placed.get(place, {}), **lines.get(key, {})} if genome.section(name).lyrics else {}
             for name, place, key in zip(params.form, section_ids(params.form), keys)]
@@ -220,9 +225,7 @@ def lyric_overlay(genome, params, lyrics):
     """Overlay authored lines on a display/performance copy, never on the bank's held words."""
     if not has_lines(params):
         return lyrics
-    from .arrange import seed_lyrics
-
-    base = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
+    base = lyrics if lyrics is not None else _seed(genome, params)
     sung = iter(base.sections)
     sections = []
     for name, patch in zip(params.form, authored(genome, params, base)):
@@ -247,9 +250,7 @@ def own_places(genome, params, lyrics) -> frozenset:
 def lyric_value(genome, params, lyrics, path):
     """The line a lyric path names as these words sing it (a person's own over them), None if they don't."""
     key, line, _ = lyric_target(genome, path)
-    from .arrange import seed_lyrics
-
-    base = lyrics if lyrics is not None else seed_lyrics(genome, params.form)
+    base = lyrics if lyrics is not None else _seed(genome, params)
     keys = lyric_keys(genome, params.form, base)
     if key not in keys:
         return None
@@ -366,8 +367,8 @@ def check_phrase(genome, pid: str, value, free: bool = False) -> list[dict] | No
     if value is None:
         return None
     phrase = genome.phrases[pid]
-    if not phrase.sung:
-        raise ValueError("this line is a rest; it has no melody notes to move")
+    if not phrase.sung and not (free and genome.clips is not None and pid not in genome.clips.base.phrases):
+        raise ValueError("this line is a rest; it has no melody notes to move")  # (a blank clip's line takes them)
     want = len(phrase.sung)
     if free:
         if not isinstance(value, list) or not 1 <= len(value) <= OWN_MAX * MELISMA:
@@ -722,6 +723,10 @@ def held_lyrics(genome, params):
     the bank can sing them in this form, else the seed's own."""
     from . import arrange
 
+    if genome.clips is not None:  # a song made from clips: the words its clips sing (songbird.clips)
+        from .clips import held_words
+
+        return held_words(genome, params)
     words = params.words
     if words and genome.source.get("bank") and not arrange.held_problem(genome, params.form, words):
         return arrange.sing(genome, params.form, words)
@@ -759,6 +764,9 @@ def _owned(genome, params, lines, phrases, lyrics, sung=None) -> list:
 
 
 def _seed(genome, params):
+    """The seed's own words for the form (a song made from clips: the words its clips sing)."""
+    if genome.clips is not None:
+        return held_lyrics(genome, params)
     from .arrange import seed_lyrics
 
     return seed_lyrics(genome, params.form)
@@ -953,10 +961,14 @@ def _said(genome, text: str, authored: bool) -> dict:
 def view(genome, params, lyrics) -> dict:
     """The editor's complete arrangement and piano roll without rendering audio. duration: the realized
     score's length in seconds, the last chord's ring included, which the rendered audio lasts."""
+    from . import clips as clips_mod
     from .arrange import seed_lyrics
     from .realize import timeline
     from .style import ring
 
+    arrangement = clips_mod.view(genome, params)  # the song's clips (songbird.clips), before they are resolved
+    genome, params, lyrics = clips_mod.resolved(genome, params, lyrics)
+    labels = clips_mod.labels(genome, params.form)
     clock = timeline(genome, params)
     meter = genome.meter
     song = genome
@@ -1005,6 +1017,8 @@ def view(genome, params, lyrics) -> dict:
                               "syllable": syllable or "", "word": word or (words[k][1] if k < len(words) else ""),
                               "edited": tune_from["from"] is not None or bool(phrase.own),
                               **({"slur": True, "syllable_index": k} if slur else {})})
+            if labels is not None and identity.rsplit(":", 1)[1] != "0":  # a linked repeat edits its clip's first
+                here = [f"{name}:0.{line}" if own else None, None]
             phrases.append({"id": pid, "path": f"tune.{pid}", "start_beat": cursor / meter.beat,
                             "duration_beats": phrase.bars * meter.bar / meter.beat,
                             "pickup_beats": phrase.pickup / meter.beat, "notes": notes,
@@ -1040,17 +1054,21 @@ def view(genome, params, lyrics) -> dict:
                             **_said(genome, lines[index][said] if lines[index] and sung and said < len(lines[index])
                                     else "", str(at) in patches[index]),
                             # a person's own notes played in for a player here (notes in)
-                            "part_key": f"{identity}.{j}",
+                            "part_key": f"{name}:0.{j}" if labels is not None else f"{identity}.{j}",
                             "part_editable": j < len(section.phrases),
                             "parts": sorted(p for p, held in in_parts.items() if f"{identity}.{j}" in held),
                             "part_notes": {p: held[f"{identity}.{j}"] for p, held in in_parts.items()
                                            if f"{identity}.{j}" in held}})
             cursor += phrase.bars * meter.bar
         nth = int(identity.rsplit(":", 1)[1])
-        label = name.replace("bridge2", "Bridge 2").title()
-        if sum(n == name for n in params.form) > 1:
-            label += f" {nth + 1}"
+        if labels is not None:  # a clip: its own label, or its role's and its number among them
+            label = labels[index]
+        else:
+            label = name.replace("bridge2", "Bridge 2").title()
+            if sum(n == name for n in params.form) > 1:
+                label += f" {nth + 1}"
         sections.append({"index": index, "id": identity, "lyric_key": keys[index], "name": name, "label": label,
+                         **({"clip": name, "instance": nth} if labels is not None else {}),
                          "start_beat": start / meter.beat, "duration_beats": (cursor - start) / meter.beat,
                          "start_seconds": clock.seconds(start), "end_seconds": clock.seconds(cursor),
                          "sung": bool(section.lyrics) and any(sung for _, sung in lined[index]), "phrases": phrases})
@@ -1068,6 +1086,7 @@ def view(genome, params, lyrics) -> dict:
             "players": playable(params), "part_seed_tonic": int(song.seed_params["tonic"]),
             "performed": {p: sorted(held) for p, held in in_parts.items()},
             "arranged": bool(params.composition.get("order")),
+            "clips": arrangement,
             # the words said two ways, and the rules that choose (songbird.heteronyms): the words editor's toggles
             "say": _say_table(),
             "guidance": "Draw, move, copy or delete notes. Words and notes travel together when the syllable "

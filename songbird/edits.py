@@ -32,6 +32,9 @@ keeps. An edit that can't be kept is left out and said why, never bent.
                          a line with its own count of syllables: {"words": text, "notes": [{degree, onset, duration,
                          slur?, alter?}, ...]}, kept by the verse (or round) its words are for, as lyrics.* are
                          (docs/notes/OWN-COUNT-LINES.md); null gives the line back to its tune line
+    clips                the song's sections as independent clips (songbird.clips, docs/notes/STUDIO-CLIPS.md):
+                         {"form", "order", "clips", "next"}; null gives the song its own form back. With clips the
+                         paths above name a clip by its instance (verse102:0) and form.* is refused
     words.verse.<i>      {"id": verse, "slots": {slot: words}}, or just the verse: the i-th verse (from 0)
     words.refrain.<i>    the i-th refrain's own words: {"id": couplet, "head": head, "slots": {slot: words}},
                          any of the three, or just a couplet (never the last's: it always sings the canon)
@@ -82,6 +85,7 @@ from dataclasses import dataclass, fields, replace
 from datetime import date
 
 from . import arrange as arrange_mod
+from . import clips as clips_mod
 from . import takeover
 from . import variation
 from . import composition
@@ -119,6 +123,7 @@ def instruments() -> tuple[str, ...]:
 
     return known()
 SHAPE = ("verses", "pairs", "intro", "turn", "break", "tag", "outro", "bridge2")
+CLIPPED = "the song is in clips: its form is the clips' order"  # (songbird.clips)
 WORDS = re.compile(r"words\.(verse|refrain)\.(\d+)|words\.(refrain|bridge|bridge2|tag)")
 
 
@@ -297,8 +302,17 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
     clean: dict = {}
     problems: list[dict] = []
     played = 0  # notes played in so far (part.*), against composition.PART_NOTES
+    song = genome  # the song a person's clips make, where these edits make some (songbird.clips)
+    if isinstance((edits or {}).get("clips"), dict):
+        try:
+            song = clips_mod.song(genome, clips_mod.check(genome, edits["clips"]))
+        except (ValueError, TypeError):
+            pass
     for path, value in (edits or {}).items():
         try:
+            if clips_mod.clip_of(path) and song.clips is None:  # a clip the version holds: checked as it is pinned
+                clean[path] = value
+                continue
             if path == "date":
                 clean[path] = date.fromisoformat(str(value)).isoformat()
             elif path == "name":
@@ -324,23 +338,25 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 if value not in b["mode"]["options"]:
                     raise LookupError(f"the modes are {', '.join(b['mode']['options'])}")
                 clean[path] = value
+            elif path == "clips":  # a person's clips (songbird.clips)
+                clean[path] = clips_mod.check(genome, value)
             elif path == "form.order":
                 names = composition.order(genome, value)
                 clean[path] = composition.section_ids(names) if names is not None else None
             elif path.startswith("tune."):
-                clean[path] = composition.check_phrase(genome, path[5:], value)
+                clean[path] = composition.check_phrase(song, path[5:], value)
             elif path.startswith("chords."):
-                clean[path] = composition.check_chords(genome, path[7:], value)
+                clean[path] = composition.check_chords(song, path[7:], value)
             elif path.startswith("part."):
-                notes = composition.check_part(genome, path, value)
+                notes = composition.check_part(song, path, value)
                 if notes and played + len(notes) > composition.PART_NOTES:
                     raise ValueError(f"a version takes at most {composition.PART_NOTES:,} notes played in")
                 played += len(notes or ())
                 clean[path] = notes
             elif path.startswith("lyrics."):
-                clean[path] = composition.check_lyric(genome, path, value)
+                clean[path] = composition.check_lyric(song, path, value)
             elif path.startswith("line."):  # a line with its own count, its words and notes (docs/notes/OWN-COUNT-LINES.md)
-                clean[path] = composition.check_own(genome, path, value)
+                clean[path] = composition.check_own(song, path, value)
             elif path.startswith("form."):
                 part = path[5:]
                 if part == "verses":
@@ -369,7 +385,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                     raise LookupError(f"the styles are {', '.join(sorted(STYLES))}")
                 clean[path] = value
             elif path.startswith("arrange."):  # the arrangement taken over (songbird.takeover)
-                clean[path] = takeover.check(genome, path, value)
+                clean[path] = takeover.check(song, path, value)
             elif path.startswith("style.") and path[6:] in STYLE_OPTIONS:
                 from .style import renamed
 
@@ -396,7 +412,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
                 else:
                     clean[path] = value
             elif sound_mod.owns(path):  # sound design: a player's sound, its channel, a transition (songbird.sound)
-                clean[path] = sound_mod.check(genome, path, value)
+                clean[path] = sound_mod.check(song, path, value)
             elif path.startswith("mix.") and path[4:] in MIX:
                 lo, hi = RANGES[path[4:]]
                 clean[path] = round(_number(value, lo, hi), 3 if path == "mix.predelay" else 2)
@@ -416,7 +432,7 @@ def check(genome: Genome, edits: dict, phrasings=()) -> tuple[dict, list[dict]]:
         except LookupError as e:
             problems.append(Problem(path, str(e.args[0]) if e.args else "there's no such choice"))
         except (TypeError, ValueError) as e:
-            if path in ("form.order", "name") or path.startswith(("tune.", "chords.", "lyrics.", "line.", "part.", "arrange.")) \
+            if path in ("form.order", "name", "clips") or path.startswith(("tune.", "chords.", "lyrics.", "line.", "part.", "arrange.")) \
                     or sound_mod.owns(path):
                 problems.append(Problem(path, str(e)))
                 continue
@@ -467,6 +483,7 @@ class Overrides:
         self._has_variants = None
         self._lines_before: dict | None = None
         self._own_before: dict | None = None
+        self.song = genome  # the song the composition edits are checked against: a person's clips' (songbird.clips)
 
     def pin(self, out: dict) -> None:
         """The edits, in the table's working dict of parameters. Idempotent: the table calls it after its
@@ -522,7 +539,10 @@ class Overrides:
             else:
                 problems += [Problem(f"variants.{k}", "this program has no melody variants yet") for k in variants]
         changes = {p[5:]: v for p, v in e.items() if p.startswith("form.") and p != "form.order"}
-        if changes:
+        clipped = e["clips"] is not None if "clips" in e else bool((out.get("composition") or {}).get("clips"))
+        if changes and clipped:  # the clips' order is the form (songbird.clips)
+            problems += [Problem(f"form.{k}", CLIPPED) for k in changes]
+        elif changes:
             form, trouble, done = reshape(self.genome, out["form"], changes)
             out["form"] = list(form)
             problems += trouble
@@ -530,20 +550,24 @@ class Overrides:
         # Copy the nested data: the parent's choices are immutable and pin() is
         # called repeatedly while the machine makes the dependent decisions.
         held = dict(out.get("composition") or {})
+        genome = self._clips(out, held, applied, problems)  # the song as a person's clips make it, if they made any
+        refused = {p: why for p in e for why in [clips_mod.refusal(genome, p)] if why}
+        problems += [Problem(p, why) for p, why in refused.items()]
+        e = {p: v for p, v in e.items() if p not in refused}
         tune = dict(held.get("tune") or {})
         melisma = dict(held.get("melisma") or {})  # a line's melismas, beside its syllables' notes
         for path, value in e.items():
             if not path.startswith("tune."):
                 continue
             try:
-                notes = composition.check_phrase(self.genome, path[5:], value)
-                key = composition.edit_key(self.genome, path[5:])  # a line, or one place of the form
+                notes = composition.check_phrase(genome, path[5:], value)
+                key = composition.edit_key(genome, path[5:])  # a line, or one place of the form
                 melisma.pop(key, None)  # a line changed or restored takes its melismas with it
                 if notes is None:
                     tune.pop(key, None)
                 else:
-                    tune[key] = composition.pack_phrase(self.genome, notes)
-                    turns = composition.pack_melisma(self.genome, notes)
+                    tune[key] = composition.pack_phrase(genome, notes)
+                    turns = composition.pack_melisma(genome, notes)
                     if turns:
                         melisma[key] = turns
                 applied.append(path)
@@ -561,8 +585,8 @@ class Overrides:
             if not path.startswith("chords."):
                 continue
             try:
-                bars = composition.check_chords(self.genome, path[7:], value)
-                key = composition.edit_key(self.genome, path[7:])
+                bars = composition.check_chords(genome, path[7:], value)
+                key = composition.edit_key(genome, path[7:])
                 if bars is None:
                     chords.pop(key, None)
                 else:
@@ -580,7 +604,7 @@ class Overrides:
             if not path.startswith("part."):
                 continue
             try:
-                notes = composition.check_part(self.genome, path, value)
+                notes = composition.check_part(genome, path, value)
                 player, key = composition.part_key(path)
                 lines = parts.setdefault(player, {})
                 if notes is None:
@@ -604,8 +628,8 @@ class Overrides:
             if not path.startswith("lyrics."):
                 continue
             try:
-                text = composition.check_lyric(self.genome, path, value)
-                key, line, _ = composition.lyric_target(self.genome, path)
+                text = composition.check_lyric(genome, path, value)
+                key, line, _ = composition.lyric_target(genome, path)
                 patch = lines.setdefault(key, {})
                 if text is None:
                     patch.pop(str(line), None)
@@ -626,7 +650,7 @@ class Overrides:
             self._own_before = {k: dict(v) for k, v in own.items()}
         for path, value in e.items():  # words written to the tune's count take the line back to its tune's notes
             if path.startswith("lyrics.") and value is not None and path in applied:
-                key, line, _ = composition.lyric_target(self.genome, path)
+                key, line, _ = composition.lyric_target(genome, path)
                 own.get(key, {}).pop(str(line), None)
                 if key in own and not own[key]:
                     own.pop(key)
@@ -634,13 +658,13 @@ class Overrides:
             if not path.startswith("line."):
                 continue
             try:
-                checked = composition.check_own(self.genome, path, value)
-                key, line, _ = composition.lyric_target(self.genome, "lyrics." + path[5:])
+                checked = composition.check_own(genome, path, value)
+                key, line, _ = composition.lyric_target(genome, "lyrics." + path[5:])
                 patch = own.setdefault(key, {})
                 if checked is None:
                     patch.pop(str(line), None)
                 else:
-                    patch[str(line)] = composition.pack_own(self.genome, checked)
+                    patch[str(line)] = composition.pack_own(genome, checked)
                 if not patch:
                     own.pop(key, None)
                 applied.append(path)
@@ -650,9 +674,11 @@ class Overrides:
             held["own"] = own
         else:
             held.pop("own", None)
-        if "form.order" in e:
+        if "form.order" in e and clipped:
+            problems.append(Problem("form.order", CLIPPED))
+        elif "form.order" in e:
             try:
-                names = composition.order(self.genome, e["form.order"])
+                names = composition.order(genome, e["form.order"])
                 if names is None:
                     # Released, the form is the one the table has without it: the parent's, which a machine
                     # singing this version then chooses from (variation.choose_form, after this first pin);
@@ -663,39 +689,78 @@ class Overrides:
                 applied.append("form.order")
             except (ValueError, TypeError) as ex:
                 problems.append(Problem("form.order", str(ex)))
-        held = self._arrange(out, held, applied, problems)  # the arrangement taken over (songbird.takeover)
+        held = self._arrange(out, held, applied, problems, e)  # the arrangement taken over (songbird.takeover)
         if held:
             out["composition"] = held
         else:
             out.pop("composition", None)
-        # sound design (songbird.sound): against the band and the form this call leaves, into out["sound"]
-        done, trouble = sound_mod.pin(self.genome, out, e)
+        # sound design (songbird.sound): against the band and the form this call leaves (the clips' order, where a
+        # person made clips), into out["sound"]
+        if genome is self.genome:
+            done, trouble = sound_mod.pin(self.genome, out, e)
+        else:
+            sung = {**out, "form": list(genome.clips.value["order"])}
+            done, trouble = sound_mod.pin(genome, sung, e)
+            if "sound" in sung:
+                out["sound"] = sung["sound"]
+            else:
+                out.pop("sound", None)
         applied += done
         problems += trouble
         self.applied, self.problems = applied, problems
 
-    def _arrange(self, out: dict, held: dict, applied: list, problems: list) -> dict:
+    def _clips(self, out: dict, held: dict, applied: list, problems: list):
+        """A person's clips (songbird.clips) into the composition's working copy (held), checked: with them the form
+        is the clips' source form, each entry kept under a section of it moved to its clip, and the song the
+        composition edits are checked against is the one the clips make (self.song); without, the song's own."""
+        if "clips" in self.edits:
+            try:
+                value = clips_mod.check(self.genome, self.edits["clips"])
+                if value is None:
+                    held.pop("clips", None)
+                else:
+                    held["clips"] = value
+                applied.append("clips")
+            except (ValueError, TypeError) as ex:
+                problems.append(Problem("clips", str(ex)))
+        value = held.get("clips")
+        if not value:
+            self.song = self.genome
+            return self.genome
+        out["form"] = list(value["form"])
+        composed, sound = clips_mod.claimed(self.genome, value, held, dict(out.get("sound") or {}))
+        held.clear()
+        held.update(composed)
+        if sound:
+            out["sound"] = sound
+        self.song = clips_mod.song(self.genome, value)
+        return self.song
+
+    def _arrange(self, out: dict, held: dict, applied: list, problems: list, edits: dict | None = None) -> dict:
         """The arrangement a person took over, in the composition's working copy (held): each choice checked and
         put in place, and a sung section's length that its lines can't have with the rest said and left as it
         was (songbird.takeover). The same dict when there are no such edits."""
-        wanted = [p for p in self.edits if p.startswith("arrange.")]
+        edits = self.edits if edits is None else edits
+        wanted = [p for p in edits if p.startswith("arrange.")]
         if not wanted:
             return held
+        genome = self.song
+        form = genome.clips.value["order"] if genome.clips is not None else out["form"]
         before = takeover.copy(held.get("arrange") or {})
         mine = takeover.copy(before)
         for path in wanted:
             try:
-                takeover.put(mine, path, self.genome, takeover.check(self.genome, path, self.edits[path]))
+                takeover.put(mine, path, genome, takeover.check(genome, path, edits[path]))
                 applied.append(path)
             except (ValueError, TypeError) as ex:
                 problems.append(Problem(path, str(ex)))
-        for path, why in takeover.shape_problems(self.genome, out["form"], mine).items():
+        for path, why in takeover.shape_problems(genome, form, mine).items():
             # a length asked for now goes back to what the version held; one held from before (a section sung
             # again now) goes back to the section's own
-            was = before.get(path.split(".")[1], {}).get(path.rsplit(".", 1)[1]) if path in self.edits else None
-            takeover.put(mine, path, self.genome, was)
-            if takeover.shape_problems(self.genome, out["form"], mine).get(path):
-                takeover.put(mine, path, self.genome, None)
+            was = before.get(path.split(".")[1], {}).get(path.rsplit(".", 1)[1]) if path in edits else None
+            takeover.put(mine, path, genome, was)
+            if takeover.shape_problems(genome, form, mine).get(path):
+                takeover.put(mine, path, genome, None)
             if path in applied:
                 applied.remove(path)
             problems.append(Problem(path, why))
@@ -733,7 +798,7 @@ class Overrides:
                 self.problems = [*self.problems, Problem(path, f"the {style.name or 'ballad'} style can't play "
                                                                f"this song that way")]
         # a line for a time round the form hasn't got; which verses it sings is known with its words (unsung())
-        return self.unsung(params, composition.lyric_keys(self.genome, params.form), verses=False)[0]
+        return self.unsung(params, lyric_keys(self.genome, params), verses=False)[0]
 
     def unsung(self, params, keys, verses: bool = True) -> tuple:
         """The parameters without the lines a person wrote for a section these keys (composition.lyric_keys)
@@ -743,8 +808,8 @@ class Overrides:
         for path in self.applied:
             if not path.startswith(("lyrics.", "line.")) or self.edits.get(path) is None:
                 continue
-            key = composition.lyric_target(self.genome, _lyric(path))[0]
-            if not verses and self.genome.section(key.split(":", 1)[0]).lyrics == "verse":
+            key = composition.lyric_target(self.song, _lyric(path))[0]
+            if not verses and self.song.section(key.split(":", 1)[0]).lyrics == "verse":
                 continue
             if key not in keys:
                 absent.append(path)
@@ -756,7 +821,7 @@ class Overrides:
             for path in absent:
                 if (kind == "own") != path.startswith("line."):
                     continue
-                key, line, _ = composition.lyric_target(self.genome, _lyric(path))
+                key, line, _ = composition.lyric_target(self.song, _lyric(path))
                 previous = (before or {}).get(key, {}).get(str(line))
                 patch = lines.setdefault(key, {})
                 if previous is None:
@@ -782,6 +847,16 @@ class Overrides:
         out = params.to_dict()
         self.pin(out)
         return self.finish(Params.from_dict(out))
+
+
+def lyric_keys(genome: Genome, params, lyrics=None) -> list:
+    """The lyric keys a version sings (composition.lyric_keys) over these words: with a person's clips, the clips'
+    and the source form's sections' (whose lines the clips that section became sing: songbird.clips)."""
+    keys = composition.lyric_keys(genome, params.form, lyrics)
+    song, sung, words = clips_mod.resolved(genome, params, lyrics)
+    if song is genome:
+        return keys
+    return keys + composition.lyric_keys(song, sung.form, words if lyrics is not None else None)
 
 
 def _lyric(path: str) -> str:
@@ -926,29 +1001,33 @@ def resolve(genome: Genome, parent, voice, drift, edits: dict, *, seed: int | No
     if body and composition.has_lines(params):  # a line for a verse these words don't sing isn't kept
         sung = lyrics if lyrics is not None else arrange_mod.seed_lyrics(genome, params.form)
         before = len(overrides.problems)
-        params, unsung = overrides.unsung(params, composition.lyric_keys(genome, params.form, sung))
+        params, unsung = overrides.unsung(params, lyric_keys(genome, params, sung))
         applied = [p for p in applied if p not in unsung]
         problems += overrides.problems[before:]
     if sung_by_a_machine and lyrics is not None and genome.source.get("bank"):
         # the lineage holds what is sung: the person's words among them, else its own fitted to the form
         params = replace(params, words=arrange_mod.hold(genome, lyrics) if kept
                          else evolve.fitted(genome, params, voice, drift))
-    silent = {p: composition.part_silent(genome, params, p) or takeover.part_missing(genome, params, p)
+    # what is heard is the song as a person's clips make it, where they made any (songbird.clips)
+    song, heard, _ = clips_mod.resolved(genome, params, lyrics)
+    silent = {p: composition.part_silent(song, heard, p) or takeover.part_missing(song, heard, p)
               for p in applied if p.startswith("part.") and edits.get(p) is not None}
     silent = {p: why for p, why in silent.items() if why}
     if silent:  # notes played for a place this version doesn't play, or a player its band hasn't got: said, not kept
         params = _unplayed(params, generated, silent)
         applied = [p for p in applied if p not in silent]
         problems += [Problem(p, why) for p, why in silent.items()]
-    params, applied, problems, edits = _taken_over(genome, generated, params, applied, problems, edits)
+    params, applied, problems, edits = _taken_over(song, generated, params, applied, problems, edits,
+                                                   heard=clips_mod.resolved(genome, params, lyrics)[1])
+    song, heard, _ = clips_mod.resolved(genome, params, lyrics)
     # a change for one place this version doesn't sing (or whose section an arrangement laid to other lines): said,
     # and put back as the version before had it (after the arrangement, which decides the lines)
-    unplaced = {p: composition.place_silent(genome, params, p.split(".", 1)[1]) for p in applied
+    unplaced = {p: composition.place_silent(song, heard, p.split(".", 1)[1]) for p in applied
                 if p.startswith(("tune.", "chords.")) and composition.is_place(p.split(".", 1)[1])
                 and edits.get(p) is not None}
     unplaced = {p: why for p, why in unplaced.items() if why}
     if unplaced:
-        params = _unplaced(genome, params, generated, unplaced)
+        params = _unplaced(song, params, generated, unplaced)
         applied = [p for p in applied if p not in unplaced]
         problems += [Problem(p, why) for p, why in unplaced.items()]
     if "phrasing" in edits and phrasing_json is not None:
@@ -1040,8 +1119,24 @@ def marks(genome: Genome, generated, generated_lyrics, final_lyrics, applied: li
     program = program if program is not None else generated
     out: dict = {}
     generated_shape = shape(genome, generated.form) or {}
+    song = None  # the program's own as its clips make it, where a path names a clip (songbird.clips)
     for path in applied:
         value, was = edits.get(path), None
+        clip = clips_mod.clip_of(path)
+        if path == "clips":  # the program's own arrangement: its clips, or its form's
+            out[path] = {"value": value, "was": clips_mod.arrangement(generated)}
+            continue
+        if clip is not None and genome.clips is None:
+            if song is None:
+                song = clips_mod.resolved(genome, generated, generated_lyrics)
+            if clip not in song[0].sections:  # a clip the program hadn't made: nothing was there
+                out[path] = {"value": {"notes": len(value or [])} if path.startswith("part.") and value is not None
+                             else value, "was": None}
+                continue
+            heard = clips_mod.resolved(genome, params, final_lyrics)[1] if params is not None else None
+            out[path] = marks(song[0], song[1], song[2], final_lyrics, [path], edits, phrasing_json, params=heard,
+                              program=clips_mod.resolved(genome, program)[1])[path]
+            continue
         if path == "date":
             was = "the day it was made"
         elif path == "tempo.free":
@@ -1221,13 +1316,14 @@ def free_tempo_range(genome: Genome) -> tuple[float, float]:
     return round(min(FREE_TEMPO[0], TEMPO_REACH[0] * song), 1), round(max(FREE_TEMPO[1], TEMPO_REACH[1] * song), 1)
 
 
-def _taken_over(genome: Genome, generated, params, applied: list, problems: list, edits: dict):
+def _taken_over(genome: Genome, generated, params, applied: list, problems: list, edits: dict, heard=None):
     """The version with the arrangement choices it can't play (a section it doesn't sing, a player its band hasn't
     got, a pattern its player doesn't play, a build at the end) said and put back as the version before had
-    them; and the tempo marked as it is sung, where the style held it to its range."""
+    them; and the tempo marked as it is sung, where the style held it to its range. heard: the parameters as
+    heard, where a person's clips make them another song (songbird.clips; genome is then that song's)."""
     if "tempo" in applied and abs(params.tempo - float(edits.get("tempo", params.tempo))) > 0.05:
         edits = {**edits, "tempo": params.tempo}
-    quiet = {p: takeover.silent(genome, params, p, edits) for p in applied
+    quiet = {p: takeover.silent(genome, heard if heard is not None else params, p, edits) for p in applied
              if p.startswith("arrange.") and edits.get(p) is not None}
     quiet = {p: why for p, why in quiet.items() if why}
     if not quiet:

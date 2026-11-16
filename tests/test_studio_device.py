@@ -153,6 +153,44 @@ def test_written_drums_have_the_same_strokes_import_midi_and_render_spec(device,
     assert spec["json"] == server.render_spec(edits, "you", refrain["index"])
 
 
+def test_a_song_of_its_own_clips_is_the_same_on_both(device, server):
+    """Clips made through the editor's operations (docs/notes/STUDIO-CLIPS.md) cross both runtimes: the operation's
+    edits, the view, the grid, the players, notes in, the MIDI file, a section's spec and the sound design."""
+    body = {"edits": {}, "op": "blank", "role": "verse", "bars": 8, "lines": 4, "at": 0}
+    made = ask(device, "/api/clips", body)
+    assert made["status"] == 200 and made["json"] == S.answer(server, "/api/clips", body)
+    clip, edits = made["json"]["clip"], made["json"]["edits"]
+    refrain = next(c for c in edits["clips"]["order"] if c.startswith("refrain"))
+    body = {"edits": edits, "op": "duplicate", "clip": refrain, "at": 1}
+    made = ask(device, "/api/clips", body)
+    assert made["status"] == 200 and made["json"] == S.answer(server, "/api/clips", body)
+    edits = {**made["json"]["edits"],
+             f"line.{clip}:0.0": {"words": "We sing now", "notes": [{"degree": 1, "onset": 0, "duration": 1},
+                                                                     {"degree": 3, "onset": 1, "duration": 1},
+                                                                     {"degree": 5, "onset": 2, "duration": 2}]},
+             f"chords.{clip}-0": [["vi"], ["IV"]], f"part.guitar.{clip}:0.1": [[0, 96, 0, 80], [96, 96, 4, 90]]}
+    for path in ("/api/song", "/api/arrangement", "/api/players", "/api/sound"):
+        actual = ask(device, path, {"edits": edits})
+        assert actual["status"] == 200 and actual["json"] == S.answer(server, path, {"edits": edits})
+    view = ask(device, "/api/song", {"edits": edits})["json"]
+    assert not view["problems"]
+    sections = view["composition"]["sections"]
+    assert [s["clip"] for s in sections[:3]] == [clip, made["json"]["clip"], edits["clips"]["order"][2]]
+    assert sections[0]["phrases"][0]["lyric_text"] == "We sing now" and len(view["listen"]["sections"]) == len(sections)
+    take = {"player": "guitar", "lines": [sections[0]["phrases"][1]["part_key"]],
+            "notes": [[0.0, 1.0, 60, 90]]}
+    body = {"edits": edits, "take": take}
+    preview = ask(device, "/api/notes-in", body)
+    assert preview["status"] == 200 and preview["json"] == S.answer(server, "/api/notes-in", body)
+    exported = ask(device, "/api/export", {"edits": edits, "what": "midi"})
+    native = server.export(edits, "midi")
+    assert exported["status"] == 200 and exported["json"] == native
+    filename = native["url"].split("?")[0].rsplit("/", 1)[1]
+    assert Path(exported["file"]["path"]).read_bytes() == (server.cache / filename).read_bytes()
+    spec = ask(device, "/api/render/spec", {"edits": edits, "section": 0})
+    assert spec["status"] == 200 and spec["json"] == server.render_spec(edits, "you", 0)
+
+
 def test_start_says_the_device_and_what_it_can_t_do(device, server):
     out = ask(device, "/api/start", method="GET")
     start, theirs = out["json"], server.start_view()

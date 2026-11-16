@@ -52,10 +52,12 @@ def layout(genome, params) -> list[dict]:
     """Every line of the form in order: its part key (verse:1.0), tune line, section's name and place in words,
     its first and last bar lines and the window its notes belong to (composition.line_windows), in grid units;
     whether the singer sings it, and how far a style's lift has raised it."""
+    from .clips import labels
     from .realize import timeline
     from .style import repeated_phrases
 
     clock = timeline(genome, params)
+    named = labels(genome, params.form)  # a song made from clips: each clip's (songbird.clips)
     m = genome.meter
     from .takeover import phrase_plan
 
@@ -73,7 +75,7 @@ def layout(genome, params) -> list[dict]:
         after = genome.phrases[flat[k + 1][4]].pickup if k + 1 < len(flat) else (repeated[0].pickup if repeated else 0)
         end = u + phrase.bars * m.bar
         out.append({"key": f"{sid}.{j}", "sid": sid, "line": j, "pid": pid, "name": name, "index": i,
-                    "where": f"{section_label(params.form, i)}, line {j + 1}", "u0": u, "u1": end,
+                    "where": f"{named[i] if named else section_label(params.form, i)}, line {j + 1}", "u0": u, "u1": end,
                     "w0": u - phrase.pickup, "w1": end - after, "pickup": phrase.pickup,
                     "sung": bool(genome.section(name).lyrics) and bool(phrase.sung) and lined[i][j][1],
                     "up": 2 if lift_from is not None and i >= lift_from else 0,
@@ -172,6 +174,9 @@ def take(genome, params, player: str, notes, keys, played: bool = False) -> dict
     program's notes taken unchanged sound where they did."""
     if not isinstance(notes, list) or len(notes) > MAX_TAKE:
         raise ValueError(f"a take is a list of at most {MAX_TAKE} notes")
+    from .clips import resolved
+
+    genome, params, _ = resolved(genome, params)  # a person's clips, as one song (songbird.clips)
     lines = layout(genome, params)
     by_key = {ln["key"]: ln for ln in lines}
     if not isinstance(keys, list) or not keys or len(keys) > len(lines) or any(k not in by_key for k in keys):
@@ -270,6 +275,9 @@ def from_file(genome, params, score, file_bytes: bytes, assign: dict | None = No
     """A MIDI file brought back (the version's own export, changed), as edits: see the module's docstring.
     assign: {file track index: the export's track name, or "" to leave it} for tracks it couldn't name.
     Raises midi.Unreadable for a file it can't read, or one made from another version."""
+    from .clips import resolved
+
+    genome, params, _ = resolved(genome, params)  # a person's clips, as one song (songbird.clips)
     theirs = midi.parse(file_bytes)
     data, _ = midi.from_score(genome, params, score, title=genome.title)
     ours = midi.parse(data)

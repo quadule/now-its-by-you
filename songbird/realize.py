@@ -345,6 +345,9 @@ class Clock:
 def timeline(genome: Genome, params: Params) -> Clock:
     """The clock realize() puts a rendition's notes on: its form laid out on
     the grid, phrase after phrase, the song's first pickup at zero."""
+    from .clips import resolved
+
+    genome, params, _ = resolved(genome, params)  # a person's clips, as one song (songbird.clips)
     meter = genome.meter
     from .takeover import phrase_ids
 
@@ -372,7 +375,10 @@ def realize(genome: Genome, params: Params, verses=None, phrasing: Phrasing | No
     verses and fixed blocks; without them the seed's own words are sung."""
     if lyrics is not None and verses is not None:
         raise ValueError("realize sings verses or lyrics, not both")
+    from .clips import resolved
     from .composition import harmonized
+
+    genome, params, lyrics = resolved(genome, params, lyrics)  # a person's clips, as one song (songbird.clips)
 
     # a person's chords in place of a tune line's own (songbird.composition), for everything that sounds from
     # them: the band, the choir's harmony, the backing voices; the same genome when nobody changed one

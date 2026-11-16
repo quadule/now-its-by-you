@@ -730,7 +730,8 @@ def shaped(genome, out: dict) -> None:
     order, stays as it is, and a person's own form.* edits are pinned over this."""
     name = (out.get("style") or {}).get("name") or ""
     sdef = STYLES.get(name)
-    if sdef is None or not sdef.shape or (out.get("composition") or {}).get("order") or not out.get("form"):
+    if sdef is None or not sdef.shape or (out.get("composition") or {}).get("order") or not out.get("form") \
+            or (out.get("composition") or {}).get("clips"):
         return
     from .edits import reshape
 
@@ -1575,7 +1576,8 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     kept = name == (parent.name or "ballad")
     digest = ctx.parent.digest
     material = f"{c.hash or 'no-voice'}|{digest}|{name}"
-    if name in SOLO_BREAK and not (out.get("composition") or {}).get("order"):  # the trio's piano chorus, its break
+    if name in SOLO_BREAK and not ((out.get("composition") or {}).get("order")  # the trio's piano chorus, its break
+                                   or (out.get("composition") or {}).get("clips")):
         out["form"] = with_break(ctx.genome, out.get("form", ctx.parent.form), material, sdef)
     form = tuple(out.get("form", ctx.parent.form))
     voices = int(out.get("choir", ctx.parent.choir))

@@ -51,10 +51,10 @@ or unbounded work. A melisma still uses scale degrees in its existing compact
 representation. A percussion player's part is written as strokes: the same
 part notes, each naming one of its pieces, on a step grid.
 
-A rewritten lyric line still belongs to its verse or refrain identity. Its
-words and melody follow that identity wherever it occurs, as existing
-own-line records do. The editor states this scope; independent copies of the
-same lyric identity need the clip model below.
+A rewritten lyric line in a song without clips belongs to its verse or refrain
+identity. Its words and melody follow that identity wherever it occurs, as
+existing own-line records do. In a song made of clips it belongs to its clip
+([Independent clips](STUDIO-CLIPS.md)).
 
 ## Web and standalone parity
 
@@ -81,7 +81,11 @@ exercise Pyodide or its browser fetch shim.
 
 ## The structural boundary
 
-The timeline still lays out the song's section templates. A verse is not an
+The six steps below are built as [independent clips](STUDIO-CLIPS.md): one
+`clips` edit, resolved once into the song every part of the program reads. What
+follows is why, and what a song without clips still is.
+
+Without clips, the timeline lays out the song's section templates. A verse is not an
 independent clip: its words are keyed by the bank's verse identity; its tune
 and chords may be shared; parts and transitions use occurrence positions;
 phrasing gestures use note indices. The bank also requires a valid narrative

@@ -921,6 +921,9 @@ def choose_form(out: dict, ctx: Context) -> None:
     if out.get("composition", {}).get("order"):
         out["form"] = list(out["composition"]["order"])
         return  # a person's arrangement is carried; its words and other choices still evolve
+    if out.get("composition", {}).get("clips"):  # a person's clips (songbird.clips): their source form, carried
+        out["form"] = list(out["composition"]["clips"]["form"])
+        return
     genome = ctx.genome
     source = ctx.parent.form if parse_form(genome, ctx.parent.form) else ctx.song.form
     was = parse_form(genome, source)

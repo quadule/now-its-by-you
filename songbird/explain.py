@@ -1484,6 +1484,12 @@ def listen_label(ctx: Context, v: Version, section: int | None, who: str) -> str
              else f"{who.split(':', 1)[-1].title()}'s version")
     if section is None:
         return f"The whole song, {whose}"
+    from .clips import labels, resolved
+
+    genome, params, _ = resolved(ctx.genome, v.params)
+    named = labels(genome, params.form)  # a person's clips: each clip's (songbird.clips)
+    if named is not None:
+        return f"{named[section]}, {whose}"
     return f"{words_view(v)[section]['label']}, {whose}"
 
 
