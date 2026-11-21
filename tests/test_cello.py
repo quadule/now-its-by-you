@@ -109,7 +109,8 @@ def test_no_hole_after_the_b1_pair(maker):
 # --- the bowed string, played as a cellist plays it ----------------------------------------
 
 
-@pytest.mark.parametrize("kind,pitches", [(cello.CELLO, (36, 48, 57, 69, 76)), (cello.VIOLA, (48, 62, 74, 84))])
+@pytest.mark.parametrize("kind,pitches", [(cello.CELLO, (36, 48, 57, 69, 76)), (cello.VIOLA, (48, 62, 74, 84)),
+                                          (cello.BASS, (28, 40, 47, 56, 64))])
 def test_in_tune_across_the_register_at_every_bow_position(kind, pitches):
     for pitch in pitches:
         for art, bright in (("", 0.0), ("", 1.0), ("tasto", 0.5), ("pont", 0.5)):
@@ -397,3 +398,13 @@ def test_a_typical_part_costs_little():
     t = time.process_time()
     stem("strings", part, 41.0)
     assert time.process_time() - t < 4.0
+
+
+def test_a_bowed_bass_is_an_instrument_of_the_band_mixed_as_a_bowed_string():
+    from songbird.synth import mixing
+
+    assert instruments.spec("bowedbass")["family"] == "bowed" and instruments.spec("bowedbass")["register"] == (28, 67)
+    assert mixing.role_of("bowedbass") == "strings"  # (the plucked bass's strip would take its bow off)
+    y = stem("bowedbass", [Note("bowedbass", 0.1, 1.6, 47.0, 0.7)], 2.0, ornament=0.0)
+    mono = y.mean(axis=1)
+    assert abs(1200 * np.log2(peak_hz(mono, midi_to_hz(47), 0.6, 1.5) / midi_to_hz(47))) < 10

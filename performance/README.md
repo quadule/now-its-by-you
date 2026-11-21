@@ -14,6 +14,16 @@ its stops released as articulate makes them (tE's t).
   The screen verse ends in the artist's own lines (composition "lines", handed down to a child that sings it):
   "they laughed and they wept, and they *scrolled* on and on, / but nobody *sang* it, and then it was gone."
 
+- `record-final.json`: the stage version, arc-morph with the stage's own words and ending. The refrains ask who
+  made, wrote and owns the song, and their lines and the screen verse's are the artist's (composition "lines"):
+  "It's *yours* when you sing it, and then it goes." / "Who *wrote* this song? Nobody, so / it's *yours* if you
+  sing it and then who knows? / It's yours for the *taking*, so take it, and do / whatever you like, but leave some
+  of *you* too." / "It's *yours* if you sing it, and then it *grows*. ... and now that you know it, go make it by
+  *you*." The tag is played, not sung (`arrange.tag:0.sung` false): a bowed upright bass (`bowedbass`) on the
+  whistle's tune two octaves down, the twin "bowedbass" with its levels along the tag, and the last phrase slows
+  to less than half its speed (`ritardando` 1.5).
+
+    uv run python -m songbird render performance/genome.json --replay performance/record-final.json --out final.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-B.json --out performance-B.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --out arc-morph.flac
 

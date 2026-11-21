@@ -225,3 +225,14 @@ def test_the_bands_own_arrangement_is_heard_under_a_layer():
         S.laid(G, params)
     assert type(heard["ctx"]) is type(plain["ctx"])
     assert [dict(s.parts) for s in heard["ctx"].sections] == [dict(s.parts) for s in plain["ctx"].sections]
+
+
+def test_a_twin_can_play_its_players_notes_plainly_and_octaves_away():
+    from songbird.score import Note
+
+    notes = (Note("whistle", 0.0, 0.5, 78.0, 0.6), Note("whistle", 0.5, 0.03, 83.0, 0.5, art="cut"),
+             Note("whistle", 0.53, 0.5, 76.0, 0.6, art="slur"), Note("whistle", 1.03, 0.5, 75.0, 0.6, art="tongued"))
+    assert S.twin_notes(notes, "bowedbass", None) is notes
+    plain = S.twin_notes(notes, "bowedbass", {"shift": -24, "plain": True})
+    assert [(n.pitch, n.art) for n in plain] == [(54.0, ""), (52.0, "slur"), (51.0, "")]
+    assert [n.pitch for n in S.twin_notes(notes, "bowedbass", {"shift": -12})] == [66.0, 71.0, 64.0, 63.0]

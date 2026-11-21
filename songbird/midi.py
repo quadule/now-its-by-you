@@ -34,7 +34,7 @@ PROGRAMS = {
     "lute": 24, "guitar": 25, "harp": 46, "bass": 32, "fiddle": 40, "whistle": 78, "drone": 109,
     "piano": 0, "epiano": 4, "epiano-reed": 4, "organ": 19, "harmonium": 20, "accordion": 21, "concertina": 21,
     "harmonica": 22, "nylon": 24, "steel": 25, "electric": 27, "electric-crunch": 29, "electric-tremolo": 27,
-    "slide": 25, "ukulele": 24, "banjo": 105, "mandolin": 25, "ebass": 33, "cello": 42, "viola": 41,
+    "slide": 25, "ukulele": 24, "banjo": 105, "mandolin": 25, "ebass": 33, "cello": 42, "viola": 41, "bowedbass": 43,
     "strings": 48, "vibes": 11, "vibraphone": 11, "marimba": 12, "glock": 9, "glockenspiel": 9, "celesta": 8,
     "musicbox": 10, "music-box": 10, "synthpad": 89, "synth-pad": 89, "synthbass": 38, "synth-bass": 38,
     "sub-bass": 38, "synthbass2": 39, "chip-bass": 38, "synthlead": 81, "synth-solo": 81, "chip": 80,

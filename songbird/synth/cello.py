@@ -1,4 +1,5 @@
-"""The cello, the viola and a string section: bowed strings on bowed.py's waveguide, through their own bodies.
+"""The cello, the viola, a bowed upright bass and a string section: bowed strings on bowed.py's waveguide, through
+their own bodies.
 
 Every player is bowed.py's string (two delay lines meeting at the bow, the STK
 friction curve between) driven by control tracks from bowed.tracks(), with
@@ -77,6 +78,9 @@ SPEC = {
     "viola": dict(family="bowed", role="comping", register=(48, 88), place=(0.2, 0.45), level=0.076, poly=False,
                   articulations=ARTICULATIONS,
                   about="a viola: darker than the fiddle, its C string weak; bowed, slid, plucked"),
+    "bowedbass": dict(family="bowed", role="comping", register=(28, 67), place=(0.1, 0.4), level=0.098, poly=False,
+                      articulations=ARTICULATIONS,
+                      about="an upright bass played with the bow: the band's bass, its player's bow in hand"),
     "strings": dict(family="bowed", role="comping", register=(36, 96), place=(0.0, 0.9), level=0.0265, poly=True,
                     articulations=ARTICULATIONS,
                     about="a string section: each line of the part taken by violins (left), violas or cellos (right) "
@@ -108,7 +112,11 @@ VIOLA = Kind(strings=(48, 55, 62, 69), box=body.VIOLA, rate=5.9, depth=(14.0, 26
              bite=0.07, shift=0.11, dark=0.12, bright=0.06, fingerboard=0.22, ring=1.2)
 VIOLIN = Kind(strings=(55, 62, 69, 76), box=body.FIDDLE, rate=6.0, depth=(12.0, 25.0), rise=0.012, turn=0.022,
               bite=0.06, shift=0.09, dark=0.12, bright=0.06, fingerboard=0.24, ring=1.0)
-KINDS = {"cello": CELLO, "viola": VIOLA}
+# An upright bass under the bow: the plucked bass's own box, strings in fourths from E1. A heavier bow on a longer,
+# thicker string: slower to speak and to turn round, a slower and narrower vibrato, longer shifts.
+BASS = Kind(strings=(28, 33, 38, 43), box=body.BASS, rate=5.0, depth=(12.0, 24.0), rise=0.03, turn=0.045,
+            bite=0.11, shift=0.2, dark=0.12, bright=0.06, fingerboard=0.2, ring=2.2)
+KINDS = {"cello": CELLO, "viola": VIOLA, "bowedbass": BASS}
 
 REF = 0.1  # the bow position the speeds and weights are reckoned from
 TASTO, PONT = 0.2, 0.04  # bow positions

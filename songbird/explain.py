@@ -74,7 +74,7 @@ PLAYERS = {"lute": "lute", "guitar": "guitar", "harp": "harp", "bass": "bass", "
            "electric": "electric guitar", "kit": "drum kit", "steel": "pedal steel", "slide": "slide guitar",
            "glock": "glockenspiel", "vibes": "vibraphone", "musicbox": "music box", "stomps": "stomping feet",
            "claps": "hand claps", "strings": "string section", "banjo": "banjo", "mandolin": "mandolin",
-           "cello": "cello", "piano": "piano", "organ": "organ", "harmonica": "harmonica", "concertina": "concertina",
+           "cello": "cello", "bowedbass": "bowed upright bass", "piano": "piano", "organ": "organ", "harmonica": "harmonica", "concertina": "concertina",
            "celesta": "celesta", "tambourine": "tambourine", "accordion": "accordion", "harmonium": "harmonium"}
 # The styles, as the page names them (songbird/style.py STYLES), and their feels
 STYLE_NAMES = {"ballad": "the ballad band, the song's own", "stringband": "a string band", "country": "country",

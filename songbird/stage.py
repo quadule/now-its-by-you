@@ -15,10 +15,14 @@ The edition's own exact data, params.composition["exact"], which the renderer ho
 (composition.handed_down drops it):
 
     {"human": {"verse:0": [0, 0, 0, 0.2]},                   amounts finer than the grid's, by section (optional)
-     "twins": {"harp~": ["harp", "arp"], "harp#": ["harp", "chip"]},
+     "twins": {"harp~": ["harp", "arp"], "harp#": ["harp", "chip"],
+               "bowedbass": ["whistle", "bowedbass", {"shift": -24, "plain": true}]},
                                                              a synth (any instrument) on a player's own notes,
                                                              or a layered part's, level with it (whole-stem
-                                                             RMS), by its name
+                                                             RMS), by its name; a third entry says how it plays
+                                                             them (twin_notes): "shift" semitones away,
+                                                             "plain" without the player's grace notes and the
+                                                             articulations the instrument doesn't have
      "layers": [{"style": "synthfolk", "parts": ["arp", "synthpad"],
                  "copy": [{"part": "synthpad", "to": "verse:0", "from": "verse:1"}]}],
                                                              another style's players on the same song (its key,
@@ -59,6 +63,7 @@ SHARE_MOST = 0.6  # the people's share of the timbre at human 1 (throat.HUMAN_SH
 TWINS = {"harp": "arp", "bass": "synthbass", "guitar": "arp", "drum": "drummachine", "whistle": "synthlead",
          "fiddle": "synthlead"}
 UNDER = -7.0  # dB a twin plays under its player ("under")
+GRACE = 0.06  # s: a shorter note is a player's grace note (a whistle's cut), which a plain twin leaves out
 EDGE = 0.12  # s a level takes to change where two points fall at one place
 PICKUP = 0.6  # s before a section's first downbeat a line of it may begin
 SPLICE = 0.03  # s one take of the lead fades into the next
@@ -347,7 +352,7 @@ def touched(score) -> set[str]:
     cache keeps none of them under its own key: synth.render)."""
     plan = getattr(score, "stage", None) or {}
     out = set(plan.get("levels") or {}) | set(plan.get("twins") or {})
-    out |= {part for part, _ in (plan.get("twins") or {}).values()}
+    out |= {pair[0] for pair in (plan.get("twins") or {}).values()}
     out |= {name for layer in plan.get("layers") or [] for name in layer["parts"]}
     if plan.get("takes"):
         out.add("voice")
@@ -377,6 +382,21 @@ def spliced(takes: dict, plan: list[tuple[float, object]], sr: int, fade: float 
             w[i1: i1 + f] = np.linspace(1.0, 0.0, f)
         out += takes[key] * w
     return out
+
+
+def twin_notes(notes, synth_name: str, how: dict | None):
+    """A player's notes as its twin plays them: as they are, or (how) "shift" semitones away and, "plain",
+    without the player's grace notes (shorter than GRACE) and with an articulation the instrument doesn't
+    have played as a plain note."""
+    if not how:
+        return notes
+    from .synth.instruments import spec
+
+    shift = float(how.get("shift", 0))
+    if how.get("plain"):
+        has = spec(synth_name).get("articulations")
+        notes = tuple(n if has is None or n.art in has else replace(n, art="") for n in notes if n.dur >= GRACE)
+    return tuple(replace(n, pitch=n.pitch + shift) for n in notes) if shift else tuple(notes)
 
 
 def rms(x: np.ndarray) -> float:
@@ -464,13 +484,14 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
                 order.append(name)
 
     twins = {name: pair for name, pair in (plan.get("twins") or {}).items() if pair[0] in makes}
-    played = {part: _Played(makes[part]) for part, _ in twins.values()}
+    played = {pair[0]: _Played(makes[pair[0]]) for pair in twins.values()}
     for part, shared in played.items():
         makes[part] = shared.take
 
-    for name, (part, synth_name) in twins.items():
-        def twin(part=part, synth_name=synth_name) -> np.ndarray:
-            y = render_part(synth_name, notes_of.get(part) or score.part(part), sr, length, score.band, seed, None)
+    for name, (part, synth_name, *how) in twins.items():
+        def twin(part=part, synth_name=synth_name, how=how[0] if how else None) -> np.ndarray:
+            notes = twin_notes(notes_of.get(part) or score.part(part), synth_name, how)
+            y = render_part(synth_name, notes, sr, length, score.band, seed, None)
             return y * (played[part].rms() / max(rms(y), 1e-9))  # level with the player whose part it plays
         makes[name] = twin
         if name not in order:

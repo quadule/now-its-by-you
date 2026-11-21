@@ -250,7 +250,8 @@ NAMES = {
     "reed": ("reed",),
     "squeezebox": ("accordion", "concertina", "melodeon", "bandoneon", "squeezebox"),
     "harmonica": ("harmonica", "melodica"),  # a melodica: a free reed blown, a lead line
-    "strings": ("cello", "viola", "strings", "quartet"),  # their low strings kept: no fiddle's 180 Hz high-pass
+    # their low strings kept: no fiddle's 180 Hz high-pass (a bowed bass's whole name, so it isn't the plucked bass)
+    "strings": ("cello", "viola", "strings", "quartet", "bowedbass"),
     "synth": ("synth", "synthlead", "arp", "chip"),
     "steel": ("steel", "pedalsteel", "lapsteel"),  # its low strings kept, and no fiddle's duck: it swells by its pedal
     "slide": ("slide", "bottleneck"),
