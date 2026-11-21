@@ -140,7 +140,14 @@
     {
       "name": "studio-harmony",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8801"],
+      "runtimeArgs": [
+        "run",
+        "songbird",
+        "studio",
+        "--no-open",
+        "--port",
+        "8801"
+      ],
       "port": 8801,
       "url": "http://127.0.0.1:8801"
     },
@@ -209,21 +216,47 @@
     {
       "name": "studio-score",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "songbird", "studio", "--no-open", "--port", "8811", "--machine", "fictional:ada"],
+      "runtimeArgs": [
+        "run",
+        "songbird",
+        "studio",
+        "--no-open",
+        "--port",
+        "8811",
+        "--machine",
+        "fictional:ada"
+      ],
       "port": 8811,
       "url": "http://127.0.0.1:8811"
     },
     {
       "name": "studio-score-public",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "songbird", "studio", "--public", "--machine", "fictional:wren", "--port", "8812", "--no-open"],
+      "runtimeArgs": [
+        "run",
+        "songbird",
+        "studio",
+        "--public",
+        "--machine",
+        "fictional:wren",
+        "--port",
+        "8812",
+        "--no-open"
+      ],
       "port": 8812,
       "url": "http://127.0.0.1:8812"
     },
     {
       "name": "studio-site-local",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "python", "web/studio-wasm/tools/serve_site.py", "renders/studio-site", "--port", "8820"],
+      "runtimeArgs": [
+        "run",
+        "python",
+        "web/studio-wasm/tools/serve_site.py",
+        "renders/studio-site",
+        "--port",
+        "8820"
+      ],
       "port": 8820,
       "url": "http://127.0.0.1:8820"
     },
@@ -245,16 +278,49 @@
     {
       "name": "studio-site",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd web/studio-site && exec node_modules/.bin/wrangler dev --port 8813 --ip 127.0.0.1"],
+      "runtimeArgs": [
+        "-c",
+        "cd web/studio-site && exec node_modules/.bin/wrangler dev --port 8813 --ip 127.0.0.1"
+      ],
       "port": 8813,
       "url": "http://127.0.0.1:8813"
     },
     {
       "name": "studio-own-lines",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["SONGBIRD_HOME=/tmp/claude-1000/-home-milo-Code-songbird--claude-worktrees-editable-notes-syllables-line-59bd88/8e656f32-4985-4fb1-91eb-e3ddc26e7eb5/scratchpad/home", "uv", "run", "songbird", "studio", "--no-open", "--port", "8830", "--machine", "fictional:ada"],
+      "runtimeArgs": [
+        "SONGBIRD_HOME=/tmp/claude-1000/-home-milo-Code-songbird--claude-worktrees-editable-notes-syllables-line-59bd88/8e656f32-4985-4fb1-91eb-e3ddc26e7eb5/scratchpad/home",
+        "uv",
+        "run",
+        "songbird",
+        "studio",
+        "--no-open",
+        "--port",
+        "8830",
+        "--machine",
+        "fictional:ada"
+      ],
       "port": 8830,
       "url": "http://127.0.0.1:8830"
+    },
+    {
+      "name": "studio-stage",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "songbird",
+        "studio",
+        "renders/performance/final-draft/now-its-by-you-final-A.flac",
+        "--song",
+        "performance/genome.json",
+        "--machine",
+        "published",
+        "--no-open",
+        "--port",
+        "8840"
+      ],
+      "port": 8840,
+      "url": "http://127.0.0.1:8840"
     }
   ]
 }
