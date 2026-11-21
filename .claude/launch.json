@@ -321,6 +321,21 @@
       ],
       "port": 8840,
       "url": "http://127.0.0.1:8840"
+    },
+    {
+      "name": "study",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8790",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/milo/Code/songbird-study"
+      ],
+      "port": 8790,
+      "url": "http://127.0.0.1:8790"
     }
   ]
 }
