@@ -12,12 +12,15 @@
   "form": [
    "intro",
    "verse",
+   "turn",
    "refrain",
    "turn",
    "verse",
+   "turn",
    "refrain",
    "turn",
    "bridge",
+   "turn",
    "refrain",
    "tag"
   ],
@@ -198,26 +201,124 @@
       }
      }
     },
-    "turn:0": {
-     "players": {
-      "bass": {
-       "synth": "under"
-      },
-      "guitar": {
-       "synth": "under"
-      }
-     }
-    },
     "turn:1": {
      "players": {
       "bass": {
        "synth": "under"
       },
       "guitar": {
+       "synth": "under",
+       "pattern": "strum",
+       "level": "plays"
+      },
+      "lute": {
+       "pattern": "quote",
+       "level": "hard"
+      },
+      "harp": {
+       "pattern": "high",
+       "level": "plays"
+      },
+      "drum": {
+       "pattern": "pulse",
+       "level": "plays"
+      }
+     }
+    },
+    "turn:3": {
+     "players": {
+      "bass": {
        "synth": "under"
       },
+      "guitar": {
+       "synth": "under",
+       "pattern": "strum",
+       "level": "plays"
+      },
       "fiddle": {
-       "synth": "under"
+       "synth": "under",
+       "pattern": "pad",
+       "level": "plays"
+      },
+      "whistle": {
+       "pattern": "quote",
+       "level": "hard"
+      },
+      "drum": {
+       "pattern": "heart",
+       "level": "plays"
+      },
+      "harp": {
+       "pattern": "roll",
+       "level": "plays"
+      },
+      "lute": {
+       "pattern": "fills",
+       "level": "plays"
+      }
+     }
+    },
+    "turn:0": {
+     "players": {
+      "whistle": {
+       "pattern": "quote",
+       "level": "hard"
+      },
+      "fiddle": {
+       "level": "out"
+      },
+      "lute": {
+       "level": "out"
+      },
+      "harp": {
+       "pattern": "arp",
+       "level": "plays"
+      }
+     }
+    },
+    "turn:2": {
+     "players": {
+      "fiddle": {
+       "pattern": "quote",
+       "level": "hard"
+      },
+      "whistle": {
+       "pattern": "counter",
+       "level": "soft"
+      },
+      "guitar": {
+       "pattern": "pick",
+       "level": "plays"
+      },
+      "drum": {
+       "pattern": "light",
+       "level": "plays"
+      },
+      "lute": {
+       "level": "out"
+      }
+     }
+    },
+    "turn:4": {
+     "players": {
+      "whistle": {
+       "pattern": "quote",
+       "level": "hard"
+      },
+      "fiddle": {
+       "pattern": "pad",
+       "level": "soft"
+      },
+      "harp": {
+       "pattern": "roll",
+       "level": "plays"
+      },
+      "drum": {
+       "pattern": "heart",
+       "level": "plays"
+      },
+      "lute": {
+       "level": "out"
       }
      }
     }
@@ -325,6 +426,26 @@
       ],
       [
        "refrain:0",
+       null
+      ],
+      [
+       "refrain:0",
+       0
+      ],
+      [
+       "turn:4",
+       0
+      ],
+      [
+       "turn:4",
+       null
+      ],
+      [
+       "turn:4.end",
+       null
+      ],
+      [
+       "turn:4.end",
        0
       ],
       [
@@ -382,7 +503,7 @@
        -9
       ],
       [
-       "turn:1.end",
+       "turn:3.end",
        -9
       ],
       [
@@ -430,7 +551,7 @@
        -9
       ],
       [
-       "turn:1.end",
+       "turn:3.end",
        -9
       ],
       [
@@ -522,7 +643,7 @@
        null
       ],
       [
-       "turn:0.end",
+       "turn:1.end",
        null
       ],
       [
@@ -548,11 +669,11 @@
        -6
       ],
       [
-       "turn:1",
+       "turn:3",
        -6
       ],
       [
-       "turn:1.end",
+       "turn:3.end",
        null
       ],
       [
@@ -612,7 +733,7 @@
        4
       ],
       [
-       "turn:0.end",
+       "turn:1.end",
        4
       ],
       [
@@ -620,7 +741,7 @@
        2
       ],
       [
-       "turn:1.end",
+       "turn:3.end",
        2
       ],
       [
@@ -696,6 +817,22 @@
      ],
      "bowedbass": [
       [
+       "turn:4",
+       null
+      ],
+      [
+       "turn:4",
+       2.0
+      ],
+      [
+       "turn:4.end",
+       2.0
+      ],
+      [
+       "turn:4.end",
+       null
+      ],
+      [
        "refrain:2@0.93",
        null
       ],
@@ -742,6 +879,22 @@
       [
        "verse:0.1",
        null
+      ],
+      [
+       "turn:0",
+       null
+      ],
+      [
+       "turn:0",
+       -3
+      ],
+      [
+       "turn:0.end",
+       -3
+      ],
+      [
+       "turn:0.end",
+       null
       ]
      ],
      "epiano~": [
@@ -752,6 +905,40 @@
       [
        "verse:0.1",
        null
+      ],
+      [
+       "turn:0",
+       null
+      ],
+      [
+       "turn:0",
+       -5
+      ],
+      [
+       "turn:0.end",
+       -5
+      ],
+      [
+       "turn:0.end",
+       null
+      ]
+     ],
+     "lute": [
+      [
+       "turn:1",
+       0
+      ],
+      [
+       "turn:1",
+       7
+      ],
+      [
+       "turn:1.end",
+       7
+      ],
+      [
+       "turn:1.end",
+       0
       ]
      ]
     }
