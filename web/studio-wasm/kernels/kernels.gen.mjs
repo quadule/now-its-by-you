@@ -3903,6 +3903,19 @@ export function k_synth$throat$_assemble_lay(y, at, periodic, aperiodic, hann, l
   }
 }
 
+// songbird/synth/throat.py:735
+export function k_synth$throat$_gelu_flat(x, out) {
+  let i, t, v, $t1, $t2, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
+  x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
+  out_d = out.d; out_n0 = out.n0; out_n1 = out.n1; out_s0 = out.s0; out_s1 = out.s1;
+  for ($t1 = 0, $t2 = x_n0; $t1 < $t2; $t1 += 1) {
+    i = $t1;
+    v = x_d[i];
+    t = (0.7978845608028654 * (v + (0.044715 * ((v * v) * v))));
+    out_d[i] = ((0.5 * v) * (1.0 + Math.tanh(t)));
+  }
+}
+
 // songbird/synth/tube.py:94
 export function k_synth$tube$_scatter(right, left, area, out_right, out_left, lo, hi) {
   let d, i, r, total, $t1, $t2, area_d, area_n0, area_n1, area_s0, area_s1, left_d, left_n0, left_n1, left_s0, left_s1, out_left_d, out_left_n0, out_left_n1, out_left_s0, out_left_s1, out_right_d, out_right_n0, out_right_n1, out_right_s0, out_right_s1, right_d, right_n0, right_n1, right_s0, right_s1;

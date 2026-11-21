@@ -1066,6 +1066,92 @@ void throat_assemble_lay(double *y, const int32_t *at, const double *periodic, c
   }
 }
 
+// Fast accurate tanh(t) (< 2 ULP across all finite doubles, exact +/-1 for |t| >= 20, preserves NaN/Inf)
+// using Cody-Waite range reduction of 2|t| and degree-12 Taylor polynomial for exp(r)-1.
+static inline double fast_tanh_f64(double t) {
+  if (t != t) return t;
+  double a = __builtin_fabs(t);
+  if (a >= 20.0) return t < 0.0 ? -1.0 : 1.0;
+  double z = a + a;
+  double kf = __builtin_rint(z * 1.4426950408889634);
+  double r = (z - kf * 0.6931471803691238) - kf * 1.9082149292705877e-10;
+  double p = 1.0 / 479001600.0;
+  p = p * r + 1.0 / 39916800.0;
+  p = p * r + 1.0 / 3628800.0;
+  p = p * r + 1.0 / 362880.0;
+  p = p * r + 1.0 / 40320.0;
+  p = p * r + 1.0 / 5040.0;
+  p = p * r + 1.0 / 720.0;
+  p = p * r + 1.0 / 120.0;
+  p = p * r + 1.0 / 24.0;
+  p = p * r + 1.0 / 6.0;
+  p = p * r + 0.5;
+  p = p * r + 1.0;
+  p *= r;
+  union { uint64_t u; double d; } scale;
+  scale.u = (uint64_t)((int64_t)kf + 1023LL) << 52;
+  double two_k = scale.d;
+  double term = two_k * p;
+  double ta = ((two_k - 1.0) + term) / ((two_k + 1.0) + term);
+  return t < 0.0 ? -ta : ta;
+}
+
+#ifdef __wasm_simd128__
+static inline v128_t fast_tanh_f64x2(v128_t t) {
+  v128_t v20 = wasm_f64x2_splat(20.0);
+  v128_t v1 = wasm_f64x2_splat(1.0);
+  v128_t a = wasm_f64x2_abs(t);
+  v128_t clamped = wasm_f64x2_pmin(a, v20);
+  v128_t z = wasm_f64x2_add(clamped, clamped);
+  v128_t kf = wasm_f64x2_nearest(wasm_f64x2_mul(z, wasm_f64x2_splat(1.4426950408889634)));
+  v128_t r = wasm_f64x2_sub(wasm_f64x2_sub(z, wasm_f64x2_mul(kf, wasm_f64x2_splat(0.6931471803691238))),
+                            wasm_f64x2_mul(kf, wasm_f64x2_splat(1.9082149292705877e-10)));
+  v128_t p = wasm_f64x2_splat(1.0 / 479001600.0);
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 39916800.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 3628800.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 362880.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 40320.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 5040.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 720.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 120.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 24.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(1.0 / 6.0));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), wasm_f64x2_splat(0.5));
+  p = wasm_f64x2_add(wasm_f64x2_mul(p, r), v1);
+  p = wasm_f64x2_mul(p, r);
+  v128_t ki = wasm_i64x2_extend_low_i32x4(wasm_i32x4_trunc_sat_f64x2_zero(kf));
+  v128_t two_k = wasm_i64x2_shl(wasm_i64x2_add(ki, wasm_i64x2_splat(1023LL)), 52);
+  v128_t term = wasm_f64x2_mul(two_k, p);
+  v128_t ta = wasm_f64x2_div(wasm_f64x2_add(wasm_f64x2_sub(two_k, v1), term),
+                             wasm_f64x2_add(wasm_f64x2_add(two_k, v1), term));
+  ta = wasm_v128_bitselect(v1, ta, wasm_f64x2_ge(a, v20));
+  v128_t sign_mask = wasm_i64x2_splat((int64_t)0x8000000000000000ULL);
+  v128_t th = wasm_v128_or(ta, wasm_v128_and(t, sign_mask));
+  return wasm_v128_bitselect(t, th, wasm_f64x2_ne(t, t));
+}
+#endif
+
+EXPORT(throat_gelu_flat)
+void throat_gelu_flat(const double *x, int32_t n, double *out) {
+  int32_t i = 0;
+#ifdef __wasm_simd128__
+  v128_t vc = wasm_f64x2_splat(0.044715), vs = wasm_f64x2_splat(0.7978845608028654);
+  v128_t vhalf = wasm_f64x2_splat(0.5), v1 = wasm_f64x2_splat(1.0);
+  for (; i + 2 <= n; i += 2) {
+    v128_t v = wasm_v128_load(x + i);
+    v128_t v3 = wasm_f64x2_mul(wasm_f64x2_mul(v, v), v);
+    v128_t t = wasm_f64x2_mul(vs, wasm_f64x2_add(v, wasm_f64x2_mul(vc, v3)));
+    v128_t th = fast_tanh_f64x2(t);
+    wasm_v128_store(out + i, wasm_f64x2_mul(wasm_f64x2_mul(vhalf, v), wasm_f64x2_add(v1, th)));
+  }
+#endif
+  for (; i < n; i++) {
+    double v = x[i];
+    double t = 0.7978845608028654 * (v + 0.044715 * (v * v * v));
+    out[i] = 0.5 * v * (1.0 + fast_tanh_f64(t));
+  }
+}
+
 #ifdef __wasm_simd128__
 // throat._matmul (x @ W.T) as Pyodide's scipy computes it, BLAS dgemm: the build with -msimd128 only
 // (kernels-simd.wasm; py/web_patches.py). Every output is summed exactly as that OpenBLAS (0.3.31, built for

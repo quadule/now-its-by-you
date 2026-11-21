@@ -369,6 +369,18 @@ def throat_assemble_lay(f):
     return call
 
 
+def throat_gelu_flat(f):
+    def call(x, out):
+        x2 = F(x)
+        if out.dtype == np.float64 and out.flags.c_contiguous and out.shape == x2.shape:
+            W.throat_gelu_flat(P(x2), len(x2), P(out))
+            return
+        work = np.empty(x2.shape)
+        W.throat_gelu_flat(P(x2), len(x2), P(work))
+        out[...] = work
+    return call
+
+
 PORTS = {
     "synth.pluck._loop": pluck_loop,
     "synth.pluck._bank": pluck_bank,
@@ -405,6 +417,7 @@ PORTS = {
     "synth.throat._assemble": throat_assemble,
     "synth.throat._lay": throat_lay,
     "synth.throat._assemble_lay": throat_assemble_lay,
+    "synth.throat._gelu_flat": throat_gelu_flat,
 }
 
 

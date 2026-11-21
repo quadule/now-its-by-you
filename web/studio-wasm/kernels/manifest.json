@@ -3375,6 +3375,30 @@
   "fastmath": false,
   "calls": []
  },
+ "synth.throat._gelu_flat": {
+  "js": "k_synth$throat$_gelu_flat",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "x",
+   "out"
+  ],
+  "arrays": {
+   "x": [
+    "f8",
+    1,
+    "C"
+   ],
+   "out": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
  "synth.tube._scatter": {
   "js": "k_synth$tube$_scatter",
   "ok": true,

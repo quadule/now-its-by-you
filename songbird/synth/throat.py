@@ -731,16 +731,35 @@ def continuous(t: dict, lf0: np.ndarray) -> np.ndarray:
                      (lf0 - np.log(220.0)) / 0.6, slope], axis=-1)
 
 
+@njit(cache=True, nogil=True)
+def _gelu_flat(x: np.ndarray, out: np.ndarray) -> None:
+    for i in range(x.shape[0]):
+        v = x[i]
+        t = 0.7978845608028654 * (v + 0.044715 * (v * v * v))
+        out[i] = 0.5 * v * (1.0 + np.tanh(t))
+
+
 def _gelu(x: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
-    """0.5 x (1 + tanh(0.7978845608028654 (x + 0.044715 x^3))), elementwise: worked out in place, a few
-    thousand rows at a time on threads (threads.in_order), each value by the same operations in the same order.
-    out may be x itself (each row's tanh term is made before the row is written)."""
+    """0.5 x (1 + tanh(0.7978845608028654 (x + 0.044715 x^3))), elementwise: fused in place across
+    threads (threads.in_order). out may be x itself."""
     out = np.empty_like(x) if out is None else out
+    if fx.JIT and x.dtype == np.float64 and out.dtype == np.float64 and x.flags.c_contiguous and out.flags.c_contiguous:
+        xf, of = x.reshape(-1), out.reshape(-1)
+        cols = x.shape[1] if x.ndim == 2 else 1
+        step = 4096 * cols
+        if workers() <= 1 or len(xf) <= step:
+            _gelu_flat(xf, of)
+            return out
+        for _ in in_order([(a, partial(_gelu_flat, xf[a: a + step], of[a: a + step]))
+                           for a in range(0, len(xf), step)]):
+            pass
+        return out
     rows = 4096
 
     def part(r0: int) -> None:
         v, o = x[r0: r0 + rows], out[r0: r0 + rows]
-        t = v**3
+        t = v * v
+        t *= v
         t *= 0.044715
         t += v
         t *= 0.7978845608028654
