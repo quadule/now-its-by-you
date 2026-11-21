@@ -153,6 +153,134 @@ def pipe_run(f):
     return call
 
 
+def instruments_placed(f):
+    def call(y, cos, sin, root2, width, out):
+        y2 = F(y)
+        n, chans = y2.shape
+        if out.dtype == np.float64 and out.flags.c_contiguous and out.shape == (n, 2):
+            W.instruments_placed(P(y2), n, chans, float(cos), float(sin), float(root2), float(width), P(out))
+            return
+        work = np.empty((n, 2))
+        W.instruments_placed(P(y2), n, chans, float(cos), float(sin), float(root2), float(width), P(work))
+        out[...] = work
+    return call
+
+
+def fx_sliding_min(f):
+    def call(x, before, after, reflect, out):
+        x = F(x)
+        cap = int(before) + int(after) + 2
+        qi, qv = np.empty(cap, dtype=np.int32), np.empty(cap)
+        return _into(out, x, lambda at: W.fx_sliding_min(P(x), len(x), int(before), int(after),
+                                                         1 if reflect else 0, P(qi), P(qv), at))
+    return call
+
+
+def fx_running_mean(f):
+    def call(x, size, out):
+        x = F(x)
+        ring = np.empty(int(size))
+        return _into(out, x, lambda at: W.fx_running_mean(P(x), len(x), int(size), P(ring), at))
+    return call
+
+
+def fx_follow(f):
+    def call(x, detect, rise, fall, floor_db, span_db):
+        x = F(x)
+        n, chans = x.shape
+        out = np.empty(n)
+        W.fx_follow(P(x), n, chans, float(detect), float(rise), float(fall), float(floor_db), float(span_db), P(out))
+        return out
+    return call
+
+
+def fx_saturate(f):
+    def call(x, k, bias, dc, y):
+        x = F(x)
+        n, chans = x.shape
+        return _into(y, x, lambda at: W.fx_saturate(P(x), n, chans, float(k), float(bias), float(dc), at))
+    return call
+
+
+def fx_hold(f):
+    def call(playing, track):
+        playing = np.ascontiguousarray(playing, dtype=np.bool_)
+        work = track if (track.dtype == np.float64 and track.flags.c_contiguous) else F(track)
+        W.fx_hold(P(playing), P(work), len(playing))
+        if work is not track:
+            track[...] = work
+    return call
+
+
+def fx_span(f):
+    def call(x, floor):
+        x = F(x)
+        out2 = np.empty(2, dtype=np.int32)
+        W.fx_span(P(x), x.shape[0], x.shape[1], float(floor), P(out2))
+        return int(out2[0]), int(out2[1])
+    return call
+
+
+def fx_ballistics(f):
+    def call(target, attack, release):
+        target = F(target)
+        out = np.empty_like(target)
+        W.fx_ballistics(P(target), len(target), float(attack), float(release), P(out))
+        return out
+    return call
+
+
+def master_windows(f):
+    def call(y, ch, points, reach):
+        y = F(y)
+        n, chans = y.shape
+        pts = np.ascontiguousarray(points, dtype=np.int32)
+        out = np.empty((len(pts), 2 * int(reach) + 1))
+        W.master_windows(P(y), n, chans, int(ch), P(pts), len(pts), int(reach), P(out))
+        return out
+    return call
+
+
+def master_mean_ahead(f):
+    def call(recovered, ahead, need, out):
+        recovered, need = F(recovered), F(need)
+        ring = np.empty(int(ahead) + 2)
+        return _into(out, recovered, lambda at: W.master_mean_ahead(P(recovered), len(recovered), int(ahead),
+                                                                    P(need), P(ring), at))
+    return call
+
+
+def master_abs_max(f):
+    def call(y):
+        y = F(y)
+        n, chans = y.shape
+        out = np.empty(n)
+        W.master_abs_max(P(y), n, chans, P(out))
+        return out
+    return call
+
+
+def master_over(f):
+    def call(x, a):
+        flat = F(x).reshape(-1)
+        out = np.empty(len(flat), dtype=np.bool_)
+        W.master_over(P(flat), len(flat), float(a), P(out))
+        return out
+    return call
+
+
+def reed_read(f):
+    def call(wave, increments, amplitude, out, offset, phase):
+        wave, increments, amplitude = F(wave), F(increments), F(amplitude)
+        work = out if (out.dtype == np.float64 and out.flags.c_contiguous) else F(out)
+        ph = W.reed_read(P(wave), len(wave), P(increments), P(amplitude), len(increments), P(work), int(offset),
+                         float(phase))
+        if work is not out:
+            out[...] = work
+        return float(ph)
+    return call
+
+
 PORTS = {
     "synth.pluck._loop": pluck_loop,
     "synth.pluck._bank": pluck_bank,
@@ -164,10 +292,24 @@ PORTS = {
     "synth.fx._apply": fx_apply,
     "synth.fx._products": fx_products,
     "synth.fx._block_power": lambda f: _blocks(W.fx_block_power, True),
+    "synth.fx._block_peaks": lambda f: _blocks(W.fx_block_peaks, False),
+    "synth.fx._sliding_min": fx_sliding_min,
+    "synth.fx._running_mean": fx_running_mean,
+    "synth.fx._follow": fx_follow,
+    "synth.fx._saturate": fx_saturate,
+    "synth.fx._hold": fx_hold,
+    "synth.fx._span": fx_span,
+    "synth.fx._ballistics": fx_ballistics,
+    "synth.instruments._placed": instruments_placed,
     "synth.master._weighted_hop_power": master_weighted_hop_power,
     "synth.master._recover": master_recover,
+    "synth.master._windows": master_windows,
+    "synth.master._mean_ahead": master_mean_ahead,
+    "synth.master._abs_max": master_abs_max,
+    "synth.master._over": master_over,
     "synth.bowed.run": bowed_run,
     "synth.pipe.run": pipe_run,
+    "synth.reed._read": reed_read,
 }
 
 

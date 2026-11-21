@@ -364,6 +364,272 @@ void pipe_run(const double *freq, const double *breath, const double *chiff, con
   }
 }
 
+// instruments._placed: place a mono or stereo signal into stereo out (out may alias y when stereo)
+EXPORT(instruments_placed)
+void instruments_placed(const double *y, int32_t n, int32_t chans, double c, double s, double root2, double width,
+                        double *out) {
+  if (chans == 1) {
+    for (int32_t i = 0; i < n; i++) {
+      double v = y[i];
+      out[(int64_t)i * 2] = (v * c) * root2;
+      out[(int64_t)i * 2 + 1] = (v * s) * root2;
+    }
+  } else {
+    for (int32_t i = 0; i < n; i++) {
+      double l = y[(int64_t)i * chans], r = y[(int64_t)i * chans + 1];
+      double mid = 0.5 * (l + r);
+      double side = (0.5 * (l - r)) * width;
+      out[(int64_t)i * 2] = (mid * c) * root2 + side;
+      out[(int64_t)i * 2 + 1] = (mid * s) * root2 - side;
+    }
+  }
+}
+
+static inline int32_t fx_extended(int32_t p, int32_t n, int32_t reflect) {
+  if (!reflect) return p < 0 ? 0 : (p >= n ? n - 1 : p);
+  while (p < 0 || p >= n) p = p < 0 ? -p - 1 : 2 * n - 1 - p;
+  return p;
+}
+
+// fx._sliding_min: qi (int32_t, cap) and qv (double, cap) are scratch buffers of length cap = before + after + 2
+EXPORT(fx_sliding_min)
+void fx_sliding_min(const double *x, int32_t n, int32_t before, int32_t after, int32_t reflect, int32_t *qi,
+                    double *qv, double *out) {
+  int32_t cap = before + after + 2;
+  int32_t head = 0, count = 0, nxt = -before;
+  for (int32_t i = 0; i < n; i++) {
+    while (nxt <= i + after) {
+      int32_t src = (nxt >= 0 && nxt < n) ? nxt : fx_extended(nxt, n, reflect);
+      double v = x[src];
+      while (count > 0) {
+        int32_t tail = head + count - 1;
+        if (tail >= cap) tail -= cap;
+        if (qv[tail] < v) break;
+        count--;
+      }
+      int32_t pos = head + count;
+      if (pos >= cap) pos -= cap;
+      qi[pos] = nxt;
+      qv[pos] = v;
+      count++;
+      nxt++;
+    }
+    while (qi[head] < i - before) {
+      if (++head == cap) head = 0;
+      count--;
+    }
+    out[i] = qv[head];
+  }
+}
+
+// fx._running_mean: ring (size) is scratch; out may alias x
+EXPORT(fx_running_mean)
+void fx_running_mean(const double *x, int32_t n, int32_t size, double *ring, double *out) {
+  int32_t size1 = size / 2;
+  double total = 0.0;
+  for (int32_t j = 0; j < size; j++) {
+    int32_t idx = j - size1;
+    if (idx < 0) idx = 0;
+    else if (idx >= n) idx = n - 1;
+    double v = x[idx];
+    ring[j] = v;
+    total += v;
+  }
+  double fs = (double)size;
+  out[0] = total / fs;
+  int32_t k = 0;
+  for (int32_t i = 1; i < n; i++) {
+    double gone = ring[k];
+    int32_t idx = i - 1 + size - size1;
+    if (idx < 0) idx = 0;
+    else if (idx >= n) idx = n - 1;
+    double v = x[idx];
+    ring[k] = v;
+    if (++k == size) k = 0;
+    total += v - gone;
+    out[i] = total / fs;
+  }
+}
+
+EXPORT(fx_follow)
+void fx_follow(const double *x, int32_t n, int32_t chans, double detect, double rise, double fall, double floor_db,
+               double span_db, double *out) {
+  double p = 0.0, a = 0.0;
+  for (int32_t i = 0; i < n; i++) {
+    double s = 0.0;
+    for (int32_t c = 0; c < chans; c++) {
+      double v = x[(int64_t)i * chans + c];
+      s += v * v;
+    }
+    p = detect * p + (1.0 - detect) * s / chans;
+    double t = (10.0 * js_log10(p + 1e-20) - floor_db) / span_db;
+    t = pmin(pmax(t, 0.0), 1.0);
+    double coef = t > a ? rise : fall;
+    a = coef * a + (1.0 - coef) * t;
+    out[i] = a;
+  }
+}
+
+EXPORT(fx_block_peaks)
+void fx_block_peaks(const double *x, int32_t n, int32_t chans, int32_t block, double *out) {
+  int32_t k = n / block;
+  for (int32_t b = 0; b < k; b++) {
+    double m = 0.0;
+    for (int32_t i = b * block; i < (b + 1) * block; i++)
+      for (int32_t c = 0; c < chans; c++) {
+        double v = __builtin_fabs(x[(int64_t)i * chans + c]);
+        if (v > m) m = v;
+      }
+    out[b] = m;
+  }
+}
+
+static inline double fx_soft(double v) {
+  if (v >= 3.0) return 1.0;
+  if (v <= -3.0) return -1.0;
+  double w = v * v;
+  return v * (27.0 + w) / (27.0 + 9.0 * w);
+}
+
+EXPORT(fx_saturate)
+void fx_saturate(const double *x, int32_t n, int32_t chans, double k, double bias, double dc, double *y) {
+  double th = fx_soft(bias);
+  double w = bias * bias;
+  double denom = 27.0 + 9.0 * w;
+  double slope = (729.0 - 162.0 * w + 9.0 * w * w) / (denom * denom);
+  double norm = 1.0 / (k * slope);
+  for (int32_t c = 0; c < chans; c++) {
+    double prev_in = 0.0, prev_out = 0.0;
+    for (int32_t i = 0; i < n; i++) {
+      double v = (fx_soft(k * x[(int64_t)i * chans + c] + bias) - th) * norm;
+      double out = v - prev_in + dc * prev_out;
+      prev_in = v;
+      prev_out = out;
+      y[(int64_t)i * chans + c] = out;
+    }
+  }
+}
+
+EXPORT(fx_hold)
+void fx_hold(const uint8_t *playing, double *track, int32_t n) {
+  int32_t last = 0;
+  for (int32_t i = 0; i < n; i++) {
+    if (playing[i]) last = i;
+    else track[i] = track[last];
+  }
+}
+
+EXPORT(fx_span)
+void fx_span(const double *x, int32_t n, int32_t chans, double floor, int32_t *out2) {
+  int32_t first = -1, last = -1;
+  for (int32_t i = 0; i < n; i++) {
+    for (int32_t c = 0; c < chans; c++) {
+      if (__builtin_fabs(x[(int64_t)i * chans + c]) > floor) { first = i; break; }
+    }
+    if (first >= 0) break;
+  }
+  for (int32_t i = n - 1; i >= 0; i--) {
+    for (int32_t c = 0; c < chans; c++) {
+      if (__builtin_fabs(x[(int64_t)i * chans + c]) > floor) { last = i; break; }
+    }
+    if (last >= 0) break;
+  }
+  out2[0] = first;
+  out2[1] = last;
+}
+
+EXPORT(fx_ballistics)
+void fx_ballistics(const double *target, int32_t n, double attack, double release, double *out) {
+  double g = 0.0;
+  for (int32_t i = 0; i < n; i++) {
+    double t = target[i];
+    double c = t < g ? attack : release;
+    g = c * g + (1.0 - c) * t;
+    out[i] = g;
+  }
+}
+
+EXPORT(master_windows)
+void master_windows(const double *y, int32_t n, int32_t chans, int32_t ch, const int32_t *points, int32_t n_pts,
+                    int32_t reach, double *out) {
+  int32_t width = 2 * reach + 1;
+  for (int32_t r = 0; r < n_pts; r++) {
+    int32_t p = points[r];
+    int32_t top = p + reach;
+    double *row = out + (int64_t)r * width;
+    if (p >= reach && top < n) {
+      for (int32_t j = 0; j < width; j++) row[j] = y[(int64_t)(top - j) * chans + ch];
+    } else {
+      for (int32_t j = 0; j < width; j++) {
+        int32_t i = top - j;
+        row[j] = (i >= 0 && i < n) ? y[(int64_t)i * chans + ch] : 0.0;
+      }
+    }
+  }
+}
+
+EXPORT(master_mean_ahead)
+void master_mean_ahead(const double *recovered, int32_t n, int32_t ahead, const double *need, double *ring,
+                       double *out) {
+  int32_t size = ahead + 2;
+  ring[0] = 0.0;
+  double first = recovered[0];
+  double s = 0.0;
+  for (int32_t m = 0; m < ahead; m++) {
+    s = m == 0 ? first : s + first;
+    ring[(m + 1) % size] = s;
+  }
+  double width = (double)(ahead + 1);
+  int32_t widx = (ahead + 1) % size;
+  int32_t ridx = 0;
+  for (int32_t i = 0; i < n; i++) {
+    int32_t m = i + ahead;
+    double v = recovered[i];
+    s = m == 0 ? v : s + v;
+    ring[widx] = s;
+    if (++widx == size) widx = 0;
+    double g = (s - ring[ridx]) / width;
+    if (++ridx == size) ridx = 0;
+    out[i] = pmin(need[i], g);
+  }
+}
+
+EXPORT(master_abs_max)
+void master_abs_max(const double *y, int32_t n, int32_t chans, double *out) {
+  if (chans == 2) {
+    for (int32_t i = 0; i < n; i++) {
+      double a = __builtin_fabs(y[(int64_t)i * 2]);
+      double b = __builtin_fabs(y[(int64_t)i * 2 + 1]);
+      out[i] = pmax(a, b);
+    }
+    return;
+  }
+  for (int32_t i = 0; i < n; i++) {
+    double m = __builtin_fabs(y[(int64_t)i * chans]);
+    for (int32_t c = 1; c < chans; c++) m = pmax(m, __builtin_fabs(y[(int64_t)i * chans + c]));
+    out[i] = m;
+  }
+}
+
+EXPORT(master_over)
+void master_over(const double *x, int32_t n, double a, uint8_t *out) {
+  for (int32_t i = 0; i < n; i++) out[i] = __builtin_fabs(x[i]) > a ? 1 : 0;
+}
+
+EXPORT(reed_read)
+double reed_read(const double *wave, int32_t size, const double *increments, const double *amplitude, int32_t n,
+                 double *out, int32_t offset, double phase) {
+  for (int32_t i = 0; i < n; i++) {
+    phase += increments[i];
+    if (phase >= 1.0) phase -= 1.0;
+    double x = phase * size;
+    int32_t j = (int32_t)x;
+    double f = x - j;
+    out[offset + i] += amplitude[i] * ((1.0 - f) * wave[pymod(j, size)] + f * wave[pymod(j + 1, size)]);
+  }
+  return phase;
+}
+
 #ifdef __wasm_simd128__
 // throat._matmul (x @ W.T) as Pyodide's scipy computes it, BLAS dgemm: the build with -msimd128 only
 // (kernels-simd.wasm; py/web_patches.py). Every output is summed exactly as that OpenBLAS (0.3.31, built for
