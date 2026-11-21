@@ -845,6 +845,68 @@ void master_over(const double *x, int32_t n, double a, uint8_t *out) {
   for (int32_t i = 0; i < n; i++) out[i] = __builtin_fabs(x[i]) > a ? 1 : 0;
 }
 
+// Fused true_peak_envelope inner loop (py/web_patches.py): for each point r and each channel ch, computes
+// max(abs(window(y, ch, point, reach) @ taps_t)) in the exact left-to-right sum order of Pyodide's numpy matmul
+// (no BLAS) and updates between[r] = max(between[r], m). Eliminates the (65536, 65) window buffer and numpy's
+// scalar matmul loop. taps_t is (width x 4, C order: taps.T made contiguous).
+EXPORT(master_true_peak_swing)
+void master_true_peak_swing(const double *y, int32_t n, int32_t chans, const int32_t *points, int32_t n_pts,
+                            int32_t reach, const double *taps_t, double *between) {
+  int32_t width = 2 * reach + 1;
+  for (int32_t ch = 0; ch < chans; ch++) {
+    for (int32_t r = 0; r < n_pts; r++) {
+      int32_t p = points[r];
+      int32_t top = p + reach;
+#ifdef __wasm_simd128__
+      v128_t s01 = wasm_f64x2_splat(0.0), s23 = wasm_f64x2_splat(0.0);
+      if (p >= reach && top < n) {
+        const double *yp = y + (int64_t)top * chans + ch;
+        const double *tp = taps_t;
+        for (int32_t j = 0; j < width; j++, yp -= chans, tp += 4) {
+          v128_t xv = wasm_f64x2_splat(*yp);
+          s01 = wasm_f64x2_add(s01, wasm_f64x2_mul(xv, wasm_v128_load(tp)));
+          s23 = wasm_f64x2_add(s23, wasm_f64x2_mul(xv, wasm_v128_load(tp + 2)));
+        }
+      } else {
+        const double *tp = taps_t;
+        for (int32_t j = 0; j < width; j++, tp += 4) {
+          int32_t i = top - j;
+          double v = (i >= 0 && i < n) ? y[(int64_t)i * chans + ch] : 0.0;
+          v128_t xv = wasm_f64x2_splat(v);
+          s01 = wasm_f64x2_add(s01, wasm_f64x2_mul(xv, wasm_v128_load(tp)));
+          s23 = wasm_f64x2_add(s23, wasm_f64x2_mul(xv, wasm_v128_load(tp + 2)));
+        }
+      }
+      s01 = wasm_f64x2_abs(s01);
+      s23 = wasm_f64x2_abs(s23);
+      double m0 = pmax(wasm_f64x2_extract_lane(s01, 0), wasm_f64x2_extract_lane(s01, 1));
+      double m1 = pmax(wasm_f64x2_extract_lane(s23, 0), wasm_f64x2_extract_lane(s23, 1));
+      double m = pmax(m0, m1);
+      if (m > between[r]) between[r] = m;
+#else
+      double s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0;
+      if (p >= reach && top < n) {
+        const double *yp = y + (int64_t)top * chans + ch;
+        const double *tp = taps_t;
+        for (int32_t j = 0; j < width; j++, yp -= chans, tp += 4) {
+          double v = *yp;
+          s0 += v * tp[0]; s1 += v * tp[1]; s2 += v * tp[2]; s3 += v * tp[3];
+        }
+      } else {
+        const double *tp = taps_t;
+        for (int32_t j = 0; j < width; j++, tp += 4) {
+          int32_t i = top - j;
+          double v = (i >= 0 && i < n) ? y[(int64_t)i * chans + ch] : 0.0;
+          s0 += v * tp[0]; s1 += v * tp[1]; s2 += v * tp[2]; s3 += v * tp[3];
+        }
+      }
+      double m = pmax(pmax(__builtin_fabs(s0), __builtin_fabs(s1)), pmax(__builtin_fabs(s2), __builtin_fabs(s3)));
+      if (m > between[r]) between[r] = m;
+#endif
+    }
+  }
+}
+
 EXPORT(reed_read)
 double reed_read(const double *wave, int32_t size, const double *increments, const double *amplitude, int32_t n,
                  double *out, int32_t offset, double phase) {

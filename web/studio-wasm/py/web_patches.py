@@ -113,8 +113,38 @@ def plain_docs() -> None:
     _docscrape.FunctionDoc = _docscrape.ClassDoc = Unread
 
 
+def _true_peak_envelope(x: np.ndarray, floor: float = 0.0) -> np.ndarray:
+    """master.true_peak_envelope with the window gather + 4-tap matmul fused in wasm (master_true_peak_swing):
+    no 34 MB window matrix and no Pyodide un-BLASed matmul loop, bit-identical to numpy's left-to-right sum."""
+    import songbird_wasm as W
+    from songbird.synth import fx, master
+
+    y = np.ascontiguousarray(x.reshape(len(x), -1), dtype=np.float64)
+    env = master._abs_max(y) if fx.JIT else np.abs(y).max(axis=1)
+    near = env >= floor
+    near[:-1] |= near[1:]
+    near[-1] = False
+    loud = np.flatnonzero(near)
+    if not len(loud):
+        return env
+    taps_t = np.ascontiguousarray(master._interpolator().T, dtype=np.float64)
+    pts = np.ascontiguousarray(loud, dtype=np.int32)
+    between = np.zeros(len(pts), dtype=np.float64)
+    W.master_true_peak_swing(_address(y), y.shape[0], y.shape[1], _address(pts), len(pts),
+                             master.REACH, _address(taps_t), _address(between))
+    env[loud] = np.maximum(env[loud], between)
+    env[loud + 1] = np.maximum(env[loud + 1], between)
+    return env
+
+
 def install(dgemm: bool = True) -> None:
-    from songbird.synth import throat
+    from songbird.synth import master, throat
 
     if dgemm:
         throat._matmul = _simd_matmul if _kernel() is not None else _dgemm_matmul
+    try:
+        import songbird_wasm
+    except ImportError:
+        return
+    if hasattr(songbird_wasm, "master_true_peak_swing"):
+        master.true_peak_envelope = _true_peak_envelope
