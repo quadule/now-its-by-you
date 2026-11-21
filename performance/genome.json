@@ -27,11 +27,12 @@
     "refrain": {"phrases": ["r1", "r2", "r3", "r4"], "lyrics": "refrain"},
     "bridge":  {"phrases": ["b1", "b2", "b3", "b4"], "lyrics": "bridge", "choir": true},
     "tag":     {"phrases": ["r4"], "lyrics": "tag", "choir": true},
+    "breath":  {"phrases": ["t1"], "role": "turn"},
     "turn":    {"phrases": ["t1"]},
     "break":   {"phrases": ["v1", "v2", "v3", "v2"]},
     "outro":   {"phrases": ["r4"]}
   },
-  "form": ["intro?", "verse", "refrain", "turn?", "verse*", "refrain", "turn?", "break?", "bridge", "refrain", "tag?", "outro?"],
+  "form": ["intro?", "verse", "breath?", "refrain", "turn?", "verse*", "breath?", "refrain", "turn?", "break?", "bridge", "breath?", "refrain", "tag?", "outro?"],
 
   "refrain": [
     "Who {*made*|*sang*|*heard*|*kept*|*wrote*|*owns*} this song? No-bo-dy knows.",

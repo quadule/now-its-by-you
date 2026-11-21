@@ -90,6 +90,7 @@ class Section:
     lyrics: str | None  # "verse", a fixed block ("refrain", "bridge", ...), or None for an instrumental section
     choir: bool = False  # voices from the lineage join in harmony here
     clip: bool = False  # a clip of a person's arrangement (songbird.clips): its words are its own, every time it comes
+    role: str | None = None  # how the band plays it (band.ROLES), where its name doesn't say: a breath is played as a turn
 
 
 @dataclass(frozen=True)
@@ -233,7 +234,8 @@ def from_dict(data: dict) -> Genome:
         missing = [p for p in spec["phrases"] if p not in phrases]
         if missing:
             raise ValueError(f"section {name} names unknown phrases {missing}")
-        sections[name] = Section(name, tuple(spec["phrases"]), spec.get("lyrics"), bool(spec.get("choir", False)))
+        sections[name] = Section(name, tuple(spec["phrases"]), spec.get("lyrics"), bool(spec.get("choir", False)),
+                                 role=spec.get("role"))
     for token in data["form"]:
         if token.rstrip("?*") not in sections:
             raise ValueError(f"form names unknown section {token!r}")

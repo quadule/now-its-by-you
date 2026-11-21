@@ -44,7 +44,9 @@ it, and the next line answers: it's yours while you sing it.
 
 **Form of the seed:** intro, verse (wire), refrain, turn, verse (screen),
 refrain, turn, bridge, refrain, tag. A turn is two bars of the strings alone
-(IV, V) so a singer can catch their breath.
+(IV, V) so a singer can catch their breath. A version may also take a breath before each
+refrain: the same two bars between a verse (or the bridge) and its refrain, an optional part of the form
+(`breath?` in the genome's template, a section the band plays as a turn), off in the seed.
 
 **Further seed verses**, for longer forms:
 

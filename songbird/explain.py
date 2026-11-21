@@ -128,12 +128,13 @@ BACKING_NAMES = {"oohs": "backing voices on oohs", "echo": "backing voices echo 
 PATTERNS = {"lilt": "a lilting strum", "strum": "a steady strum", "pick": "fingerpicking", "air": "a slow air"}
 PATTERN_DETAIL = {"lilt": "the strum follows the tune's long-short-short", "strum": "a steady strum in the player's own groove",
                   "pick": "picked strings, no strumming", "air": "rolled chords and held notes, no drum"}
-SECTIONS = {"intro": "Intro", "verse": "Verse", "refrain": "Refrain", "turn": "Turn", "break": "Break",
+SECTIONS = {"intro": "Intro", "verse": "Verse", "refrain": "Refrain", "breath": "Breath", "turn": "Turn", "break": "Break",
             "bridge": "Bridge", "bridge2": "Bridge again", "tag": "Tag", "outro": "Outro"}
 PARTS = {"verses": "how many verses", "pairs": "verses in pairs", "intro": "an intro",
+         "breath": "a breath before the refrains",
          "turn": "a turn after the refrains", "break": "a break before the bridge", "bridge2": "the bridge twice",
          "tag": "everyone singing the tag", "outro": "an outro"}
-SHORT = {"pairs": "verses in pairs", "intro": "an intro", "turn": "the turns", "break": "a break",
+SHORT = {"pairs": "verses in pairs", "intro": "an intro", "breath": "the breaths", "turn": "the turns", "break": "a break",
          "bridge2": "the bridge twice", "tag": "the tag", "outro": "an outro"}  # the parts, as a reason says them
 VIEWS = {"full": "today", "slow": "these weeks", "season": "this season", "year": "this year"}
 THEMES = {"sea": "the sea", "fire": "fire", "machines": "machines", "earth": "the land", "home": "home",
@@ -229,7 +230,7 @@ def shape_words(parts: dict | None, played=()) -> str:
         return "a shape of its own"
     verses = f"{number(parts.get('verses', 0))} verse{'s' if parts.get('verses') != 1 else ''}"
     extras = ["the tag played" if k == "tag" and "tag" in played else PARTS[k]
-              for k in ("pairs", "intro", "turn", "break", "bridge2", "tag", "outro") if parts.get(k)]
+              for k in ("pairs", "intro", "breath", "turn", "break", "bridge2", "tag", "outro") if parts.get(k)]
     return f"{verses}, with {listed(extras)}" if extras else f"{verses}, and nothing more"
 
 
@@ -1517,6 +1518,7 @@ def _heard_lead(params, ids: list[str], k: int, lead: str | None) -> str | None:
 def _instrumental(name: str, lead: str | None) -> str:
     who = f"the {player(lead)}" if lead else "the band"
     return {"intro": f"{who} plays the tune in", "turn": "the band turns a line of the refrain over",
+            "breath": "the band plays two bars before the refrain",
             "break": f"{who} plays a verse's tune before the bridge", "outro": f"{who} plays it out"}.get(
         name, "the band plays")
 
@@ -1659,7 +1661,7 @@ def timeline(ctx: Context, days: int = TIMELINE_DAYS) -> dict:
         lanes["tonic"].append(p.tonic)
         lanes["tempo"].append(round(p.tempo, 1))
         lanes["verses"].append(parts.get("verses", 0))
-        lanes["parts"].append(" ".join(k for k in ("intro", "turn", "break", "bridge2", "tag", "outro", "pairs")
+        lanes["parts"].append(" ".join(k for k in ("intro", "breath", "turn", "break", "bridge2", "tag", "outro", "pairs")
                                        if parts.get(k)))
         lanes["pattern"].append(p.band.pattern)
         lanes["lead"].append(leader(p.band, p.style) or "")

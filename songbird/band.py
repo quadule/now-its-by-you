@@ -455,6 +455,8 @@ def _role(name: str, section) -> str:
     base = re.sub(r"\d+$", "", name)
     if base in ROLES:
         return base
+    if getattr(section, "role", None) in ROLES:  # the genome's own word for it (a breath: a turn)
+        return section.role
     if section.lyrics == "verse":
         return "verse"
     if section.lyrics == "refrain":

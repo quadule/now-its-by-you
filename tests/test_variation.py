@@ -66,10 +66,10 @@ def test_the_lead_songs_forms(h):
     refrains = lambda form: sum(s == "refrain" for s in form)  # noqa: E731
     assert refrains(V.build(h, 2, {})) == 3 and refrains(V.build(h, 4, {})) == 5  # each verse brings its refrain
     assert refrains(V.build(h, 4, {}, pairs=True)) == 4
-    long = V.build(h, 4, {(4, "turn", r): True for r in range(3)}, bridge2=True)
+    long = V.build(h, 4, {(5, "turn", r): True for r in range(3)}, bridge2=True)
     assert " ".join(long) == ("verse refrain verse refrain turn verse refrain turn verse refrain turn "
                               "bridge bridge2 refrain")
-    assert V.fits(h, long) and V.parse_form(h, long)["x8"] == "bridge2,"
+    assert V.fits(h, long) and V.parse_form(h, long)["x10"] == "bridge2,"
     seen = set()
     for name in MACHINES:
         for date in ("2026-09-25", "2026-10-25", "2027-01-25", "2027-06-25", "2027-09-25"):
@@ -534,3 +534,21 @@ def test_lay_moves_only_the_singers(h):
     lead_after = sorted(n.start for n in moved.part("voice"))
     assert all(abs((a - b) - 0.05 * beat) < 1e-9 for a, b in zip(lead_before, lead_after) if a > 0.05 * beat)
     assert V.lay(score, replace(p, lay=0.0)) is score
+
+
+def test_a_breath_before_the_refrains_is_a_part_of_the_form():
+    """An optional section nobody sings between a verse and its refrain (the song's "breath?") comes with every
+    refrain, the bridge's too, is switched like any other part, and is played as a turn."""
+    from songbird import band, edits
+    from songbird.genome import load as load_genome
+    from pathlib import Path
+
+    genome = load_genome(Path(__file__).parent.parent / "songs" / "h-now-its-by-you.json")
+    seed = tuple(genome.seed_params["form"])
+    assert "breath" in edits.optional(genome) and edits.shape(genome, seed)["breath"] is False
+    form = edits.build(genome, dict(edits.shape(genome, seed), breath=True))
+    assert form == ("intro", "verse", "breath", "refrain", "turn", "verse", "breath", "refrain", "turn", "bridge",
+                    "breath", "refrain", "tag")
+    assert edits.shape(genome, form)["breath"] is True and edits.form_problem(genome, form) is None
+    assert edits.build(genome, dict(edits.shape(genome, form), breath=False)) == seed
+    assert band._role("breath", genome.section("breath")) == "turn"

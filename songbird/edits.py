@@ -122,7 +122,7 @@ def instruments() -> tuple[str, ...]:
     from .synth.instruments import known
 
     return known()
-SHAPE = ("verses", "pairs", "intro", "turn", "break", "tag", "outro", "bridge2")
+SHAPE = ("verses", "pairs", "intro", "breath", "turn", "break", "tag", "outro", "bridge2")
 CLIPPED = "the song is in clips: its form is the clips' order"  # (songbird.clips)
 WORDS = re.compile(r"words\.(verse|refrain)\.(\d+)|words\.(refrain|bridge|bridge2|tag)")
 
@@ -212,7 +212,7 @@ def shape(genome: Genome, form) -> dict | None:
         if name == "pairs":
             out["pairs"] = any(chunk.split(",").count(it.tokens[0][0]) > 1
                                for it in variation.items(genome) if it.repeat and len(it.tokens) > 1
-                               for chunk in parsed.get(f"t{it.index}", "").split(f"{it.tokens[1][0]},"))
+                               for chunk in parsed.get(f"t{it.index}", "").split(f"{variation.refrain_of(genome, it)},"))
         else:
             out[name] = name in form
     return out

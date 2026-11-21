@@ -620,7 +620,7 @@ def _show_kept(path: Path, cached, stored: dict) -> int:
 # ---------------------------------------------------------------- year
 
 NOTE_NAMES = ("C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B")
-FORM_LETTERS = {"intro": "i", "verse": "V", "refrain": "R", "turn": "t", "break": "k", "bridge": "B",
+FORM_LETTERS = {"intro": "i", "verse": "V", "refrain": "R", "breath": "h", "turn": "t", "break": "k", "bridge": "B",
                 "bridge2": "b", "tag": "g", "outro": "o"}
 
 

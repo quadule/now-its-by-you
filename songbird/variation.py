@@ -772,9 +772,10 @@ def is_verse(genome: Genome, name: str) -> bool:
 @dataclass(frozen=True)
 class Item:
     """A piece of the template: one section, or a repeatable verse with the
-    refrain it brings (and any turn that follows the first verse's refrain).
-    A group is sung as units, each a verse (or two) and then the refrain, so
-    every unit adds a refrain and the question turns once more."""
+    refrain it brings (any breath the first verse takes before its refrain,
+    and any turn that follows it). A group is sung as units, each a verse (or
+    two) and then the refrain, so every unit adds a refrain and the question
+    turns once more."""
 
     index: int  # position of its first token in the template
     tokens: tuple  # ((name, flag), ...); a group's first token is its verse
@@ -785,13 +786,22 @@ class Item:
 def items(genome: Genome) -> tuple[Item, ...]:
     tokens = template(genome)
     lyrics = [genome.sections[n].lyrics for n, _ in tokens]
-    followers: set[str] = set()  # what follows the first verse's refrain comes with every refrain a verse brings
+    def played(j: int) -> bool:  # an optional section nobody sings
+        return j < len(tokens) and tokens[j][1] == "?" and lyrics[j] is None
+
+    # what comes between the first verse and its refrain, and what follows that refrain, comes with every refrain
+    # a verse brings
+    leaders: set[str] = set()
+    followers: set[str] = set()
     for k, (n, f) in enumerate(tokens):
         if f == "" and lyrics[k] == "verse":
             j = k + 1
-            if j < len(tokens) and lyrics[j] == "refrain":
+            while played(j):
                 j += 1
-                while j < len(tokens) and tokens[j][1] == "?" and lyrics[j] is None:
+            if j < len(tokens) and lyrics[j] == "refrain":
+                leaders.update(tokens[m][0] for m in range(k + 1, j))
+                j += 1
+                while played(j):
                     followers.add(tokens[j][0])
                     j += 1
             break
@@ -800,18 +810,27 @@ def items(genome: Genome) -> tuple[Item, ...]:
         name, flag = tokens[i]
         if flag == "*" and lyrics[i] == "verse":
             group, j = [(name, "")], i + 1
-            if j < len(tokens) and lyrics[j] == "refrain" and tokens[j][1] == "":
-                group.append(tokens[j])
+            while played(j) and tokens[j][0] in leaders:
                 j += 1
-                while j < len(tokens) and tokens[j][1] == "?" and tokens[j][0] in followers:
+            if j < len(tokens) and lyrics[j] == "refrain" and tokens[j][1] == "":
+                group += tokens[i + 1: j + 1]
+                j += 1
+                while played(j) and tokens[j][0] in followers:
                     group.append(tokens[j])
                     j += 1
+            else:
+                j = i + 1  # a verse that brings no refrain: itself alone
             out.append(Item(i, tuple(group), True))
             i = j
         else:
             out.append(Item(i, (tokens[i],), False))
             i += 1
     return tuple(out)
+
+
+def refrain_of(genome: Genome, it: Item) -> str | None:
+    """The refrain a repeatable verse brings (the first section sung after it in its group), or None."""
+    return next((n for n, _ in it.tokens[1:] if genome.sections[n].lyrics), None)
 
 
 def extra_bridge(genome: Genome) -> bool:
@@ -948,7 +967,7 @@ def choose_form(out: dict, ctx: Context) -> None:
     for it in items(genome):
         text = was.get(f"t{it.index}", "")
         if it.repeat and len(it.tokens) > 1:
-            verse, refrain = it.tokens[0][0], it.tokens[1][0]
+            verse, refrain = it.tokens[0][0], refrain_of(genome, it)
             for chunk in text.split(f"{refrain},"):
                 n = chunk.split(",").count(verse)
                 sung += n > 0
