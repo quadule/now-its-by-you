@@ -3709,7 +3709,41 @@ export function k_synth$throat$_to_bins(values, lo, hi, before, after, above, ro
   return out_t;
 }
 
-// songbird/synth/throat.py:244
+// songbird/synth/throat.py:130
+export function k_synth$throat$_polar_turn(spec_f, amp, turn) {
+  let a, i, phi, $t1, $t2, amp_d, amp_n0, amp_n1, amp_s0, amp_s1, spec_f_d, spec_f_n0, spec_f_n1, spec_f_s0, spec_f_s1, turn_d, turn_n0, turn_n1, turn_s0, turn_s1;
+  spec_f_d = spec_f.d; spec_f_n0 = spec_f.n0; spec_f_n1 = spec_f.n1; spec_f_s0 = spec_f.s0; spec_f_s1 = spec_f.s1;
+  amp_d = amp.d; amp_n0 = amp.n0; amp_n1 = amp.n1; amp_s0 = amp.s0; amp_s1 = amp.s1;
+  turn_d = turn.d; turn_n0 = turn.n0; turn_n1 = turn.n1; turn_s0 = turn.s0; turn_s1 = turn.s1;
+  for ($t1 = 0, $t2 = amp_n0; $t1 < $t2; $t1 += 1) {
+    i = $t1;
+    phi = (spec_f_d[((2 * i) + 1)] + turn_d[i]);
+    a = amp_d[i];
+    spec_f_d[(2 * i)] = (a * Math.cos(phi));
+    spec_f_d[((2 * i) + 1)] = (a * Math.sin(phi));
+  }
+}
+
+// songbird/synth/throat.py:140
+export function k_synth$throat$_polar_mul(spec_f, amp, other_f) {
+  let a, i, im, oim, ore, phi, re, $t1, $t2, amp_d, amp_n0, amp_n1, amp_s0, amp_s1, other_f_d, other_f_n0, other_f_n1, other_f_s0, other_f_s1, spec_f_d, spec_f_n0, spec_f_n1, spec_f_s0, spec_f_s1;
+  spec_f_d = spec_f.d; spec_f_n0 = spec_f.n0; spec_f_n1 = spec_f.n1; spec_f_s0 = spec_f.s0; spec_f_s1 = spec_f.s1;
+  amp_d = amp.d; amp_n0 = amp.n0; amp_n1 = amp.n1; amp_s0 = amp.s0; amp_s1 = amp.s1;
+  other_f_d = other_f.d; other_f_n0 = other_f.n0; other_f_n1 = other_f.n1; other_f_s0 = other_f.s0; other_f_s1 = other_f.s1;
+  for ($t1 = 0, $t2 = amp_n0; $t1 < $t2; $t1 += 1) {
+    i = $t1;
+    phi = spec_f_d[((2 * i) + 1)];
+    a = amp_d[i];
+    re = (a * Math.cos(phi));
+    im = (a * Math.sin(phi));
+    ore = other_f_d[(2 * i)];
+    oim = other_f_d[((2 * i) + 1)];
+    spec_f_d[(2 * i)] = ((re * ore) - (im * oim));
+    spec_f_d[((2 * i) + 1)] = ((re * oim) + (im * ore));
+  }
+}
+
+// songbird/synth/throat.py:273
 export function k_synth$throat$_turn_phase(bins, hz, frac, period, spread, has_spread, scatter, has_scatter, lo, hi, before, after, sr, fft, tx_spread, tx_scatter, scatter_from, scatter_span) {
   let c, fr, h, nbins, neg_two_pi, out, per, r, rows, sm, sp_scale, t, $t1, $t2, $t3, $t4, after_d, after_n0, after_n1, after_s0, after_s1, before_d, before_n0, before_n1, before_s0, before_s1, bins_d, bins_n0, bins_n1, bins_s0, bins_s1, frac_d, frac_n0, frac_n1, frac_s0, frac_s1, hi_d, hi_n0, hi_n1, hi_s0, hi_s1, hz_d, hz_n0, hz_n1, hz_s0, hz_s1, lo_d, lo_n0, lo_n1, lo_s0, lo_s1, out_d, out_n0, out_n1, out_s0, out_s1, period_d, period_n0, period_n1, period_s0, period_s1, scatter_d, scatter_n0, scatter_n1, scatter_s0, scatter_s1, spread_d, spread_n0, spread_n1, spread_s0, spread_s1;
   bins_d = bins.d; bins_n0 = bins.n0; bins_n1 = bins.n1; bins_s0 = bins.s0; bins_s1 = bins.s1;
@@ -3759,7 +3793,7 @@ export function k_synth$throat$_turn_phase(bins, hz, frac, period, spread, has_s
   return out;
 }
 
-// songbird/synth/throat.py:278
+// songbird/synth/throat.py:307
 export function k_synth$throat$_noise_mask(noise, m) {
   let c, cols, mr, r, rows, $t1, $t2, $t3, $t4, m_d, m_n0, m_n1, m_s0, m_s1, noise_d, noise_n0, noise_n1, noise_s0, noise_s1;
   noise_d = noise.d; noise_n0 = noise.n0; noise_n1 = noise.n1; noise_s0 = noise.s0; noise_s1 = noise.s1;
@@ -3776,7 +3810,7 @@ export function k_synth$throat$_noise_mask(noise, m) {
   }
 }
 
-// songbird/synth/throat.py:287
+// songbird/synth/throat.py:316
 export function k_synth$throat$_noise_sub_dc(noise, m, dc) {
   let c, cols, d, mr, r, rows, $t1, $t2, $t3, $t4, dc_d, dc_n0, dc_n1, dc_s0, dc_s1, m_d, m_n0, m_n1, m_s0, m_s1, noise_d, noise_n0, noise_n1, noise_s0, noise_s1;
   noise_d = noise.d; noise_n0 = noise.n0; noise_n1 = noise.n1; noise_s0 = noise.s0; noise_s1 = noise.s1;
@@ -3798,7 +3832,7 @@ export function k_synth$throat$_noise_sub_dc(noise, m, dc) {
   }
 }
 
-// songbird/synth/throat.py:299
+// songbird/synth/throat.py:328
 export function k_synth$throat$_assemble(periodic, aperiodic, hann, lead) {
   let c, dc, fft, half, k, out, post, pre, r, rows, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, $t11, $t12, $t13, $t14, aperiodic_d, aperiodic_n0, aperiodic_n1, aperiodic_s0, aperiodic_s1, hann_d, hann_n0, hann_n1, hann_s0, hann_s1, out_d, out_n0, out_n1, out_s0, out_s1, periodic_d, periodic_n0, periodic_n1, periodic_s0, periodic_s1;
   periodic_d = periodic.d; periodic_n0 = periodic.n0; periodic_n1 = periodic.n1; periodic_s0 = periodic.s0; periodic_s1 = periodic.s1;
@@ -3841,7 +3875,7 @@ export function k_synth$throat$_assemble(periodic, aperiodic, hann, lead) {
   return out;
 }
 
-// songbird/synth/throat.py:323
+// songbird/synth/throat.py:352
 export function k_synth$throat$_lay(y, at, response) {
   let k, r, rows, start, width, $t1, $t2, $t3, $t4, at_d, at_n0, at_n1, at_s0, at_s1, response_d, response_n0, response_n1, response_s0, response_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   y_d = y.d; y_n0 = y.n0; y_n1 = y.n1; y_s0 = y.s0; y_s1 = y.s1;
@@ -3859,7 +3893,7 @@ export function k_synth$throat$_lay(y, at, response) {
   }
 }
 
-// songbird/synth/throat.py:332
+// songbird/synth/throat.py:361
 export function k_synth$throat$_assemble_lay(y, at, periodic, aperiodic, hann, lead) {
   let c, dc, fft, half, k, post, pre, r, rows, start, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, $t9, $t10, $t11, $t12, $t13, $t14, aperiodic_d, aperiodic_n0, aperiodic_n1, aperiodic_s0, aperiodic_s1, at_d, at_n0, at_n1, at_s0, at_s1, hann_d, hann_n0, hann_n1, hann_s0, hann_s1, periodic_d, periodic_n0, periodic_n1, periodic_s0, periodic_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   y_d = y.d; y_n0 = y.n0; y_n1 = y.n1; y_s0 = y.s0; y_s1 = y.s1;
@@ -3903,7 +3937,7 @@ export function k_synth$throat$_assemble_lay(y, at, periodic, aperiodic, hann, l
   }
 }
 
-// songbird/synth/throat.py:735
+// songbird/synth/throat.py:782
 export function k_synth$throat$_gelu_flat(x, out) {
   let i, t, v, $t1, $t2, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;

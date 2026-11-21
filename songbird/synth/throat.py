@@ -126,12 +126,41 @@ def _cepstrum_fold(fft: int) -> np.ndarray:
     return fold
 
 
-def min_phase(log_mag: np.ndarray) -> np.ndarray:
-    """Minimum-phase spectra (rows, fft // 2 + 1) from natural-log magnitudes, by folding the real cepstrum."""
+@njit(cache=True, nogil=True)
+def _polar_turn(spec_f: np.ndarray, amp: np.ndarray, turn: np.ndarray) -> None:
+    """In-place: spec[i] = amp[i] * exp(1j * (spec[i].imag + turn[i])), with spec viewed as flat float64."""
+    for i in range(amp.shape[0]):
+        phi = spec_f[2 * i + 1] + turn[i]
+        a = amp[i]
+        spec_f[2 * i] = a * np.cos(phi)
+        spec_f[2 * i + 1] = a * np.sin(phi)
+
+
+@njit(cache=True, nogil=True)
+def _polar_mul(spec_f: np.ndarray, amp: np.ndarray, other_f: np.ndarray) -> None:
+    """In-place: spec[i] = amp[i] * exp(1j * spec[i].imag) * other[i], both viewed as flat float64."""
+    for i in range(amp.shape[0]):
+        phi = spec_f[2 * i + 1]
+        a = amp[i]
+        re = a * np.cos(phi)
+        im = a * np.sin(phi)
+        ore = other_f[2 * i]
+        oim = other_f[2 * i + 1]
+        spec_f[2 * i] = re * ore - im * oim
+        spec_f[2 * i + 1] = re * oim + im * ore
+
+
+def _min_phase_raw(log_mag: np.ndarray) -> np.ndarray:
+    """Minimum-phase complex log-spectrum (rows, fft // 2 + 1), before exp()."""
     fft = 2 * (log_mag.shape[-1] - 1)
     cep = np.fft.irfft(log_mag, n=fft, axis=-1)
     cep *= _cepstrum_fold(fft)
-    return np.exp(np.fft.rfft(cep, n=fft, axis=-1))
+    return np.fft.rfft(cep, n=fft, axis=-1)
+
+
+def min_phase(log_mag: np.ndarray) -> np.ndarray:
+    """Minimum-phase spectra (rows, fft // 2 + 1) from natural-log magnitudes, by folding the real cepstrum."""
+    return np.exp(_min_phase_raw(log_mag))
 
 
 def pulse_times(f0: np.ndarray, sr: int, n: int, block: int = 1 << 16) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -437,11 +466,11 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
             np.subtract(1.0, mag, out=mag)
             mag *= voiced_power
             mag += 1e-16
-            np.log(mag, out=mag)
-            mag *= 0.5
-            pulse = min_phase(mag)
-            del mag
             if use_jit:
+                amp = np.sqrt(mag, out=mag)
+                log_mag = np.log(amp)
+                pulse = _min_phase_raw(log_mag)
+                del log_mag
                 scat_on = np.ascontiguousarray(scatter[on], dtype=np.float64) if scatter is not None else empty_scatter
                 turn = _turn_phase(bins_f, hz, np.ascontiguousarray(frac[g], dtype=np.float64),
                                    np.ascontiguousarray(period[g], dtype=np.float64),
@@ -450,7 +479,14 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
                                    float(sr), float(fft), float(tx.spread), float(tx.scatter),
                                    float(tx.scatter_from), float(scatter_span))
                 del scat_on
+                pulse = np.ascontiguousarray(pulse)
+                _polar_turn(pulse.view(np.float64).reshape(-1), np.ascontiguousarray(amp).reshape(-1), turn.reshape(-1))
+                del amp, turn
             else:
+                np.log(mag, out=mag)
+                mag *= 0.5
+                pulse = min_phase(mag)
+                del mag
                 turn = (-2 * np.pi * bins) * frac[g, None]
                 turn /= fft
                 if spread is not None:
@@ -465,8 +501,8 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
                     harmonic *= _smooth(scatter[on], fft, sr)
                     turn += harmonic
                     del harmonic
-            pulse *= np.exp(1j * turn)
-            del turn
+                pulse *= np.exp(1j * turn)
+                del turn
             made = np.fft.irfft(pulse, n=fft, axis=-1)
             del pulse
             made *= np.sqrt(period[g, None])
@@ -488,10 +524,21 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
             noise -= inside * dc  # no DC, as WORLD
         ratio *= power
         ratio += 1e-16
-        np.log(ratio, out=ratio)
-        ratio *= 0.5
-        shaped = min_phase(ratio)
-        shaped *= np.fft.rfft(noise, axis=-1)
+        if use_jit:
+            amp_a = np.empty(ratio.shape, dtype=np.float64)
+            np.sqrt(ratio, out=amp_a)
+            del ratio
+            log_a = np.log(amp_a)
+            shaped = np.ascontiguousarray(_min_phase_raw(log_a))
+            del log_a
+            n_spec = np.ascontiguousarray(np.fft.rfft(noise, axis=-1))
+            _polar_mul(shaped.view(np.float64).reshape(-1), amp_a.reshape(-1), n_spec.view(np.float64).reshape(-1))
+            del amp_a, n_spec
+        else:
+            np.log(ratio, out=ratio)
+            ratio *= 0.5
+            shaped = min_phase(ratio)
+            shaped *= np.fft.rfft(noise, axis=-1)
         aperiodic = np.fft.irfft(shaped, n=fft, axis=-1)
         del shaped
         # each response laid out from `half` samples before its pulse: the part of a delayed pulse that

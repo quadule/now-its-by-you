@@ -3137,6 +3137,66 @@
   "fastmath": false,
   "calls": []
  },
+ "synth.throat._polar_turn": {
+  "js": "k_synth$throat$_polar_turn",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "spec_f",
+   "amp",
+   "turn"
+  ],
+  "arrays": {
+   "spec_f": [
+    "f8",
+    1,
+    "C"
+   ],
+   "amp": [
+    "f8",
+    1,
+    "C"
+   ],
+   "turn": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.throat._polar_mul": {
+  "js": "k_synth$throat$_polar_mul",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "spec_f",
+   "amp",
+   "other_f"
+  ],
+  "arrays": {
+   "spec_f": [
+    "f8",
+    1,
+    "C"
+   ],
+   "amp": [
+    "f8",
+    1,
+    "C"
+   ],
+   "other_f": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
  "synth.throat._turn_phase": {
   "js": "k_synth$throat$_turn_phase",
   "ok": true,

@@ -7296,7 +7296,7 @@
  "synth.throat._assemble": {
   "fastmath": false,
   "file": "synth/throat.py",
-  "line": 298,
+  "line": 327,
   "params": [
    "periodic",
    "aperiodic",
@@ -7309,7 +7309,7 @@
  "synth.throat._assemble_lay": {
   "fastmath": false,
   "file": "synth/throat.py",
-  "line": 331,
+  "line": 360,
   "params": [
    "y",
    "at",
@@ -7386,7 +7386,7 @@
  "synth.throat._gelu_flat": {
   "fastmath": false,
   "file": "synth/throat.py",
-  "line": 734,
+  "line": 781,
   "params": [
    "x",
    "out"
@@ -7422,7 +7422,7 @@
  "synth.throat._lay": {
   "fastmath": false,
   "file": "synth/throat.py",
-  "line": 322,
+  "line": 351,
   "params": [
    "y",
    "at",
@@ -7434,7 +7434,7 @@
  "synth.throat._noise_mask": {
   "fastmath": false,
   "file": "synth/throat.py",
-  "line": 277,
+  "line": 306,
   "params": [
    "noise",
    "m"
@@ -7476,7 +7476,7 @@
  "synth.throat._noise_sub_dc": {
   "fastmath": false,
   "file": "synth/throat.py",
-  "line": 286,
+  "line": 315,
   "params": [
    "noise",
    "m",
@@ -7522,6 +7522,100 @@
    }
   ],
   "source": "18c0bc796d6c4aa7"
+ },
+ "synth.throat._polar_mul": {
+  "fastmath": false,
+  "file": "synth/throat.py",
+  "line": 139,
+  "params": [
+   "spec_f",
+   "amp",
+   "other_f"
+  ],
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "amp": [
+      "array(float64, 1d, C)"
+     ],
+     "i": [
+      "int64"
+     ],
+     "im": [
+      "float64"
+     ],
+     "oim": [
+      "float64"
+     ],
+     "ore": [
+      "float64"
+     ],
+     "other_f": [
+      "array(float64, 1d, C)"
+     ],
+     "phi": [
+      "float64"
+     ],
+     "re": [
+      "float64"
+     ],
+     "spec_f": [
+      "array(float64, 1d, C)"
+     ]
+    },
+    "return": "none"
+   }
+  ],
+  "source": "769d0d2f772276fa"
+ },
+ "synth.throat._polar_turn": {
+  "fastmath": false,
+  "file": "synth/throat.py",
+  "line": 129,
+  "params": [
+   "spec_f",
+   "amp",
+   "turn"
+  ],
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "amp": [
+      "array(float64, 1d, C)"
+     ],
+     "i": [
+      "int64"
+     ],
+     "phi": [
+      "float64"
+     ],
+     "spec_f": [
+      "array(float64, 1d, C)"
+     ],
+     "turn": [
+      "array(float64, 1d, C)"
+     ]
+    },
+    "return": "none"
+   }
+  ],
+  "source": "3e6500923d0cea26"
  },
  "synth.throat._to_bins": {
   "fastmath": false,
@@ -7619,7 +7713,7 @@
  "synth.throat._turn_phase": {
   "fastmath": false,
   "file": "synth/throat.py",
-  "line": 243,
+  "line": 272,
   "params": [
    "bins",
    "hz",

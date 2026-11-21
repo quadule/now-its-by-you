@@ -381,6 +381,26 @@ def throat_gelu_flat(f):
     return call
 
 
+def throat_polar_turn(f):
+    def call(spec_f, amp, turn):
+        work = spec_f if (spec_f.dtype == np.float64 and spec_f.flags.c_contiguous) else F(spec_f)
+        amp, turn = F(amp), F(turn)
+        W.throat_polar_turn(P(work), P(amp), P(turn), len(amp))
+        if work is not spec_f:
+            spec_f[...] = work
+    return call
+
+
+def throat_polar_mul(f):
+    def call(spec_f, amp, other_f):
+        work = spec_f if (spec_f.dtype == np.float64 and spec_f.flags.c_contiguous) else F(spec_f)
+        amp, other_f = F(amp), F(other_f)
+        W.throat_polar_mul(P(work), P(amp), P(other_f), len(amp))
+        if work is not spec_f:
+            spec_f[...] = work
+    return call
+
+
 PORTS = {
     "synth.pluck._loop": pluck_loop,
     "synth.pluck._bank": pluck_bank,
@@ -418,6 +438,8 @@ PORTS = {
     "synth.throat._lay": throat_lay,
     "synth.throat._assemble_lay": throat_assemble_lay,
     "synth.throat._gelu_flat": throat_gelu_flat,
+    "synth.throat._polar_turn": throat_polar_turn,
+    "synth.throat._polar_mul": throat_polar_mul,
 }
 
 

@@ -1152,6 +1152,134 @@ void throat_gelu_flat(const double *x, int32_t n, double *out) {
   }
 }
 
+// Fast accurate sincos(phi) (< 1 ULP for |phi| < 1e6) via 3-part Cody-Waite reduction modulo pi/2
+// and degree-15 / degree-14 Taylor polynomials on [-pi/4, pi/4].
+static inline void fast_sincos_f64(double phi, double *s_out, double *c_out) {
+  double kf = __builtin_rint(phi * 0.6366197723675814);
+  double r = ((phi - kf * 1.5707963267341256) - kf * 6.077100506303966e-11) - kf * 2.0222662487959506e-21;
+  double r2 = r * r;
+  double s = -1.0 / 1307674368000.0;
+  s = s * r2 + 1.0 / 6227020800.0;
+  s = s * r2 - 1.0 / 39916800.0;
+  s = s * r2 + 1.0 / 362880.0;
+  s = s * r2 - 1.0 / 5040.0;
+  s = s * r2 + 1.0 / 120.0;
+  s = s * r2 - 1.0 / 6.0;
+  s = r + r * (r2 * s);
+  double c = -1.0 / 87178291200.0;
+  c = c * r2 + 1.0 / 479001600.0;
+  c = c * r2 - 1.0 / 3628800.0;
+  c = c * r2 + 1.0 / 40320.0;
+  c = c * r2 - 1.0 / 720.0;
+  c = c * r2 + 1.0 / 24.0;
+  c = c * r2 - 0.5;
+  c = 1.0 + r2 * c;
+  int32_t q = (int32_t)kf;
+  double sv = (q & 1) ? c : s;
+  double cv = (q & 1) ? s : c;
+  if (q & 2) sv = -sv;
+  if ((q + 1) & 2) cv = -cv;
+  *s_out = sv;
+  *c_out = cv;
+}
+
+#ifdef __wasm_simd128__
+static inline void fast_sincos_f64x2(v128_t phi, v128_t *s_out, v128_t *c_out) {
+  v128_t kf = wasm_f64x2_nearest(wasm_f64x2_mul(phi, wasm_f64x2_splat(0.6366197723675814)));
+  v128_t r = wasm_f64x2_sub(wasm_f64x2_sub(wasm_f64x2_sub(phi, wasm_f64x2_mul(kf, wasm_f64x2_splat(1.5707963267341256))),
+                                           wasm_f64x2_mul(kf, wasm_f64x2_splat(6.077100506303966e-11))),
+                            wasm_f64x2_mul(kf, wasm_f64x2_splat(2.0222662487959506e-21)));
+  v128_t r2 = wasm_f64x2_mul(r, r);
+  v128_t s = wasm_f64x2_splat(-1.0 / 1307674368000.0);
+  s = wasm_f64x2_add(wasm_f64x2_mul(s, r2), wasm_f64x2_splat(1.0 / 6227020800.0));
+  s = wasm_f64x2_add(wasm_f64x2_mul(s, r2), wasm_f64x2_splat(-1.0 / 39916800.0));
+  s = wasm_f64x2_add(wasm_f64x2_mul(s, r2), wasm_f64x2_splat(1.0 / 362880.0));
+  s = wasm_f64x2_add(wasm_f64x2_mul(s, r2), wasm_f64x2_splat(-1.0 / 5040.0));
+  s = wasm_f64x2_add(wasm_f64x2_mul(s, r2), wasm_f64x2_splat(1.0 / 120.0));
+  s = wasm_f64x2_add(wasm_f64x2_mul(s, r2), wasm_f64x2_splat(-1.0 / 6.0));
+  s = wasm_f64x2_add(r, wasm_f64x2_mul(r, wasm_f64x2_mul(r2, s)));
+  v128_t c = wasm_f64x2_splat(-1.0 / 87178291200.0);
+  c = wasm_f64x2_add(wasm_f64x2_mul(c, r2), wasm_f64x2_splat(1.0 / 479001600.0));
+  c = wasm_f64x2_add(wasm_f64x2_mul(c, r2), wasm_f64x2_splat(-1.0 / 3628800.0));
+  c = wasm_f64x2_add(wasm_f64x2_mul(c, r2), wasm_f64x2_splat(1.0 / 40320.0));
+  c = wasm_f64x2_add(wasm_f64x2_mul(c, r2), wasm_f64x2_splat(-1.0 / 720.0));
+  c = wasm_f64x2_add(wasm_f64x2_mul(c, r2), wasm_f64x2_splat(1.0 / 24.0));
+  c = wasm_f64x2_add(wasm_f64x2_mul(c, r2), wasm_f64x2_splat(-0.5));
+  c = wasm_f64x2_add(wasm_f64x2_splat(1.0), wasm_f64x2_mul(r2, c));
+  v128_t qi = wasm_i64x2_extend_low_i32x4(wasm_i32x4_trunc_sat_f64x2_zero(kf));
+  v128_t swap_mask = wasm_i64x2_ne(wasm_v128_and(qi, wasm_i64x2_splat(1LL)), wasm_i64x2_splat(0LL));
+  v128_t sv = wasm_v128_bitselect(c, s, swap_mask);
+  v128_t cv = wasm_v128_bitselect(s, c, swap_mask);
+  v128_t s_flip = wasm_i64x2_shl(wasm_v128_and(qi, wasm_i64x2_splat(2LL)), 62);
+  v128_t c_flip = wasm_i64x2_shl(wasm_v128_and(wasm_i64x2_add(qi, wasm_i64x2_splat(1LL)), wasm_i64x2_splat(2LL)), 62);
+  *s_out = wasm_v128_xor(sv, s_flip);
+  *c_out = wasm_v128_xor(cv, c_flip);
+}
+#endif
+
+EXPORT(throat_polar_turn)
+void throat_polar_turn(double *spec_f, const double *amp, const double *turn, int32_t n) {
+  int32_t i = 0;
+#ifdef __wasm_simd128__
+  for (; i + 2 <= n; i += 2) {
+    v128_t z0 = wasm_v128_load(spec_f + (int64_t)2 * i);
+    v128_t z1 = wasm_v128_load(spec_f + (int64_t)2 * i + 2);
+    v128_t im = wasm_i64x2_shuffle(z0, z1, 1, 3);
+    v128_t phi = wasm_f64x2_add(im, wasm_v128_load(turn + i));
+    v128_t s, c;
+    fast_sincos_f64x2(phi, &s, &c);
+    v128_t a = wasm_v128_load(amp + i);
+    v128_t re = wasm_f64x2_mul(a, c);
+    v128_t im_o = wasm_f64x2_mul(a, s);
+    wasm_v128_store(spec_f + (int64_t)2 * i, wasm_i64x2_shuffle(re, im_o, 0, 2));
+    wasm_v128_store(spec_f + (int64_t)2 * i + 2, wasm_i64x2_shuffle(re, im_o, 1, 3));
+  }
+#endif
+  for (; i < n; i++) {
+    double s, c;
+    fast_sincos_f64(spec_f[(int64_t)2 * i + 1] + turn[i], &s, &c);
+    double a = amp[i];
+    spec_f[(int64_t)2 * i] = a * c;
+    spec_f[(int64_t)2 * i + 1] = a * s;
+  }
+}
+
+EXPORT(throat_polar_mul)
+void throat_polar_mul(double *spec_f, const double *amp, const double *other_f, int32_t n) {
+  int32_t i = 0;
+#ifdef __wasm_simd128__
+  for (; i + 2 <= n; i += 2) {
+    int64_t at = (int64_t)2 * i;
+    v128_t z0 = wasm_v128_load(spec_f + at);
+    v128_t z1 = wasm_v128_load(spec_f + at + 2);
+    v128_t phi = wasm_i64x2_shuffle(z0, z1, 1, 3);
+    v128_t s, c;
+    fast_sincos_f64x2(phi, &s, &c);
+    v128_t a = wasm_v128_load(amp + i);
+    v128_t re = wasm_f64x2_mul(a, c);
+    v128_t im = wasm_f64x2_mul(a, s);
+    v128_t o0 = wasm_v128_load(other_f + at);
+    v128_t o1 = wasm_v128_load(other_f + at + 2);
+    v128_t ore = wasm_i64x2_shuffle(o0, o1, 0, 2);
+    v128_t oim = wasm_i64x2_shuffle(o0, o1, 1, 3);
+    v128_t r_out = wasm_f64x2_sub(wasm_f64x2_mul(re, ore), wasm_f64x2_mul(im, oim));
+    v128_t i_out = wasm_f64x2_add(wasm_f64x2_mul(re, oim), wasm_f64x2_mul(im, ore));
+    wasm_v128_store(spec_f + at, wasm_i64x2_shuffle(r_out, i_out, 0, 2));
+    wasm_v128_store(spec_f + at + 2, wasm_i64x2_shuffle(r_out, i_out, 1, 3));
+  }
+#endif
+  for (; i < n; i++) {
+    int64_t at = (int64_t)2 * i;
+    double s, c;
+    fast_sincos_f64(spec_f[at + 1], &s, &c);
+    double a = amp[i];
+    double re = a * c, im = a * s;
+    double ore = other_f[at], oim = other_f[at + 1];
+    spec_f[at] = re * ore - im * oim;
+    spec_f[at + 1] = re * oim + im * ore;
+  }
+}
+
 #ifdef __wasm_simd128__
 // throat._matmul (x @ W.T) as Pyodide's scipy computes it, BLAS dgemm: the build with -msimd128 only
 // (kernels-simd.wasm; py/web_patches.py). Every output is summed exactly as that OpenBLAS (0.3.31, built for
