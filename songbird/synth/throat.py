@@ -912,6 +912,20 @@ T_AS_WAS = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": 
 T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 8.0, "longer": 2.5,
             "decay": 0.01, "aspiration": -6.0, "own": 0.3}
 T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
+# A t sung straight into the next word ("that you", "wrote this"): T_RELEASE's keys as they are there, and `rise`,
+# the seconds the throat's own sound takes to come back after the stop. T_CHOSEN's t is a phrase's last ("part",
+# "heart"), heard against the silence after it; between two sung sounds its 30 ms of 6-10 kHz is heard as a burst of
+# noise, and the next word starts at once at full level. Here the release is darker (3.4 kHz, a little at 5.2), 5 dB
+# softer and 18 ms long, and the voice returns over 30 ms: chosen by ear over one as bright and softer, and a 7 ms
+# tap. voice.linked 0 sings every t as T_RELEASE has it.
+T_LINKED = {"shape": [(3400.0, 1600.0, 0.0), (5200.0, 2500.0, -8.0)], "burst": 3.0, "longer": 1.5, "decay": 0.008,
+            "aspiration": -6.0, "rise": 0.03}
+# A d sung straight into the next word's vowel ("old and", "saved it"): the tongue's closure and its release are all
+# that tell it from the l or n before it, and CLOSURE_DIP's half and a release 15 dB under the vowels leave "ol' and".
+# `closure`: what is left of the throat's own sound through the closure, held as given (not scaled by voice.crisp);
+# `burst`: dB added to the release; `longer`: how many times as long it lasts.
+D_LINKED = {"closure": 0.35, "burst": 6.0, "longer": 1.0}
+LINKED = 0.08  # s: the next word's sound begins within this of the t's end (a rest or a breath is longer)
 
 # A release made as an airway makes one (as Chimera's physical model does, jamesondh/chimera-vocal-synth), for a
 # voiceless stop's phone: the pressure behind the closure lets go in a spike (`spike` dB re the vowels, lasting
@@ -1016,8 +1030,14 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
             env = env * np.exp(-np.maximum(t - t0, 0.0) / decay)
         added[lo:hi] += crisp * ref * 10.0 ** (level_db / 20.0) * amp * env * shaped
 
+    def rise(t0: float, over: float, left: float) -> None:
+        i0, i1 = max(int(t0 * sr), 0), min(int((t0 + over) * sr), n)
+        if i1 > i0:
+            floor = 1.0 - crisp * (1.0 - left)
+            gain[i0:i1] = np.minimum(gain[i0:i1], floor + (1.0 - floor) * np.arange(i1 - i0) / (i1 - i0))
+
     spread = float(getattr(voice, "spread", 0.0))
-    for s in segs:
+    for k, s in enumerate(segs):
         if s.role not in ("onset", "coda"):
             continue
         manner, place, voiced = ph.CONSONANTS[s.phone]
@@ -1060,16 +1080,30 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
                          fading=not coda, decay=R["breath_decay"] if coda else None)
                 continue
             if s.phone == "T":
-                shape = T_RELEASE["shape"] or shape
-                aspiration += T_RELEASE["aspiration"]
-                level += T_RELEASE["burst"]
-                length *= T_RELEASE["longer"]
-                ramp, decay = T_RELEASE["ramp"], T_RELEASE["decay"]
-                breath_shape, breath_from = T_RELEASE["aspiration_shape"], T_RELEASE["aspiration_from"]
-                if T_RELEASE["own"] < 1.0:
-                    dip(release, s.t1, T_RELEASE["own"])
-                if T_RELEASE["closure"] is not None:
-                    dip(s.t0, release, T_RELEASE["closure"])
+                T = T_RELEASE
+                after = segs[k + 1] if k + 1 < len(segs) else None
+                if float(getattr(voice, "linked", 0.0)) > 0 and s.role == "coda" and after is not None \
+                        and after.role in ("onset", "vowel") and after.t0 - s.t1 < LINKED:
+                    T = {**T_RELEASE, **T_LINKED}
+                shape = T["shape"] or shape
+                aspiration += T["aspiration"]
+                level += T["burst"]
+                length *= T["longer"]
+                ramp, decay = T["ramp"], T["decay"]
+                breath_shape, breath_from = T["aspiration_shape"], T["aspiration_from"]
+                if T["own"] < 1.0:
+                    dip(release, s.t1, T["own"])
+                    if T.get("rise"):
+                        rise(s.t1, T["rise"], T["own"])
+                if T["closure"] is not None:
+                    dip(s.t0, release, T["closure"])
+            elif s.phone == "D" and s.role == "coda" and float(getattr(voice, "linked", 0.0)) > 0:
+                after = segs[k + 1] if k + 1 < len(segs) else None
+                if after is not None and after.role == "vowel" and after.t0 - s.t1 < LINKED:
+                    level += D_LINKED["burst"]
+                    length *= D_LINKED["longer"]
+                    i0, i1 = max(int(s.t0 * sr), 0), min(int(release * sr), n)
+                    gain[i0:i1] = np.minimum(gain[i0:i1], D_LINKED["closure"])
             hiss(release, release + length, shape, level, ramp, s.amp, decay=decay)
             if manner == "affricate":
                 sh_shape, sh_level = ph.FRICATION["ZH" if voiced else "SH"]
