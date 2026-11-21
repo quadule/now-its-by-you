@@ -209,6 +209,12 @@ def _attack_into(y: np.ndarray, sr: int, hardness: float, vel: float, rng: np.ra
     y[:n] += noise * np.exp(-np.arange(n) / ((0.0005 + 0.0015 * hardness) * sr)) * 0.1 * hardness**1.5 * vel
 
 
+def _attack(sr: int, hardness: float, vel: float, length: int, rng: np.random.Generator) -> np.ndarray:
+    burst = np.zeros(length)
+    _attack_into(burst, sr, hardness, vel, rng)
+    return burst
+
+
 def _touch_into(y: np.ndarray, sr: int, at: int, freq: float, level: float, rng: np.random.Generator) -> None:
     """A finger landing on a sounding string: a soft, low buzz of a few hundredths of a second."""
     n = min(len(y) - at, int(0.03 * sr))
@@ -219,6 +225,12 @@ def _touch_into(y: np.ndarray, sr: int, at: int, freq: float, level: float, rng:
                            output="sos"), noise)[64:]
     env = np.sin(np.pi * np.arange(n) / n) ** 2
     y[at : at + n] += noise * env * 0.05 * level
+
+
+def _touch(sr: int, at: int, length: int, freq: float, level: float, rng: np.random.Generator) -> np.ndarray:
+    y = np.zeros(length)
+    _touch_into(y, sr, at, freq, level, rng)
+    return y
 
 
 @njit(cache=True, nogil=True)
