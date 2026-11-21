@@ -8,6 +8,9 @@
 // (checked by the build), so it writes nothing but the arrays it is handed.
 
 #include <stdint.h>
+#ifdef __wasm_simd128__
+#include <wasm_simd128.h>
+#endif
 
 #define IMPORT(name) __attribute__((import_module("env"), import_name(#name)))
 IMPORT(exp) double js_exp(double);
@@ -68,22 +71,59 @@ void pluck_bank(const double *x, int32_t length, const int32_t *wholes, const do
 // fx._four / _two / _one: biquads in cascade over each channel of y (n x chans, C order), in place
 EXPORT(fx_four)
 void fx_four(double *y, int32_t n, int32_t chans, const double *p, const double *q, const double *r, const double *s) {
+  double p0 = p[0], p1 = p[1], p2 = p[2], p4 = p[4], p5 = p[5];
+  double q0 = q[0], q1 = q[1], q2 = q[2], q4 = q[4], q5 = q[5];
+  double r0 = r[0], r1 = r[1], r2 = r[2], r4 = r[4], r5 = r[5];
+  double s0 = s[0], s1 = s[1], s2 = s[2], s4 = s[4], s5 = s[5];
+#ifdef __wasm_simd128__
+  if (chans == 2) {
+    v128_t vp0 = wasm_f64x2_splat(p0), vp1 = wasm_f64x2_splat(p1), vp2 = wasm_f64x2_splat(p2),
+           vp4 = wasm_f64x2_splat(p4), vp5 = wasm_f64x2_splat(p5);
+    v128_t vq0 = wasm_f64x2_splat(q0), vq1 = wasm_f64x2_splat(q1), vq2 = wasm_f64x2_splat(q2),
+           vq4 = wasm_f64x2_splat(q4), vq5 = wasm_f64x2_splat(q5);
+    v128_t vr0 = wasm_f64x2_splat(r0), vr1 = wasm_f64x2_splat(r1), vr2 = wasm_f64x2_splat(r2),
+           vr4 = wasm_f64x2_splat(r4), vr5 = wasm_f64x2_splat(r5);
+    v128_t vs0 = wasm_f64x2_splat(s0), vs1 = wasm_f64x2_splat(s1), vs2 = wasm_f64x2_splat(s2),
+           vs4 = wasm_f64x2_splat(s4), vs5 = wasm_f64x2_splat(s5);
+    v128_t z1 = wasm_f64x2_splat(0.0), z2 = wasm_f64x2_splat(0.0), w1 = wasm_f64x2_splat(0.0),
+           w2 = wasm_f64x2_splat(0.0), u1 = wasm_f64x2_splat(0.0), u2 = wasm_f64x2_splat(0.0),
+           t1 = wasm_f64x2_splat(0.0), t2 = wasm_f64x2_splat(0.0);
+    for (int32_t i = 0; i < n; i++) {
+      double *yp = y + (int64_t)i * 2;
+      v128_t v = wasm_v128_load(yp);
+      v128_t o = wasm_f64x2_add(wasm_f64x2_mul(vp0, v), z1);
+      z1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vp1, v), wasm_f64x2_mul(vp4, o)), z2);
+      z2 = wasm_f64x2_sub(wasm_f64x2_mul(vp2, v), wasm_f64x2_mul(vp5, o));
+      v128_t u = wasm_f64x2_add(wasm_f64x2_mul(vq0, o), w1);
+      w1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vq1, o), wasm_f64x2_mul(vq4, u)), w2);
+      w2 = wasm_f64x2_sub(wasm_f64x2_mul(vq2, o), wasm_f64x2_mul(vq5, u));
+      v128_t m = wasm_f64x2_add(wasm_f64x2_mul(vr0, u), u1);
+      u1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vr1, u), wasm_f64x2_mul(vr4, m)), u2);
+      u2 = wasm_f64x2_sub(wasm_f64x2_mul(vr2, u), wasm_f64x2_mul(vr5, m));
+      v128_t k = wasm_f64x2_add(wasm_f64x2_mul(vs0, m), t1);
+      t1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vs1, m), wasm_f64x2_mul(vs4, k)), t2);
+      t2 = wasm_f64x2_sub(wasm_f64x2_mul(vs2, m), wasm_f64x2_mul(vs5, k));
+      wasm_v128_store(yp, k);
+    }
+    return;
+  }
+#endif
   for (int32_t c = 0; c < chans; c++) {
     double z1 = 0, z2 = 0, w1 = 0, w2 = 0, u1 = 0, u2 = 0, t1 = 0, t2 = 0;
     for (int32_t i = 0; i < n; i++) {
       double v = y[(int64_t)i * chans + c];
-      double o = p[0] * v + z1;
-      z1 = p[1] * v - p[4] * o + z2;
-      z2 = p[2] * v - p[5] * o;
-      double u = q[0] * o + w1;
-      w1 = q[1] * o - q[4] * u + w2;
-      w2 = q[2] * o - q[5] * u;
-      double m = r[0] * u + u1;
-      u1 = r[1] * u - r[4] * m + u2;
-      u2 = r[2] * u - r[5] * m;
-      double k = s[0] * m + t1;
-      t1 = s[1] * m - s[4] * k + t2;
-      t2 = s[2] * m - s[5] * k;
+      double o = p0 * v + z1;
+      z1 = p1 * v - p4 * o + z2;
+      z2 = p2 * v - p5 * o;
+      double u = q0 * o + w1;
+      w1 = q1 * o - q4 * u + w2;
+      w2 = q2 * o - q5 * u;
+      double m = r0 * u + u1;
+      u1 = r1 * u - r4 * m + u2;
+      u2 = r2 * u - r5 * m;
+      double k = s0 * m + t1;
+      t1 = s1 * m - s4 * k + t2;
+      t2 = s2 * m - s5 * k;
       y[(int64_t)i * chans + c] = k;
     }
   }
@@ -91,16 +131,40 @@ void fx_four(double *y, int32_t n, int32_t chans, const double *p, const double 
 
 EXPORT(fx_two)
 void fx_two(double *y, int32_t n, int32_t chans, const double *p, const double *q) {
+  double p0 = p[0], p1 = p[1], p2 = p[2], p4 = p[4], p5 = p[5];
+  double q0 = q[0], q1 = q[1], q2 = q[2], q4 = q[4], q5 = q[5];
+#ifdef __wasm_simd128__
+  if (chans == 2) {
+    v128_t vp0 = wasm_f64x2_splat(p0), vp1 = wasm_f64x2_splat(p1), vp2 = wasm_f64x2_splat(p2),
+           vp4 = wasm_f64x2_splat(p4), vp5 = wasm_f64x2_splat(p5);
+    v128_t vq0 = wasm_f64x2_splat(q0), vq1 = wasm_f64x2_splat(q1), vq2 = wasm_f64x2_splat(q2),
+           vq4 = wasm_f64x2_splat(q4), vq5 = wasm_f64x2_splat(q5);
+    v128_t z1 = wasm_f64x2_splat(0.0), z2 = wasm_f64x2_splat(0.0),
+           w1 = wasm_f64x2_splat(0.0), w2 = wasm_f64x2_splat(0.0);
+    for (int32_t i = 0; i < n; i++) {
+      double *yp = y + (int64_t)i * 2;
+      v128_t v = wasm_v128_load(yp);
+      v128_t o = wasm_f64x2_add(wasm_f64x2_mul(vp0, v), z1);
+      z1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vp1, v), wasm_f64x2_mul(vp4, o)), z2);
+      z2 = wasm_f64x2_sub(wasm_f64x2_mul(vp2, v), wasm_f64x2_mul(vp5, o));
+      v128_t u = wasm_f64x2_add(wasm_f64x2_mul(vq0, o), w1);
+      w1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vq1, o), wasm_f64x2_mul(vq4, u)), w2);
+      w2 = wasm_f64x2_sub(wasm_f64x2_mul(vq2, o), wasm_f64x2_mul(vq5, u));
+      wasm_v128_store(yp, u);
+    }
+    return;
+  }
+#endif
   for (int32_t c = 0; c < chans; c++) {
     double z1 = 0, z2 = 0, w1 = 0, w2 = 0;
     for (int32_t i = 0; i < n; i++) {
       double v = y[(int64_t)i * chans + c];
-      double o = p[0] * v + z1;
-      z1 = p[1] * v - p[4] * o + z2;
-      z2 = p[2] * v - p[5] * o;
-      double u = q[0] * o + w1;
-      w1 = q[1] * o - q[4] * u + w2;
-      w2 = q[2] * o - q[5] * u;
+      double o = p0 * v + z1;
+      z1 = p1 * v - p4 * o + z2;
+      z2 = p2 * v - p5 * o;
+      double u = q0 * o + w1;
+      w1 = q1 * o - q4 * u + w2;
+      w2 = q2 * o - q5 * u;
       y[(int64_t)i * chans + c] = u;
     }
   }
@@ -108,13 +172,30 @@ void fx_two(double *y, int32_t n, int32_t chans, const double *p, const double *
 
 EXPORT(fx_one)
 void fx_one(double *y, int32_t n, int32_t chans, const double *p) {
+  double p0 = p[0], p1 = p[1], p2 = p[2], p4 = p[4], p5 = p[5];
+#ifdef __wasm_simd128__
+  if (chans == 2) {
+    v128_t vp0 = wasm_f64x2_splat(p0), vp1 = wasm_f64x2_splat(p1), vp2 = wasm_f64x2_splat(p2),
+           vp4 = wasm_f64x2_splat(p4), vp5 = wasm_f64x2_splat(p5);
+    v128_t z1 = wasm_f64x2_splat(0.0), z2 = wasm_f64x2_splat(0.0);
+    for (int32_t i = 0; i < n; i++) {
+      double *yp = y + (int64_t)i * 2;
+      v128_t v = wasm_v128_load(yp);
+      v128_t o = wasm_f64x2_add(wasm_f64x2_mul(vp0, v), z1);
+      z1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vp1, v), wasm_f64x2_mul(vp4, o)), z2);
+      z2 = wasm_f64x2_sub(wasm_f64x2_mul(vp2, v), wasm_f64x2_mul(vp5, o));
+      wasm_v128_store(yp, o);
+    }
+    return;
+  }
+#endif
   for (int32_t c = 0; c < chans; c++) {
     double z1 = 0, z2 = 0;
     for (int32_t i = 0; i < n; i++) {
       double v = y[(int64_t)i * chans + c];
-      double o = p[0] * v + z1;
-      z1 = p[1] * v - p[4] * o + z2;
-      z2 = p[2] * v - p[5] * o;
+      double o = p0 * v + z1;
+      z1 = p1 * v - p4 * o + z2;
+      z2 = p2 * v - p5 * o;
       y[(int64_t)i * chans + c] = o;
     }
   }
@@ -164,14 +245,40 @@ void drum_ring(const double *freqs, const double *amps, const double *t60s, int3
 EXPORT(fx_detect_every)
 void fx_detect_every(const double *key, int32_t n, int32_t chans, double coef, int32_t step, double *out) {
   double p = 0.0;
+  double one_m = 1.0 - coef;
   int32_t count = (n + step - 1) / step;
+  if (chans == 2) {
+    for (int32_t k = 0; k < count; k++) {
+      int32_t start = (k - 1) * step + 1;
+      if (start < 0) start = 0;
+      for (int32_t i = start; i < k * step + 1; i++) {
+        double a = key[(int64_t)i * 2], b = key[(int64_t)i * 2 + 1];
+        double s = a * a + b * b;
+        p = coef * p + one_m * s / 2.0;
+      }
+      out[k] = p;
+    }
+    return;
+  }
+  if (chans == 1) {
+    for (int32_t k = 0; k < count; k++) {
+      int32_t start = (k - 1) * step + 1;
+      if (start < 0) start = 0;
+      for (int32_t i = start; i < k * step + 1; i++) {
+        double a = key[i];
+        p = coef * p + one_m * (a * a);
+      }
+      out[k] = p;
+    }
+    return;
+  }
   for (int32_t k = 0; k < count; k++) {
     int32_t start = (k - 1) * step + 1;
     if (start < 0) start = 0;
     for (int32_t i = start; i < k * step + 1; i++) {
       double s = 0.0;
       for (int32_t c = 0; c < chans; c++) s += key[(int64_t)i * chans + c] * key[(int64_t)i * chans + c];
-      p = coef * p + (1.0 - coef) * s / chans;
+      p = coef * p + one_m * s / chans;
     }
     out[k] = p;
   }
@@ -182,6 +289,51 @@ void fx_apply(const double *x, int32_t n, int32_t chans, const double *lin, int3
               const double *band, int32_t band_chans, double *y) {
   int split = band_chans == chans;
   int32_t count = (n + step - 1) / step;
+#ifdef __wasm_simd128__
+  if (chans == 2) {
+    double fstep = (double)step;
+    for (int32_t k = 0; k < count; k++) {
+      int32_t start = k * step;
+      int32_t stop = start + step < n ? start + step : n;
+      double lk = lin[k];
+      if (k + 1 < n_lin) {
+        double change = lin[k + 1] - lk;
+        if (split) {
+          for (int32_t i = start; i < stop; i++) {
+            double g = lk + ((double)(i - start) / fstep) * change;
+            v128_t vg = wasm_f64x2_splat(g - 1.0);
+            int64_t at = (int64_t)i * 2;
+            wasm_v128_store(y + at, wasm_f64x2_add(wasm_v128_load(x + at),
+                                                   wasm_f64x2_mul(wasm_v128_load(band + at), vg)));
+          }
+        } else {
+          for (int32_t i = start; i < stop; i++) {
+            double g = lk + ((double)(i - start) / fstep) * change;
+            v128_t vg = wasm_f64x2_splat(g);
+            int64_t at = (int64_t)i * 2;
+            wasm_v128_store(y + at, wasm_f64x2_mul(wasm_v128_load(x + at), vg));
+          }
+        }
+      } else {
+        if (split) {
+          v128_t vg = wasm_f64x2_splat(lk - 1.0);
+          for (int32_t i = start; i < stop; i++) {
+            int64_t at = (int64_t)i * 2;
+            wasm_v128_store(y + at, wasm_f64x2_add(wasm_v128_load(x + at),
+                                                   wasm_f64x2_mul(wasm_v128_load(band + at), vg)));
+          }
+        } else {
+          v128_t vg = wasm_f64x2_splat(lk);
+          for (int32_t i = start; i < stop; i++) {
+            int64_t at = (int64_t)i * 2;
+            wasm_v128_store(y + at, wasm_f64x2_mul(wasm_v128_load(x + at), vg));
+          }
+        }
+      }
+    }
+    return;
+  }
+#endif
   for (int32_t k = 0; k < count; k++) {
     int32_t start = k * step;
     int32_t stop = start + step < n ? start + step : n;
@@ -237,27 +389,58 @@ EXPORT(master_weighted_hop_power)
 void master_weighted_hop_power(const double *x, int32_t n, int32_t chans, const double *p, const double *q,
                                int32_t hop, double *state, double *out) {
   int32_t k = n / hop;
+  double p0 = p[0], p1 = p[1], p2 = p[2], p4 = p[4], p5 = p[5];
+  double q0 = q[0], q1 = q[1], q2 = q[2], q4 = q[4], q5 = q[5];
   if (chans == 2) {
+#ifdef __wasm_simd128__
+    v128_t vp0 = wasm_f64x2_splat(p0), vp1 = wasm_f64x2_splat(p1), vp2 = wasm_f64x2_splat(p2),
+           vp4 = wasm_f64x2_splat(p4), vp5 = wasm_f64x2_splat(p5);
+    v128_t vq0 = wasm_f64x2_splat(q0), vq1 = wasm_f64x2_splat(q1), vq2 = wasm_f64x2_splat(q2),
+           vq4 = wasm_f64x2_splat(q4), vq5 = wasm_f64x2_splat(q5);
+    v128_t z1 = wasm_f64x2_make(state[0], state[1]), z2 = wasm_f64x2_make(state[2], state[3]);
+    v128_t w1 = wasm_f64x2_make(state[4], state[5]), w2 = wasm_f64x2_make(state[6], state[7]);
+    for (int32_t j = 0; j < k; j++) {
+      double s = 0.0;
+      for (int32_t i = j * hop; i < (j + 1) * hop; i++) {
+        v128_t v = wasm_v128_load(x + (int64_t)i * 2);
+        v128_t o = wasm_f64x2_add(wasm_f64x2_mul(vp0, v), z1);
+        z1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vp1, v), wasm_f64x2_mul(vp4, o)), z2);
+        z2 = wasm_f64x2_sub(wasm_f64x2_mul(vp2, v), wasm_f64x2_mul(vp5, o));
+        v128_t u = wasm_f64x2_add(wasm_f64x2_mul(vq0, o), w1);
+        w1 = wasm_f64x2_add(wasm_f64x2_sub(wasm_f64x2_mul(vq1, o), wasm_f64x2_mul(vq4, u)), w2);
+        w2 = wasm_f64x2_sub(wasm_f64x2_mul(vq2, o), wasm_f64x2_mul(vq5, u));
+        v128_t u2 = wasm_f64x2_mul(u, u);
+        s += wasm_f64x2_extract_lane(u2, 0);
+        s += wasm_f64x2_extract_lane(u2, 1);
+      }
+      out[j] = s / hop;
+    }
+    state[0] = wasm_f64x2_extract_lane(z1, 0); state[1] = wasm_f64x2_extract_lane(z1, 1);
+    state[2] = wasm_f64x2_extract_lane(z2, 0); state[3] = wasm_f64x2_extract_lane(z2, 1);
+    state[4] = wasm_f64x2_extract_lane(w1, 0); state[5] = wasm_f64x2_extract_lane(w1, 1);
+    state[6] = wasm_f64x2_extract_lane(w2, 0); state[7] = wasm_f64x2_extract_lane(w2, 1);
+    return;
+#else
     double z1l = state[0], z2l = state[2], w1l = state[4], w2l = state[6];
     double z1r = state[1], z2r = state[3], w1r = state[5], w2r = state[7];
     for (int32_t j = 0; j < k; j++) {
       double s = 0.0;
       for (int32_t i = j * hop; i < (j + 1) * hop; i++) {
         double v = x[(int64_t)i * 2];
-        double o = p[0] * v + z1l;
-        z1l = p[1] * v - p[4] * o + z2l;
-        z2l = p[2] * v - p[5] * o;
-        double u = q[0] * o + w1l;
-        w1l = q[1] * o - q[4] * u + w2l;
-        w2l = q[2] * o - q[5] * u;
+        double o = p0 * v + z1l;
+        z1l = p1 * v - p4 * o + z2l;
+        z2l = p2 * v - p5 * o;
+        double u = q0 * o + w1l;
+        w1l = q1 * o - q4 * u + w2l;
+        w2l = q2 * o - q5 * u;
         s += u * u;
         v = x[(int64_t)i * 2 + 1];
-        o = p[0] * v + z1r;
-        z1r = p[1] * v - p[4] * o + z2r;
-        z2r = p[2] * v - p[5] * o;
-        u = q[0] * o + w1r;
-        w1r = q[1] * o - q[4] * u + w2r;
-        w2r = q[2] * o - q[5] * u;
+        o = p0 * v + z1r;
+        z1r = p1 * v - p4 * o + z2r;
+        z2r = p2 * v - p5 * o;
+        u = q0 * o + w1r;
+        w1r = q1 * o - q4 * u + w2r;
+        w2r = q2 * o - q5 * u;
         s += u * u;
       }
       out[j] = s / hop;
@@ -265,6 +448,7 @@ void master_weighted_hop_power(const double *x, int32_t n, int32_t chans, const 
     state[0] = z1l; state[2] = z2l; state[4] = w1l; state[6] = w2l;
     state[1] = z1r; state[3] = z2r; state[5] = w1r; state[7] = w2r;
     return;
+#endif
   }
   double *z1 = state, *z2 = state + chans, *w1 = state + 2 * chans, *w2 = state + 3 * chans;
   for (int32_t j = 0; j < k; j++) {
@@ -272,12 +456,12 @@ void master_weighted_hop_power(const double *x, int32_t n, int32_t chans, const 
     for (int32_t i = j * hop; i < (j + 1) * hop; i++)
       for (int32_t c = 0; c < chans; c++) {
         double v = x[(int64_t)i * chans + c];
-        double o = p[0] * v + z1[c];
-        z1[c] = p[1] * v - p[4] * o + z2[c];
-        z2[c] = p[2] * v - p[5] * o;
-        double u = q[0] * o + w1[c];
-        w1[c] = q[1] * o - q[4] * u + w2[c];
-        w2[c] = q[2] * o - q[5] * u;
+        double o = p0 * v + z1[c];
+        z1[c] = p1 * v - p4 * o + z2[c];
+        z2[c] = p2 * v - p5 * o;
+        double u = q0 * o + w1[c];
+        w1[c] = q1 * o - q4 * u + w2[c];
+        w2[c] = q2 * o - q5 * u;
         s += u * u;
       }
     out[j] = s / hop;
@@ -368,6 +552,27 @@ void pipe_run(const double *freq, const double *breath, const double *chiff, con
 EXPORT(instruments_placed)
 void instruments_placed(const double *y, int32_t n, int32_t chans, double c, double s, double root2, double width,
                         double *out) {
+#ifdef __wasm_simd128__
+  v128_t vcs = wasm_f64x2_make(c, s), vr2 = wasm_f64x2_splat(root2);
+  if (chans == 1) {
+    for (int32_t i = 0; i < n; i++) {
+      v128_t v = wasm_f64x2_splat(y[i]);
+      wasm_v128_store(out + (int64_t)i * 2, wasm_f64x2_mul(wasm_f64x2_mul(v, vcs), vr2));
+    }
+    return;
+  }
+  if (chans == 2) {
+    v128_t vsign = wasm_f64x2_make(width, -width);
+    for (int32_t i = 0; i < n; i++) {
+      int64_t at = (int64_t)i * 2;
+      double l = y[at], r = y[at + 1];
+      v128_t mid = wasm_f64x2_splat(0.5 * (l + r));
+      v128_t side = wasm_f64x2_mul(wasm_f64x2_splat(0.5 * (l - r)), vsign);
+      wasm_v128_store(out + at, wasm_f64x2_add(wasm_f64x2_mul(wasm_f64x2_mul(mid, vcs), vr2), side));
+    }
+    return;
+  }
+#endif
   if (chans == 1) {
     for (int32_t i = 0; i < n; i++) {
       double v = y[i];
@@ -498,6 +703,30 @@ void fx_saturate(const double *x, int32_t n, int32_t chans, double k, double bia
   double denom = 27.0 + 9.0 * w;
   double slope = (729.0 - 162.0 * w + 9.0 * w * w) / (denom * denom);
   double norm = 1.0 / (k * slope);
+#ifdef __wasm_simd128__
+  if (chans == 2) {
+    v128_t vk = wasm_f64x2_splat(k), vbias = wasm_f64x2_splat(bias), vth = wasm_f64x2_splat(th),
+           vnorm = wasm_f64x2_splat(norm), vdc = wasm_f64x2_splat(dc);
+    v128_t v3 = wasm_f64x2_splat(3.0), vm3 = wasm_f64x2_splat(-3.0), v1 = wasm_f64x2_splat(1.0),
+           vm1 = wasm_f64x2_splat(-1.0), v27 = wasm_f64x2_splat(27.0), v9 = wasm_f64x2_splat(9.0);
+    v128_t prev_in = wasm_f64x2_splat(0.0), prev_out = wasm_f64x2_splat(0.0);
+    for (int32_t i = 0; i < n; i++) {
+      int64_t at = (int64_t)i * 2;
+      v128_t u = wasm_f64x2_add(wasm_f64x2_mul(vk, wasm_v128_load(x + at)), vbias);
+      v128_t u2 = wasm_f64x2_mul(u, u);
+      v128_t soft = wasm_f64x2_div(wasm_f64x2_mul(u, wasm_f64x2_add(v27, u2)),
+                                   wasm_f64x2_add(v27, wasm_f64x2_mul(v9, u2)));
+      soft = wasm_v128_bitselect(vm1, soft, wasm_f64x2_le(u, vm3));
+      soft = wasm_v128_bitselect(v1, soft, wasm_f64x2_ge(u, v3));
+      v128_t v = wasm_f64x2_mul(wasm_f64x2_sub(soft, vth), vnorm);
+      v128_t out = wasm_f64x2_add(wasm_f64x2_sub(v, prev_in), wasm_f64x2_mul(vdc, prev_out));
+      prev_in = v;
+      prev_out = out;
+      wasm_v128_store(y + at, out);
+    }
+    return;
+  }
+#endif
   for (int32_t c = 0; c < chans; c++) {
     double prev_in = 0.0, prev_out = 0.0;
     for (int32_t i = 0; i < n; i++) {
@@ -639,7 +868,6 @@ double reed_read(const double *wave, int32_t size, const double *increments, con
 // the unroll (480: four of 120; 160: 80 and 80). Found by experiment against blas.dgemm, which it equals bit
 // for bit (tools/check_kernels.py; web_patches checks again before using it). Two outputs of a row at a time,
 // one in each f64x2 lane; wasm has no fused multiply-add, so a product rounds before it is added, as there.
-#include <wasm_simd128.h>
 
 #define MM_Q 120
 #define MM_UNROLL 2
