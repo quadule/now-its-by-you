@@ -21,7 +21,8 @@ its stops released as articulate makes them (tE's t).
   of *you* too." / "It's *yours* if you sing it, and then it *grows*. ... and now that you know it, go make it by
   *you*." The tag is played, not sung (`arrange.tag:0.sung` false): a bowed upright bass (`bowedbass`) on the
   whistle's tune two octaves down, the twin "bowedbass" with its levels along the tag, and the last phrase slows
-  to less than half its speed (`ritardando` 1.5).
+  to less than half its speed (`ritardando` 1.5). The intro's tune is a hollow square lead without the whistle's
+  grace notes, an electric piano an octave under it, and its drums the 808 as a soft, worn kit.
 
     uv run python -m songbird render performance/genome.json --replay performance/record-final.json --out final.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-B.json --out performance-B.flac

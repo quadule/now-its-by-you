@@ -224,10 +224,6 @@
    },
    "exact": {
     "twins": {
-     "whistle~": [
-      "whistle",
-      "synthlead"
-     ],
      "harp~": [
       "harp",
       "arp"
@@ -254,7 +250,12 @@
      ],
      "drummachine#": [
       "drummachine",
-      "chip-drums"
+      "drums-808",
+      {
+       "sound": {
+        "kit": "lofi"
+       }
+      }
      ],
      "bowedbass": [
       "whistle",
@@ -262,6 +263,24 @@
       {
        "shift": -24,
        "plain": true
+      }
+     ],
+     "whistle~": [
+      "whistle",
+      "synthlead",
+      {
+       "plain": true,
+       "sound": {
+        "patch": "square"
+       }
+      }
+     ],
+     "epiano~": [
+      "whistle",
+      "epiano",
+      {
+       "plain": true,
+       "shift": -12
       }
      ]
     },
@@ -299,16 +318,6 @@
      }
     ],
     "levels": {
-     "whistle~": [
-      [
-       "verse:0",
-       0
-      ],
-      [
-       "verse:0.1",
-       null
-      ]
-     ],
      "whistle": [
       [
        "verse:0",
@@ -723,6 +732,26 @@
       [
        "refrain:2@0.8145",
        0
+      ]
+     ],
+     "whistle~": [
+      [
+       "verse:0",
+       -3
+      ],
+      [
+       "verse:0.1",
+       null
+      ]
+     ],
+     "epiano~": [
+      [
+       "verse:0",
+       -5
+      ],
+      [
+       "verse:0.1",
+       null
       ]
      ]
     }

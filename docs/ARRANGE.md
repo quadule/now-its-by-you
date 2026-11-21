@@ -509,7 +509,8 @@ drops it):
 
 `twins`: a synth (any instrument) on a player's notes or a layered part's, named, level with it by the whole stems' RMS
 (a third entry says how it plays them, `stage.twin_notes`: `["whistle", "bowedbass", {"shift": -24, "plain": true}]` is a bowed
-upright bass on the whistle's tune two octaves down, without the whistle's grace notes);
+upright bass on the whistle's tune two octaves down, without the whistle's grace notes; `"sound": {"patch": "square"}`
+there gives the twin its own sound, as `sound.<player>` gives a player's);
 `layers`: another style's players on the same song (its key, tempo, form and chords), a section of a part played
 as it plays another; `levels`: each named part's level along the song as points (where, dB or null for silent)
 joined by straight fades, the first and last held, a point at the place of the one before it 0.12 s after it;

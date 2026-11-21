@@ -22,7 +22,10 @@ The edition's own exact data, params.composition["exact"], which the renderer ho
                                                              RMS), by its name; a third entry says how it plays
                                                              them (twin_notes): "shift" semitones away,
                                                              "plain" without the player's grace notes and the
-                                                             articulations the instrument doesn't have
+                                                             articulations the instrument doesn't have; and
+                                                             "sound", its own sound (songbird.sound's: a
+                                                             synth's patch, cutoff, resonance, envelope; a
+                                                             drum machine's kit)
      "layers": [{"style": "synthfolk", "parts": ["arp", "synthpad"],
                  "copy": [{"part": "synthpad", "to": "verse:0", "from": "verse:1"}]}],
                                                              another style's players on the same song (its key,
@@ -491,7 +494,7 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
     for name, (part, synth_name, *how) in twins.items():
         def twin(part=part, synth_name=synth_name, how=how[0] if how else None) -> np.ndarray:
             notes = twin_notes(notes_of.get(part) or score.part(part), synth_name, how)
-            y = render_part(synth_name, notes, sr, length, score.band, seed, None)
+            y = render_part(synth_name, notes, sr, length, score.band, seed, (how or {}).get("sound"))
             return y * (played[part].rms() / max(rms(y), 1e-9))  # level with the player whose part it plays
         makes[name] = twin
         if name not in order:
