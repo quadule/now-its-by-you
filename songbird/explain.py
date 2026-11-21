@@ -207,12 +207,29 @@ def tempo_words(bpm: float) -> str:
     return f"{bpm:.0f} beats a minute: {feel}"
 
 
-def shape_words(parts: dict | None) -> str:
-    """'three verses, with an intro, a turn after the refrains and the bridge twice'."""
+def played_sections(params) -> set[str]:
+    """The sung sections a person's arrangement has played every time they come (takeover's `sung` false): the
+    tag of a version whose tag an instrument plays."""
+    from .composition import section_ids
+    from .takeover import arranged
+
+    held = arranged(params)
+    if not held:
+        return set()
+    names: dict[str, list[bool]] = {}
+    for sid, name in zip(section_ids(params.form), params.form):
+        names.setdefault(name, []).append(held.get(sid, {}).get("sung") is False)
+    return {name for name, each in names.items() if all(each)}
+
+
+def shape_words(parts: dict | None, played=()) -> str:
+    """'three verses, with an intro, a turn after the refrains and the bridge twice'. played: the sung
+    sections this version has played (played_sections): its tag is 'the tag played'."""
     if not parts:
         return "a shape of its own"
     verses = f"{number(parts.get('verses', 0))} verse{'s' if parts.get('verses') != 1 else ''}"
-    extras = [PARTS[k] for k in ("pairs", "intro", "turn", "break", "bridge2", "tag", "outro") if parts.get(k)]
+    extras = ["the tag played" if k == "tag" and "tag" in played else PARTS[k]
+              for k in ("pairs", "intro", "turn", "break", "bridge2", "tag", "outro") if parts.get(k)]
     return f"{verses}, with {listed(extras)}" if extras else f"{verses}, and nothing more"
 
 
@@ -847,7 +864,7 @@ def shape_card(v: Version) -> dict:
 
     mine = [{"kind": "you", "text": f"{chosen(p[5:], v.edits.get(p))}: chosen by you", "path": p}
             for p in v.mine("form.")]
-    return _card(v, "shape", "Shape", shape_words(parts), _form_line(v.params.form), mine + _finish(v, why, "form"),
+    return _card(v, "shape", "Shape", shape_words(parts, played_sections(v.params)), _form_line(v.params.form), mine + _finish(v, why, "form"),
                  ["form."], parts=parts or {}, choices=edits_mod.shapes(genome, v.params.form))
 
 
@@ -1286,7 +1303,9 @@ def _word_place(path: str) -> str:
 
 def choir_card(v: Version) -> dict:
     n = v.params.choir
-    sings = [s for s in dict.fromkeys(v.params.form) if v.context.genome.section(s).choir and s != "bridge2"]
+    played = played_sections(v.params)
+    sings = [s for s in dict.fromkeys(v.params.form)
+             if v.context.genome.section(s).choir and s != "bridge2" and s not in played]
     has = in_clips(v)
     if has is not None:  # a song of a person's clips: the sections it sings that the voices join, by their role
         from .clips import base, resolved
@@ -1387,6 +1406,10 @@ def words_view(v: Version) -> list[dict]:
     own = [{i: t for i, t in mine_.items() if handed_lines[k].get(i) != t} for k, mine_ in enumerate(own)]
     seen: dict = {}
     out = []
+    from .composition import section_ids
+    from .takeover import arranged
+
+    ids, held = section_ids(v.params.form), arranged(v.params)
     for k, name in enumerate(v.params.form):
         section = genome.section(name)
         block = section.lyrics
@@ -1394,10 +1417,14 @@ def words_view(v: Version) -> list[dict]:
         label = SECTIONS.get(name, name.title()) + (f" {seen[name]}" if name in ("verse", "refrain") else "")
         item = {"index": k, "name": name, "label": label, "sung": bool(block)}
         if not block:
-            item["lines"] = [_instrumental(name, lead)]
+            item["lines"] = [_instrumental(name, _heard_lead(v.params, ids, k, lead))]
             out.append(item)
             continue
         s = next(sung)
+        if held.get(ids[k], {}).get("sung") is False:  # played, not sung: its words wait (takeover)
+            item.update({"sung": False, "lines": [f"the {player(_heard_lead(v.params, ids, k, lead))} plays its tune"]})
+            out.append(item)
+            continue
         nth = sum(1 for x in lyrics.sections[: lyrics.sections.index(s)] if x.block == s.block)
         path = (f"words.{block}.{nth}" if block in ("verse", "refrain")
                 else "words.bridge2" if block == "bridge" and nth == 1 else f"words.{block}")
@@ -1463,6 +1490,28 @@ def clip_words(cards: list[dict], sung: dict) -> list[dict]:
                      "blank": clip is not None and not clip["source"], "clip": clip["id"] if clip else None})
         out.append(item)
     return out
+
+
+def _heard_lead(params, ids: list[str], k: int, lead: str | None) -> str | None:
+    """Who is heard on the lead's notes in the k-th section: the lead, or in a stage edition the twin that
+    sounds there in its place (stage's exact twins and levels: the level at the section's start)."""
+    exact = (getattr(params, "composition", None) or {}).get("exact") or {}
+    levels = exact.get("levels") or {}
+
+    def sounds(name: str) -> bool:
+        points = levels.get(name) or ()
+        at = points[0][1] if points else 0.0  # (the first level holds before its place, as stage.curve has it)
+        for where, db in points:
+            sid = where.partition("@")[0].partition(".")[0]
+            if sid in ids and ids.index(sid) <= k:
+                at = db
+        return at is not None
+
+    if lead and not sounds(lead):
+        for name, pair in (exact.get("twins") or {}).items():
+            if pair[0] == lead and name in levels and sounds(name):
+                return pair[1]
+    return lead
 
 
 def _instrumental(name: str, lead: str | None) -> str:
@@ -1547,7 +1596,7 @@ def _headline(card: str, v: Version):
     if card == "tempo":
         return f"{p.tempo:.0f} beats a minute"
     if card == "shape":
-        return shape_words(edits_mod.shape(v.context.genome, p.form))
+        return shape_words(edits_mod.shape(v.context.genome, p.form), played_sections(p))
     if card == "band":
         return f"{PATTERNS.get(p.band.pattern, p.band.pattern)}, the {player(leader(p.band) or 'band')} leading"
     return None
@@ -1664,7 +1713,7 @@ def summary(ctx: Context, v: Version, who: str, name: str | None = None) -> dict
     return {"who": who, "name": name or "Yours",
             "rows": {"Style": STYLE_NAMES.get(style, style).split(",")[0],
                      "Key": key_words(p.tonic, p.mode), "Tempo": f"{p.tempo:.0f} beats a minute",
-                     "Shape": shape_words(edits_mod.shape(ctx.genome, p.form)),
+                     "Shape": shape_words(edits_mod.shape(ctx.genome, p.form), played_sections(p)),
                      "Band": band,
                      "Singer": "a low voice" if singer.shift <= -12 else "a high voice",
                      "Room": room_words(mix.rt60), "New verse": fresh}}
