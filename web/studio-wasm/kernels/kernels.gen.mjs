@@ -3937,7 +3937,7 @@ export function k_synth$throat$_assemble_lay(y, at, periodic, aperiodic, hann, l
   }
 }
 
-// songbird/synth/throat.py:782
+// songbird/synth/throat.py:812
 export function k_synth$throat$_gelu_flat(x, out) {
   let i, t, v, $t1, $t2, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;

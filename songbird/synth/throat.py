@@ -386,7 +386,7 @@ BLOCK = 512  # pulses synthesize() hands a thread at a time: a few tens of MB of
 
 def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.random.Generator,
                fft: int | None = None, chunk: int = 2048, source: np.ndarray | None = None,
-               texture: Texture | None = None) -> np.ndarray:
+               texture: Texture | None = None, active: np.ndarray | None = None) -> np.ndarray:
     """A voice from per-frame f0 (Hz, 0 unvoiced), log-power envelope (frames, MEL) and
     aperiodicity (frames, AP_MEL), all on FRAME steps. source: an optional log-power change to the
     voiced (periodic) part alone, on the envelope's grid: a different glottal source from the one
@@ -437,8 +437,9 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
     threads = workers()
     use_jit = fx.JIT
     direct_lay = threads <= 1 and use_jit
+    keep_pulse = None if active is None else (active[k0] | active[k1])
 
-    def responses(sl: slice, scatter: np.ndarray | None, noise: np.ndarray):
+    def responses(sl: slice | np.ndarray, scatter: np.ndarray | None, noise: np.ndarray):
         """The responses of pulses sl, each laid out from `half` samples before its pulse. scatter, noise: their
         rows of the random values drawn for them."""
         env = to_bins(sp[k0[sl]] * (1 - w[sl]) + sp[k1[sl]] * w[sl], fft, sr, log_power=True)
@@ -457,7 +458,7 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         periodic = np.zeros((len(v), fft)) if use_fast_asm else np.zeros((fft, len(v))).T
         on = np.flatnonzero(v)
         if len(on):
-            g = sl.start + on  # the voiced pulses, by their index among all
+            g = sl.start + on if isinstance(sl, slice) else sl[on]  # the voiced pulses, by their index among all
             voiced_power = power[on]
             if source is not None:
                 voiced_power = voiced_power * np.exp(to_bins(source[k0[g]] * (1 - w[g]) + source[k1[g]] * w[g], fft,
@@ -558,7 +559,7 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         response[:, :fft] -= periodic.sum(axis=1, keepdims=True) * hann
         return response
 
-    def lay(sl: slice, response: np.ndarray | None) -> None:
+    def lay(sl: slice | np.ndarray, response: np.ndarray | None) -> None:
         if response is None:
             return
         if use_jit:
@@ -575,6 +576,27 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
             # the chunk's random values, always drawn in this order: its scatter, then its noise
             scatter = rng.standard_normal((rows, _knots(sr))) if tx.scatter > 0 else None
             noise = rng.standard_normal((rows, fft))
+            if keep_pulse is not None:
+                kp = keep_pulse[c0: c0 + rows]
+                if not kp.any():
+                    continue
+                if not kp.all():
+                    act_local = np.flatnonzero(kp)
+                    starts = list(range(0, len(act_local), BLOCK))
+                    if len(starts) > 1 and len(act_local) - starts[-1] == 1:
+                        starts.pop()
+                    for b0, b1 in zip(starts, starts[1:] + [len(act_local)]):
+                        loc = act_local[b0:b1]
+                        idx = c0 + loc
+                        args = (idx, None if scatter is None else scatter[loc], noise[loc])
+                        if pool is None:
+                            lay(idx, responses(*args))
+                            continue
+                        pending.append((idx, pool.submit(responses, *args)))
+                        while len(pending) > 2 * threads:
+                            done, future = pending.popleft()
+                            lay(done, future.result())
+                    continue
             # blocks of BLOCK pulses, the last taking one left over (a single row is summed in another order)
             starts = list(range(0, rows, BLOCK))
             if len(starts) > 1 and rows - starts[-1] == 1:
@@ -664,18 +686,26 @@ def timeline(segments: list[tuple], n: int) -> dict[str, np.ndarray]:
     return out
 
 
+def _hush_keep(phones: np.ndarray, pad: float = 0.0) -> np.ndarray:
+    """Per frame, whether the throat is kept audible (within HUSH + pad of any sung phone)."""
+    before, after, _ = HUSH
+    sung = phones != PHONES.index("sil")
+    if not sung.any():
+        return np.zeros(len(sung), dtype=bool)
+    idx = np.arange(len(sung))
+    last = np.maximum.accumulate(np.where(sung, idx, -len(sung) - 1))  # the latest sung frame at or before each
+    ahead = np.minimum.accumulate(np.where(sung, idx, 2 * len(sung) + 1)[::-1])[::-1]  # the next one at or after
+    return ((idx - last) * FRAME <= after + pad) | ((ahead - idx) * FRAME <= before + pad)
+
+
 def hush(phones: np.ndarray, sr: int, n: int) -> np.ndarray:
     """Per sample (n of them), 1 where something is sung and HUSH's margins around it, 0 in the silence
     between, with a raised-cosine fade: the throat is quiet where nothing is sung. phones: the timeline's
     phone for every frame."""
-    before, after, fade = HUSH
-    sung = phones != PHONES.index("sil")
-    if not sung.any():
+    _, _, fade = HUSH
+    keep = _hush_keep(phones)
+    if not keep.any():
         return np.zeros(n)
-    idx = np.arange(len(sung))
-    last = np.maximum.accumulate(np.where(sung, idx, -len(sung) - 1))  # the latest sung frame at or before each
-    ahead = np.minimum.accumulate(np.where(sung, idx, 2 * len(sung) + 1)[::-1])[::-1]  # the next one at or after
-    keep = ((idx - last) * FRAME <= after) | ((ahead - idx) * FRAME <= before)
     # (each step where the last left it: the same values, without a second copy of the song's length)
     frame = (np.arange(n) / (FRAME * sr)).astype(np.int64)
     np.minimum(frame, len(keep) - 1, out=frame)
@@ -983,37 +1013,68 @@ def _predict_raw(model: Model, t: dict, cont: np.ndarray, singer: np.ndarray) ->
 
 
 def predict(model: Model, t: dict, lf0: np.ndarray, singer: np.ndarray, gv: float = 1.0,
-            last: int | None = None) -> tuple[np.ndarray, np.ndarray]:
+            last: int | None = None, active: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Envelope (log power, MEL points) and aperiodicity for every frame of a timeline.
 
     Long timelines are inferred a bounded stretch at a time, with the network's complete temporal
     context on each side. Continuous inputs are formed before slicing so log-f0 slopes stay whole;
     global variance is applied to the assembled output, with the full song's mean. last: the frame where
     the silence after the last phone begins; its frames are told of it as a silence before a breath
-    (LAST_SILENCE), the frames before it as the timeline has them."""
+    (LAST_SILENCE), the frames before it as the timeline has them. active: optional per-frame boolean mask;
+    frames outside it (beyond context) are skipped."""
     cont = continuous(t, lf0)
     context = sum(model.config["dilations"])
-    if len(lf0) <= PREDICT_BLOCK:
-        y = _predict_raw(model, t, cont, singer)
+    n_frames = len(lf0)
+    if active is None:
+        if n_frames <= PREDICT_BLOCK:
+            y = _predict_raw(model, t, cont, singer)
+        else:
+            y = np.empty((n_frames, len(model.w["out.bias"])))
+            starts = list(range(0, n_frames, PREDICT_BLOCK))
+            # Keep a tiny final tail with its preceding block: the browser uses a different
+            # matrix-product implementation below 64 rows, with another rounding order.
+            if len(starts) > 1 and n_frames - starts[-1] < 64:
+                starts.pop()
+            for a, b in zip(starts, starts[1:] + [n_frames]):
+                lo, hi = max(0, a - context), min(n_frames, b + context)
+                raw = _predict_raw(model, {k: v[lo:hi] for k, v in t.items()}, cont[lo:hi], singer)
+                y[a:b] = raw[a - lo: b - lo]
+                del raw
     else:
-        y = np.empty((len(lf0), len(model.w["out.bias"])))
-        starts = list(range(0, len(lf0), PREDICT_BLOCK))
-        # Keep a tiny final tail with its preceding block: the browser uses a different
-        # matrix-product implementation below 64 rows, with another rounding order.
-        if len(starts) > 1 and len(lf0) - starts[-1] < 64:
-            starts.pop()
-        for a, b in zip(starts, starts[1:] + [len(lf0)]):
-            lo, hi = max(0, a - context), min(len(lf0), b + context)
-            raw = _predict_raw(model, {k: v[lo:hi] for k, v in t.items()}, cont[lo:hi], singer)
-            y[a:b] = raw[a - lo: b - lo]
-            del raw
-    if last is not None and last < len(lf0):
-        lo = max(0, min(last - context, len(lf0) - 64))  # (64 rows or more: the browser's own product, as above)
-        tail = {k: v[lo:] for k, v in t.items()}
-        tail["next"] = tail["next"].copy()
-        tail["next"][last - lo:] = PHONES.index("breath")
-        y[last:] = _predict_raw(model, tail, cont[lo:], singer)[last - lo:]
-        del tail
+        y = np.zeros((n_frames, len(model.w["out.bias"])))
+        on = np.flatnonzero(active)
+        if len(on):
+            cuts = np.flatnonzero(np.diff(on) > 2 * context)
+            span_starts = np.concatenate(([on[0]], on[cuts + 1]))
+            span_ends = np.concatenate((on[cuts] + 1, [on[-1] + 1]))
+            for s0, s1 in zip(span_starts, span_ends):
+                s0, s1 = int(s0), int(s1)
+                starts = list(range(s0, s1, PREDICT_BLOCK))
+                if len(starts) > 1 and s1 - starts[-1] < 64:
+                    starts.pop()
+                for a, b in zip(starts, starts[1:] + [s1]):
+                    lo, hi = max(0, a - context), min(n_frames, b + context)
+                    if hi - lo < 64 and n_frames >= 64:
+                        lo = max(0, lo - (64 - (hi - lo)))
+                        hi = min(n_frames, lo + 64)
+                    raw = _predict_raw(model, {k: v[lo:hi] for k, v in t.items()}, cont[lo:hi], singer)
+                    y[a:b] = raw[a - lo: b - lo]
+                    del raw
+    if last is not None and last < n_frames:
+        end = n_frames
+        if active is not None:
+            on_tail = np.flatnonzero(active[last:])
+            end = last + int(on_tail[-1]) + 1 if len(on_tail) else last
+        if end > last:
+            hi = min(n_frames, end + context) if active is not None else n_frames
+            lo = max(0, min(last - context, hi - 64))
+            if hi - lo < 64 and n_frames >= 64:
+                hi = min(n_frames, lo + 64)
+            tail = {k: v[lo:hi] for k, v in t.items()}
+            tail["next"] = tail["next"].copy()
+            tail["next"][last - lo:] = PHONES.index("breath")
+            y[last:end] = _predict_raw(model, tail, cont[lo:hi], singer)[last - lo: end - lo]
+            del tail
     del cont
     n_sp = len(model.sp_mean)
     sp, ap = y[:, :n_sp], y[:, n_sp:]
@@ -1481,7 +1542,8 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     sung = np.median([n.pitch + voice.shift for n in notes])
     if isinstance(mix, str) and mix.startswith("machine:"):  # a singer of its own, drawn for this pitch
         mix = machine_mix(int(mix.split(":", 1)[1]), float(sung), net, share=share)
-    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung, share), gv=gv, last=last)
+    active = _hush_keep(t["phone"], pad=HUSH[2] * 0.5 + 0.10)
+    sp, ap = predict(net, t, np.log(f0), timbre(net, parse_mix(mix), sung, share), gv=gv, last=last, active=active)
     sp = sharpen(sp, SHARPEN)
     factor = voice.tract / TRACT
     sp, ap = warp(sp, factor), warp(ap, factor)
@@ -1497,7 +1559,7 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
             sp[i0:i1] += (s.swell * np.linspace(0.0, 1.0, max(i1 - i0, 1)))[:, None] * np.log(10.0) / 10.0
     voiced = np.array([PHONES[p] not in UNVOICED for p in t["phone"]])
     source = source_change(f0, voice.rd, voice.tilt, sp.shape[1])
-    y = synthesize(np.where(voiced, f0, 0.0), sp, ap, RATE, rng, source=source)
+    y = synthesize(np.where(voiced, f0, 0.0), sp, ap, RATE, rng, source=source, active=active)
     del sp, ap, source  # (the envelopes sung, they go)
     y = resample_poly(y, sr // np.gcd(sr, RATE), RATE // np.gcd(sr, RATE)) if sr != RATE else y
     # the high-pass where the song lies, a stretch at a time (its state carried: the same samples as the whole)
