@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache, partial
 from pathlib import Path
 
@@ -920,11 +920,13 @@ T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
 # tap. voice.linked 0 sings every t as T_RELEASE has it.
 T_LINKED = {"shape": [(3400.0, 1600.0, 0.0), (5200.0, 2500.0, -8.0)], "burst": 3.0, "longer": 1.5, "decay": 0.008,
             "aspiration": -6.0, "rise": 0.03}
-# A d sung straight into the next word's vowel ("old and", "saved it"): the tongue's closure and its release are all
-# that tell it from the l or n before it, and CLOSURE_DIP's half and a release 15 dB under the vowels leave "ol' and".
-# `closure`: what is left of the throat's own sound through the closure, held as given (not scaled by voice.crisp);
-# `burst`: dB added to the release; `longer`: how many times as long it lasts.
-D_LINKED = {"closure": 0.35, "burst": 6.0, "longer": 1.0}
+# A d sung straight into the next word's vowel ("old and", "saved it") is carried over as singers carry it ("ol
+# dand"): the network is told it begins that syllable (its word-final consonants are soft, a d there a gap with no
+# hum under it), its closure and release are an onset's, and it is given time from the l or n before it. `least`:
+# the seconds it lasts, taken from a longer sound before it, which keeps `keeps` of its own length; `burst`: dB
+# added to the release; `longer`: how many times as long it lasts; `closure`: what is left of the throat's own sound
+# through the closure, held as given (None: an onset d's, CLOSURE_DIP's).
+D_LINKED = {"closure": None, "burst": 6.0, "longer": 1.0, "least": 0.07, "keeps": 0.6}
 LINKED = 0.08  # s: the next word's sound begins within this of the t's end (a rest or a breath is longer)
 
 # A release made as an airway makes one (as Chimera's physical model does, jamesondh/chimera-vocal-synth), for a
@@ -1042,7 +1044,8 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
             continue
         manner, place, voiced = ph.CONSONANTS[s.phone]
         if manner in ("stop", "affricate"):
-            release, _ = _stop_times(s, voiced)
+            over = float(getattr(voice, "linked", 0.0)) > 0 and carried(segs, k)
+            release, _ = _stop_times(replace(s, role="onset") if over else s, voiced)
             dip(s.t0, release, CLOSURE_DIP[voiced])
             shape, level = ph.BURSTS[place]
             if place == "velar":
@@ -1097,11 +1100,10 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
                         rise(s.t1, T["rise"], T["own"])
                 if T["closure"] is not None:
                     dip(s.t0, release, T["closure"])
-            elif s.phone == "D" and s.role == "coda" and float(getattr(voice, "linked", 0.0)) > 0:
-                after = segs[k + 1] if k + 1 < len(segs) else None
-                if after is not None and after.role == "vowel" and after.t0 - s.t1 < LINKED:
-                    level += D_LINKED["burst"]
-                    length *= D_LINKED["longer"]
+            elif over:
+                level += D_LINKED["burst"]
+                length *= D_LINKED["longer"]
+                if D_LINKED["closure"] is not None:
                     i0, i1 = max(int(s.t0 * sr), 0), min(int(release * sr), n)
                     gain[i0:i1] = np.minimum(gain[i0:i1], D_LINKED["closure"])
             hiss(release, release + length, shape, level, ramp, s.amp, decay=decay)
@@ -1151,7 +1153,29 @@ def stresses(notes, lexicon) -> list[bool]:
     return out
 
 
-def told(segs: list, stressed: list[bool]) -> list[tuple]:
+def carried(segs: list, k: int) -> bool:
+    """Whether the k-th segment is a word's last d sung straight into the next word's vowel ("old and"): it is
+    sung as that syllable's first sound ("ol dand"), as singers carry it over."""
+    s, after = segs[k], segs[k + 1] if k + 1 < len(segs) else None
+    return (s.role == "coda" and s.phone == "D" and after is not None and after.role == "vowel"
+            and after.t0 - s.t1 < LINKED)
+
+
+def carry(segs: list) -> list:
+    """The schedule with each carried d (carried()) given its time: at least D_LINKED["least"] seconds, the
+    sound before it ending that much sooner (never under D_LINKED["keeps"] of its own length)."""
+    out = list(segs)
+    for k in range(1, len(out)):
+        if carried(out, k):
+            s, before = out[k], out[k - 1]
+            want = D_LINKED["least"] - (s.t1 - s.t0)
+            if want > 0 and before.role in ("vowel", "coda") and before.t1 == s.t0:
+                t0 = s.t0 - min(want, (1.0 - D_LINKED["keeps"]) * (before.t1 - before.t0))
+                out[k - 1], out[k] = replace(before, t1=t0), replace(s, t0=t0)
+    return out
+
+
+def told(segs: list, stressed: list[bool], linked: bool = False) -> list[tuple]:
     """What the network is told is sung: (phone, start, end, stressed, level dB, role) for each of the schedule's
     segments but breaths (added after: voice.breaths), each note's onsets, its vowel and its codas, an AW
     before a nasal coda ending in its second target (GLIDE_TAILS)."""
@@ -1159,12 +1183,13 @@ def told(segs: list, stressed: list[bool]) -> list[tuple]:
     for i, s in enumerate(segs):
         if s.role == "breath":
             continue
-        note = k + 1 if s.role == "onset" else k
+        role = "onset" if linked and carried(segs, i) else s.role
+        note = k + 1 if role == "onset" else k
         if s.role == "vowel":
             k += 1
             note = k
         row = (s.phone, s.t0, s.t1, stressed[min(max(note, 0), len(stressed) - 1)],
-               float(20.0 * np.log10(max(s.amp, 1e-6) / 0.9)), s.role)
+               float(20.0 * np.log10(max(s.amp, 1e-6) / 0.9)), role)
         after = segs[i + 1] if i + 1 < len(segs) else None
         if s.role == "vowel" and s.phone in GLIDE_TAILS and after is not None and after.role == "coda" \
                 and after.phone in NASAL_CODAS:  # sound, down: the glide's end sung in the vowel, not left to the nasal
@@ -1191,7 +1216,10 @@ def sing(notes, sr: int, voice, seed: int = 0, lexicon: dict | None = None, mix:
     rng = np.random.default_rng(seed)
     segs = schedule(notes, voice, lexicon, durations, seed=seed)
     stressed = stresses(notes, lexicon)
-    rows = told(segs, stressed)
+    linked = float(getattr(voice, "linked", 0.0)) > 0
+    if linked:
+        segs = carry(segs)
+    rows = told(segs, stressed, linked)
     duration = max(s.t1 for s in segs) + 0.5
     n = int(np.ceil(duration / FRAME))
     t = timeline(rows, n)
