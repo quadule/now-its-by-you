@@ -79,7 +79,7 @@ class Types:
                     if t != self.vars.get(p) and array_info(t) and array_info(self.vars.get(p)):
                         self.vars[p] = re.sub(r", \w\)$", ", A)", self.vars[p])
             for name, ts in sig["locals"].items():
-                arr = [t for t in ts if t.startswith("array(")]
+                arr = [t for t in ts if array_info(t)]
                 self.vars.setdefault(name, arr[0] if arr else ("float64" if "float64" in ts else ts[0]))
 
     def get(self, name):
@@ -87,8 +87,8 @@ class Types:
 
 
 def array_info(t: str):
-    """'array(float64, 2d, C)' -> ('f8', 2, 'C')"""
-    m = re.match(r"array\((\w+), (\d)d, (\w)\)", t or "")
+    """'array(float64, 2d, C)' or 'readonly array(...)' -> ('f8', 2, 'C')"""
+    m = re.match(r"(?:readonly )?array\((\w+), (\d)d, (\w)\)", t or "")
     if not m:
         return None
     return DTYPES.get(m.group(1), "?" + m.group(1)), int(m.group(2)), m.group(3)

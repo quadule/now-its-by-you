@@ -921,6 +921,151 @@ double reed_read(const double *wave, int32_t size, const double *increments, con
   return phase;
 }
 
+EXPORT(throat_to_bins)
+void throat_to_bins(const double *values, int32_t rows, int32_t cols, const int32_t *lo, const int32_t *hi,
+                    const double *before, const double *after, const uint8_t *above, const double *rolloff,
+                    int32_t nbins, int32_t log_power, double *out_t) {
+  for (int32_t c = 0; c < nbins; c++) {
+    int32_t l = lo[c], h = hi[c];
+    double b = before[c], a = after[c];
+    int32_t do_sub = log_power && above[c];
+    double sub = do_sub ? rolloff[c] : 0.0;
+    double *dst = out_t + (int64_t)c * rows;
+    if (do_sub) {
+      for (int32_t r = 0; r < rows; r++) {
+        const double *vr = values + (int64_t)r * cols;
+        dst[r] = (vr[l] * b + vr[h] * a) - sub;
+      }
+    } else {
+      for (int32_t r = 0; r < rows; r++) {
+        const double *vr = values + (int64_t)r * cols;
+        dst[r] = vr[l] * b + vr[h] * a;
+      }
+    }
+  }
+}
+
+EXPORT(throat_turn_phase)
+void throat_turn_phase(const double *bins, const double *hz, const double *frac, const double *period, int32_t rows,
+                       int32_t nbins, const double *spread, int32_t has_spread, const double *scatter,
+                       int32_t scat_cols, int32_t has_scatter, const int32_t *lo, const int32_t *hi,
+                       const double *before, const double *after, double sr, double fft, double tx_spread,
+                       double tx_scatter, double scatter_from, double scatter_span, double *out) {
+  const double neg_two_pi = -2.0 * 3.141592653589793;
+  for (int32_t r = 0; r < rows; r++) {
+    double fr = frac[r], per = period[r];
+    double sp_scale = (tx_spread * per) / sr;
+    const double *sr_row = has_scatter ? scatter + (int64_t)r * scat_cols : 0;
+    double *dst = out + (int64_t)r * nbins;
+    for (int32_t c = 0; c < nbins; c++) {
+      double t = ((neg_two_pi * bins[c]) * fr) / fft;
+      if (has_spread) t += sp_scale * spread[c];
+      if (has_scatter) {
+        double h = (hz[c] * per) / sr;
+        h -= scatter_from;
+        h /= scatter_span;
+        if (h < 0.0) h = 0.0;
+        else if (h > 1.0) h = 1.0;
+        h *= tx_scatter;
+        double sm = sr_row[lo[c]] * before[c] + sr_row[hi[c]] * after[c];
+        h *= sm;
+        t += h;
+      }
+      dst[c] = t;
+    }
+  }
+}
+
+EXPORT(throat_noise_mask)
+void throat_noise_mask(double *noise, int32_t rows, int32_t cols, const int32_t *m) {
+  for (int32_t r = 0; r < rows; r++) {
+    double *row = noise + (int64_t)r * cols;
+    for (int32_t c = m[r]; c < cols; c++) row[c] = 0.0;
+  }
+}
+
+EXPORT(throat_noise_sub_dc)
+void throat_noise_sub_dc(double *noise, int32_t rows, int32_t cols, const int32_t *m, const double *dc) {
+  for (int32_t r = 0; r < rows; r++) {
+    int32_t mr = m[r] < cols ? m[r] : cols;
+    double d = dc[r];
+    double *row = noise + (int64_t)r * cols;
+    for (int32_t c = 0; c < mr; c++) row[c] -= d;
+  }
+}
+
+EXPORT(throat_assemble)
+void throat_assemble(const double *periodic, const double *aperiodic, int32_t rows, int32_t fft, const double *hann,
+                     int32_t lead, double *out) {
+  int32_t half = fft / 2, pre = half - lead, post = fft - lead, width = fft + half;
+  for (int32_t r = 0; r < rows; r++) {
+    const double *per = periodic + (int64_t)r * fft;
+    const double *aper = aperiodic + (int64_t)r * fft;
+    double *dst = out + (int64_t)r * width;
+    double dc = 0.0;
+    for (int32_t c = 0; c < fft; c++) dc += per[c];
+    for (int32_t k = 0; k < pre; k++) dst[k] = 0.0 - dc * hann[k];
+    for (int32_t k = pre; k < half; k++) dst[k] = per[k + half] - dc * hann[k];
+    for (int32_t k = half; k < fft; k++) dst[k] = (per[k - half] + aper[k - half]) - dc * hann[k];
+    for (int32_t k = fft; k < half + post; k++) dst[k] = per[k - half] + aper[k - half];
+    for (int32_t k = half + post; k < width; k++) dst[k] = 0.0 + aper[k - half];
+  }
+}
+
+EXPORT(throat_lay)
+void throat_lay(double *y, const int32_t *at, const double *response, int32_t rows, int32_t width) {
+  for (int32_t r = 0; r < rows; r++) {
+    double *dst = y + at[r];
+    const double *src = response + (int64_t)r * width;
+    for (int32_t k = 0; k < width; k++) dst[k] += src[k];
+  }
+}
+
+EXPORT(throat_assemble_lay)
+void throat_assemble_lay(double *y, const int32_t *at, const double *periodic, const double *aperiodic, int32_t rows,
+                         int32_t fft, const double *hann, int32_t lead) {
+  int32_t half = fft / 2, pre = half - lead, post = fft - lead, width = fft + half;
+  for (int32_t r = 0; r < rows; r++) {
+    double *dst = y + at[r];
+    const double *per = periodic + (int64_t)r * fft;
+    const double *aper = aperiodic + (int64_t)r * fft;
+    double dc = 0.0;
+    for (int32_t c = 0; c < fft; c++) dc += per[c];
+#ifdef __wasm_simd128__
+    if ((pre & 1) == 0 && (half & 1) == 0 && (post & 1) == 0 && (fft & 1) == 0) {
+      v128_t vdc = wasm_f64x2_splat(dc), vz = wasm_f64x2_splat(0.0);
+      for (int32_t k = 0; k < pre; k += 2) {
+        v128_t val = wasm_f64x2_sub(vz, wasm_f64x2_mul(vdc, wasm_v128_load(hann + k)));
+        wasm_v128_store(dst + k, wasm_f64x2_add(wasm_v128_load(dst + k), val));
+      }
+      for (int32_t k = pre; k < half; k += 2) {
+        v128_t val = wasm_f64x2_sub(wasm_v128_load(per + k + half), wasm_f64x2_mul(vdc, wasm_v128_load(hann + k)));
+        wasm_v128_store(dst + k, wasm_f64x2_add(wasm_v128_load(dst + k), val));
+      }
+      for (int32_t k = half; k < fft; k += 2) {
+        v128_t sum = wasm_f64x2_add(wasm_v128_load(per + k - half), wasm_v128_load(aper + k - half));
+        v128_t val = wasm_f64x2_sub(sum, wasm_f64x2_mul(vdc, wasm_v128_load(hann + k)));
+        wasm_v128_store(dst + k, wasm_f64x2_add(wasm_v128_load(dst + k), val));
+      }
+      for (int32_t k = fft; k < half + post; k += 2) {
+        v128_t val = wasm_f64x2_add(wasm_v128_load(per + k - half), wasm_v128_load(aper + k - half));
+        wasm_v128_store(dst + k, wasm_f64x2_add(wasm_v128_load(dst + k), val));
+      }
+      for (int32_t k = half + post; k < width; k += 2) {
+        v128_t val = wasm_f64x2_add(vz, wasm_v128_load(aper + k - half));
+        wasm_v128_store(dst + k, wasm_f64x2_add(wasm_v128_load(dst + k), val));
+      }
+      continue;
+    }
+#endif
+    for (int32_t k = 0; k < pre; k++) dst[k] += 0.0 - dc * hann[k];
+    for (int32_t k = pre; k < half; k++) dst[k] += per[k + half] - dc * hann[k];
+    for (int32_t k = half; k < fft; k++) dst[k] += (per[k - half] + aper[k - half]) - dc * hann[k];
+    for (int32_t k = fft; k < half + post; k++) dst[k] += per[k - half] + aper[k - half];
+    for (int32_t k = half + post; k < width; k++) dst[k] += 0.0 + aper[k - half];
+  }
+}
+
 #ifdef __wasm_simd128__
 // throat._matmul (x @ W.T) as Pyodide's scipy computes it, BLAS dgemm: the build with -msimd128 only
 // (kernels-simd.wasm; py/web_patches.py). Every output is summed exactly as that OpenBLAS (0.3.31, built for

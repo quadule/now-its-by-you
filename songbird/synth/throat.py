@@ -30,7 +30,9 @@ from functools import lru_cache, partial
 from pathlib import Path
 
 import numpy as np
+from numba import njit
 
+from . import fx
 from .fx import running_mean
 from .threads import in_order, workers
 
@@ -65,22 +67,49 @@ def _bin_geometry(points: int, fft: int, sr: int) -> tuple[np.ndarray, ...]:
     bins = np.arange(fft // 2 + 1) * sr / fft
     # interpolate each row along mel, all rows at once
     pos = np.interp(mel(np.clip(bins, F_LO, F_HI)), mel(at), np.arange(len(at)))
-    lo = np.floor(pos).astype(int)
+    lo = np.floor(pos).astype(np.int64)
     hi = np.minimum(lo + 1, len(at) - 1)
     w = pos - lo
     above = bins > F_HI
     rolloff = (ROLLOFF / 10.0 * np.log(10.0)) * np.log2(bins[above] / F_HI)
-    arrays = (lo, hi, 1 - w, w, above, rolloff)
+    rolloff_full = np.zeros(len(bins), dtype=np.float64)
+    rolloff_full[above] = rolloff
+    arrays = (lo, hi, 1 - w, w, above, rolloff, rolloff_full)
     for a in arrays:
         a.flags.writeable = False
     return arrays
+
+
+@njit(cache=True, nogil=True)
+def _to_bins(values: np.ndarray, lo: np.ndarray, hi: np.ndarray, before: np.ndarray, after: np.ndarray,
+             above: np.ndarray, rolloff: np.ndarray, log_power: bool) -> np.ndarray:
+    rows = values.shape[0]
+    nbins = lo.shape[0]
+    out_t = np.empty((nbins, rows))
+    for c in range(nbins):
+        l = lo[c]
+        h = hi[c]
+        b = before[c]
+        a = after[c]
+        sub = rolloff[c] if (log_power and above[c]) else 0.0
+        do_sub = log_power and above[c]
+        for r in range(rows):
+            v = values[r, l] * b + values[r, h] * a
+            if do_sub:
+                v -= sub
+            out_t[c, r] = v
+    return out_t
 
 
 def to_bins(values: np.ndarray, fft: int, sr: int, log_power: bool) -> np.ndarray:
     """(frames, n) on the mel grid to (frames, fft // 2 + 1) linear FFT bins.
 
     Log power continues above the grid at ROLLOFF dB per octave; aperiodicity holds its last value."""
-    lo, hi, before, after, above, rolloff = _bin_geometry(values.shape[1], fft, sr)
+    lo, hi, before, after, above, rolloff, rolloff_full = _bin_geometry(values.shape[1], fft, sr)
+    if fx.JIT:
+        out_t = _to_bins(np.ascontiguousarray(values, dtype=np.float64), lo, hi, before, after, above, rolloff_full,
+                         bool(log_power))
+        return out_t.reshape(1, -1) if values.shape[0] == 1 else out_t.T
     out = values[:, lo] * before + values[:, hi] * after
     if log_power:
         out[:, above] -= rolloff
@@ -197,7 +226,7 @@ def _knots(sr: int) -> int:
 def _scatter_geometry(fft: int, sr: int, knots: int) -> tuple[np.ndarray, ...]:
     hz = np.arange(fft // 2 + 1) * sr / fft
     pos = hz / SCATTER_BW
-    lo = np.minimum(pos.astype(int), knots - 2)
+    lo = np.minimum(pos.astype(np.int64), knots - 2)
     w = pos - lo
     arrays = (lo, lo + 1, 1 - w, w)
     for a in arrays:
@@ -209,6 +238,118 @@ def _smooth(r: np.ndarray, fft: int, sr: int) -> np.ndarray:
     """Rows of values r at knots SCATTER_BW Hz apart, linear between them, per FFT bin."""
     lo, hi, before, after = _scatter_geometry(fft, sr, r.shape[1])
     return r[:, lo] * before + r[:, hi] * after
+
+
+@njit(cache=True, nogil=True)
+def _turn_phase(bins: np.ndarray, hz: np.ndarray, frac: np.ndarray, period: np.ndarray,
+                spread: np.ndarray, has_spread: bool, scatter: np.ndarray, has_scatter: bool,
+                lo: np.ndarray, hi: np.ndarray, before: np.ndarray, after: np.ndarray,
+                sr: float, fft: float, tx_spread: float, tx_scatter: float,
+                scatter_from: float, scatter_span: float) -> np.ndarray:
+    rows = frac.shape[0]
+    nbins = bins.shape[0]
+    out = np.empty((rows, nbins))
+    neg_two_pi = -2.0 * np.pi
+    for r in range(rows):
+        fr = frac[r]
+        per = period[r]
+        sp_scale = (tx_spread * per) / sr
+        for c in range(nbins):
+            t = ((neg_two_pi * bins[c]) * fr) / fft
+            if has_spread:
+                t += sp_scale * spread[c]
+            if has_scatter:
+                h = (hz[c] * per) / sr
+                h -= scatter_from
+                h /= scatter_span
+                if h < 0.0:
+                    h = 0.0
+                elif h > 1.0:
+                    h = 1.0
+                h *= tx_scatter
+                sm = scatter[r, lo[c]] * before[c] + scatter[r, hi[c]] * after[c]
+                h *= sm
+                t += h
+            out[r, c] = t
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _noise_mask(noise: np.ndarray, m: np.ndarray) -> None:
+    rows, cols = noise.shape
+    for r in range(rows):
+        mr = m[r]
+        for c in range(mr, cols):
+            noise[r, c] = 0.0
+
+
+@njit(cache=True, nogil=True)
+def _noise_sub_dc(noise: np.ndarray, m: np.ndarray, dc: np.ndarray) -> None:
+    rows, cols = noise.shape
+    for r in range(rows):
+        mr = m[r]
+        if mr > cols:
+            mr = cols
+        d = dc[r]
+        for c in range(mr):
+            noise[r, c] -= d
+
+
+@njit(cache=True, nogil=True)
+def _assemble(periodic: np.ndarray, aperiodic: np.ndarray, hann: np.ndarray, lead: int) -> np.ndarray:
+    rows, fft = periodic.shape
+    half = fft // 2
+    out = np.empty((rows, fft + half))
+    pre = half - lead
+    post = fft - lead
+    for r in range(rows):
+        dc = 0.0
+        for c in range(fft):
+            dc += periodic[r, c]
+        for k in range(pre):
+            out[r, k] = 0.0 - dc * hann[k]
+        for k in range(pre, half):
+            out[r, k] = periodic[r, k + half] - dc * hann[k]
+        for k in range(half, fft):
+            out[r, k] = (periodic[r, k - half] + aperiodic[r, k - half]) - dc * hann[k]
+        for k in range(fft, half + post):
+            out[r, k] = periodic[r, k - half] + aperiodic[r, k - half]
+        for k in range(half + post, fft + half):
+            out[r, k] = 0.0 + aperiodic[r, k - half]
+    return out
+
+
+@njit(cache=True, nogil=True)
+def _lay(y: np.ndarray, at: np.ndarray, response: np.ndarray) -> None:
+    rows, width = response.shape
+    for r in range(rows):
+        start = at[r]
+        for k in range(width):
+            y[start + k] += response[r, k]
+
+
+@njit(cache=True, nogil=True)
+def _assemble_lay(y: np.ndarray, at: np.ndarray, periodic: np.ndarray, aperiodic: np.ndarray,
+                  hann: np.ndarray, lead: int) -> None:
+    rows, fft = periodic.shape
+    half = fft // 2
+    pre = half - lead
+    post = fft - lead
+    for r in range(rows):
+        start = at[r]
+        dc = 0.0
+        for c in range(fft):
+            dc += periodic[r, c]
+        for k in range(pre):
+            y[start + k] += 0.0 - dc * hann[k]
+        for k in range(pre, half):
+            y[start + k] += periodic[r, k + half] - dc * hann[k]
+        for k in range(half, fft):
+            y[start + k] += (periodic[r, k - half] + aperiodic[r, k - half]) - dc * hann[k]
+        for k in range(fft, half + post):
+            y[start + k] += periodic[r, k - half] + aperiodic[r, k - half]
+        for k in range(half + post, fft + half):
+            y[start + k] += 0.0 + aperiodic[r, k - half]
 
 
 BLOCK = 512  # pulses synthesize() hands a thread at a time: a few tens of MB of spectra each
@@ -251,12 +392,24 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         at = np.maximum(np.floor(exact).astype(int), 0)
         frac = np.clip(exact - at, 0.0, None)
     bins = np.arange(fft // 2 + 1)
+    bins_f = bins.astype(np.float64)
     hz = bins * sr / fft
     spread = _spread_curve(fft, sr, tx.spread_from) if tx.spread > 0 else None
+    spread_arg = np.ascontiguousarray(spread, dtype=np.float64) if spread is not None else np.empty(0, dtype=np.float64)
+    scat_geom = _scatter_geometry(fft, sr, _knots(sr)) if tx.scatter > 0 else (
+        np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64),
+        np.empty(0, dtype=np.float64), np.empty(0, dtype=np.float64),
+    )
+    empty_scatter = np.empty((0, 0), dtype=np.float64)
+    scatter_span = max(tx.scatter_to - tx.scatter_from, 1e-9)
     hann = 0.5 - 0.5 * np.cos(2 * np.pi * (np.arange(fft) + 1.0) / (fft + 1.0))
     hann /= hann.sum()  # takes a pulse's DC away smoothly over a window centred on it, as WORLD's DC remover does
 
-    def responses(sl: slice, scatter: np.ndarray | None, noise: np.ndarray) -> np.ndarray:
+    threads = workers()
+    use_jit = fx.JIT
+    direct_lay = threads <= 1 and use_jit
+
+    def responses(sl: slice, scatter: np.ndarray | None, noise: np.ndarray):
         """The responses of pulses sl, each laid out from `half` samples before its pulse. scatter, noise: their
         rows of the random values drawn for them."""
         env = to_bins(sp[k0[sl]] * (1 - w[sl]) + sp[k1[sl]] * w[sl], fft, sr, log_power=True)
@@ -269,9 +422,10 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         ratio[~v] = 1.0
         power = np.exp(env, out=env)
         # periodic: a minimum-phase pulse, delayed by its fraction of a sample, scaled for its period. Made for
-        # the voiced pulses only (an unvoiced pulse's is nothing), into zeros laid out in memory as the FFT lays
-        # out its output for spectra laid out as these are, so the sum below adds each row in the same order.
-        periodic = np.zeros((fft, len(v))).T
+        # the voiced pulses only (an unvoiced pulse's is nothing). When _assemble/_assemble_lay sums each row
+        # sequentially in compiled code (len(v) > 1), periodic can stay C-contiguous for fast row copies.
+        use_fast_asm = use_jit and len(v) > 1
+        periodic = np.zeros((len(v), fft)) if use_fast_asm else np.zeros((fft, len(v))).T
         on = np.flatnonzero(v)
         if len(on):
             g = sl.start + on  # the voiced pulses, by their index among all
@@ -287,20 +441,30 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
             mag *= 0.5
             pulse = min_phase(mag)
             del mag
-            turn = (-2 * np.pi * bins) * frac[g, None]
-            turn /= fft
-            if spread is not None:
-                turn += (tx.spread * period[g, None] / sr) * spread[None, :]
-            if scatter is not None:
-                harmonic = hz[None, :] * period[g, None]
-                harmonic /= sr
-                harmonic -= tx.scatter_from
-                harmonic /= max(tx.scatter_to - tx.scatter_from, 1e-9)
-                np.clip(harmonic, 0.0, 1.0, out=harmonic)
-                harmonic *= tx.scatter
-                harmonic *= _smooth(scatter[on], fft, sr)
-                turn += harmonic
-                del harmonic
+            if use_jit:
+                scat_on = np.ascontiguousarray(scatter[on], dtype=np.float64) if scatter is not None else empty_scatter
+                turn = _turn_phase(bins_f, hz, np.ascontiguousarray(frac[g], dtype=np.float64),
+                                   np.ascontiguousarray(period[g], dtype=np.float64),
+                                   spread_arg, spread is not None, scat_on, scatter is not None,
+                                   scat_geom[0], scat_geom[1], scat_geom[2], scat_geom[3],
+                                   float(sr), float(fft), float(tx.spread), float(tx.scatter),
+                                   float(tx.scatter_from), float(scatter_span))
+                del scat_on
+            else:
+                turn = (-2 * np.pi * bins) * frac[g, None]
+                turn /= fft
+                if spread is not None:
+                    turn += (tx.spread * period[g, None] / sr) * spread[None, :]
+                if scatter is not None:
+                    harmonic = hz[None, :] * period[g, None]
+                    harmonic /= sr
+                    harmonic -= tx.scatter_from
+                    harmonic /= scatter_span
+                    np.clip(harmonic, 0.0, 1.0, out=harmonic)
+                    harmonic *= tx.scatter
+                    harmonic *= _smooth(scatter[on], fft, sr)
+                    turn += harmonic
+                    del harmonic
             pulse *= np.exp(1j * turn)
             del turn
             made = np.fft.irfft(pulse, n=fft, axis=-1)
@@ -309,12 +473,19 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
             periodic[on] = made
             del made
         # aperiodic: a period's worth of white noise through the aperiodic part of the envelope
-        m = np.maximum(np.round(period[sl]).astype(int), 1)
-        inside = np.arange(fft)[None, :] < m[:, None]
-        noise[~inside] = 0.0
-        dc = noise.sum(axis=1, keepdims=True)
-        dc /= m[:, None]
-        noise -= inside * dc  # no DC, as WORLD
+        m = np.maximum(np.round(period[sl]).astype(np.int64), 1)
+        if use_jit:
+            _noise_mask(noise, m)
+            dc = noise.sum(axis=1)
+            dc /= m
+            _noise_sub_dc(noise, m, dc)
+            del dc
+        else:
+            inside = np.arange(fft)[None, :] < m[:, None]
+            noise[~inside] = 0.0
+            dc = noise.sum(axis=1, keepdims=True)
+            dc /= m[:, None]
+            noise -= inside * dc  # no DC, as WORLD
         ratio *= power
         ratio += 1e-16
         np.log(ratio, out=ratio)
@@ -326,6 +497,12 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         # each response laid out from `half` samples before its pulse: the part of a delayed pulse that
         # rings before it (which the FFT wraps to the end) back where it belongs, then the pulse's DC
         # taken away over the window centred on it
+        if use_fast_asm:
+            if direct_lay:
+                _assemble_lay(y, np.ascontiguousarray(at[sl], dtype=np.int64), periodic,
+                              np.ascontiguousarray(aperiodic, dtype=np.float64), hann, lead)
+                return None
+            return _assemble(periodic, np.ascontiguousarray(aperiodic, dtype=np.float64), hann, lead)
         response = np.zeros((len(m), fft + half))
         response[:, half - lead: half] = periodic[:, fft - lead:]  # np.roll's wrapped tail
         response[:, half: half - lead + fft] = periodic[:, : fft - lead]
@@ -334,11 +511,15 @@ def synthesize(f0: np.ndarray, sp: np.ndarray, ap: np.ndarray, sr: int, rng: np.
         response[:, :fft] -= periodic.sum(axis=1, keepdims=True) * hann
         return response
 
-    def lay(sl: slice, response: np.ndarray) -> None:
+    def lay(sl: slice, response: np.ndarray | None) -> None:
+        if response is None:
+            return
+        if use_jit:
+            _lay(y, np.ascontiguousarray(at[sl], dtype=np.int64), np.ascontiguousarray(response, dtype=np.float64))
+            return
         for j, start in enumerate(at[sl]):
             y[start : start + fft + half] += response[j]
 
-    threads = workers()
     pool = ThreadPoolExecutor(threads) if threads > 1 else None
     pending: deque = deque()
     try:

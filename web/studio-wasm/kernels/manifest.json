@@ -3082,6 +3082,299 @@
   "fastmath": false,
   "calls": []
  },
+ "synth.throat._to_bins": {
+  "js": "k_synth$throat$_to_bins",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 2d, C)",
+  "params": [
+   "values",
+   "lo",
+   "hi",
+   "before",
+   "after",
+   "above",
+   "rolloff",
+   "log_power"
+  ],
+  "arrays": {
+   "values": [
+    "f8",
+    2,
+    "C"
+   ],
+   "lo": [
+    "i8",
+    1,
+    "C"
+   ],
+   "hi": [
+    "i8",
+    1,
+    "C"
+   ],
+   "before": [
+    "f8",
+    1,
+    "C"
+   ],
+   "after": [
+    "f8",
+    1,
+    "C"
+   ],
+   "above": [
+    "b1",
+    1,
+    "C"
+   ],
+   "rolloff": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.throat._turn_phase": {
+  "js": "k_synth$throat$_turn_phase",
+  "ok": true,
+  "typed": true,
+  "ret": "array(float64, 2d, C)",
+  "params": [
+   "bins",
+   "hz",
+   "frac",
+   "period",
+   "spread",
+   "has_spread",
+   "scatter",
+   "has_scatter",
+   "lo",
+   "hi",
+   "before",
+   "after",
+   "sr",
+   "fft",
+   "tx_spread",
+   "tx_scatter",
+   "scatter_from",
+   "scatter_span"
+  ],
+  "arrays": {
+   "bins": [
+    "f8",
+    1,
+    "C"
+   ],
+   "hz": [
+    "f8",
+    1,
+    "C"
+   ],
+   "frac": [
+    "f8",
+    1,
+    "C"
+   ],
+   "period": [
+    "f8",
+    1,
+    "C"
+   ],
+   "spread": [
+    "f8",
+    1,
+    "C"
+   ],
+   "scatter": [
+    "f8",
+    2,
+    "C"
+   ],
+   "lo": [
+    "i8",
+    1,
+    "C"
+   ],
+   "hi": [
+    "i8",
+    1,
+    "C"
+   ],
+   "before": [
+    "f8",
+    1,
+    "C"
+   ],
+   "after": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.throat._noise_mask": {
+  "js": "k_synth$throat$_noise_mask",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "noise",
+   "m"
+  ],
+  "arrays": {
+   "noise": [
+    "f8",
+    2,
+    "C"
+   ],
+   "m": [
+    "i8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.throat._noise_sub_dc": {
+  "js": "k_synth$throat$_noise_sub_dc",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "noise",
+   "m",
+   "dc"
+  ],
+  "arrays": {
+   "noise": [
+    "f8",
+    2,
+    "C"
+   ],
+   "m": [
+    "i8",
+    1,
+    "C"
+   ],
+   "dc": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.throat._assemble": {
+  "js": "k_synth$throat$_assemble",
+  "ok": true,
+  "typed": false,
+  "ret": null,
+  "params": [
+   "periodic",
+   "aperiodic",
+   "hann",
+   "lead"
+  ],
+  "arrays": {
+   "periodic": [
+    "f8",
+    2,
+    "A"
+   ],
+   "aperiodic": [
+    "f8",
+    2,
+    "A"
+   ],
+   "hann": [
+    "f8",
+    1,
+    "A"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.throat._lay": {
+  "js": "k_synth$throat$_lay",
+  "ok": true,
+  "typed": false,
+  "ret": null,
+  "params": [
+   "y",
+   "at",
+   "response"
+  ],
+  "arrays": {
+   "y": [
+    "f8",
+    1,
+    "A"
+   ],
+   "at": [
+    "f8",
+    1,
+    "A"
+   ],
+   "response": [
+    "f8",
+    2,
+    "A"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
+ "synth.throat._assemble_lay": {
+  "js": "k_synth$throat$_assemble_lay",
+  "ok": true,
+  "typed": true,
+  "ret": "none",
+  "params": [
+   "y",
+   "at",
+   "periodic",
+   "aperiodic",
+   "hann",
+   "lead"
+  ],
+  "arrays": {
+   "y": [
+    "f8",
+    1,
+    "C"
+   ],
+   "at": [
+    "i8",
+    1,
+    "C"
+   ],
+   "periodic": [
+    "f8",
+    2,
+    "C"
+   ],
+   "aperiodic": [
+    "f8",
+    2,
+    "C"
+   ],
+   "hann": [
+    "f8",
+    1,
+    "C"
+   ]
+  },
+  "fastmath": false,
+  "calls": []
+ },
  "synth.tube._scatter": {
   "js": "k_synth$tube$_scatter",
   "ok": true,

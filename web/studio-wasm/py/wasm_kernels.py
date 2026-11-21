@@ -281,6 +281,94 @@ def reed_read(f):
     return call
 
 
+def _i32(a) -> np.ndarray:
+    return np.ascontiguousarray(a, dtype=np.int32)
+
+
+def throat_to_bins(f):
+    def call(values, lo, hi, before, after, above, rolloff, log_power):
+        values, before, after, rolloff = F(values), F(before), F(after), F(rolloff)
+        lo32, hi32 = _i32(lo), _i32(hi)
+        ab = np.ascontiguousarray(above, dtype=np.bool_)
+        rows, cols = values.shape
+        nbins = len(lo32)
+        out_t = np.empty((nbins, rows))
+        W.throat_to_bins(P(values), rows, cols, P(lo32), P(hi32), P(before), P(after), P(ab), P(rolloff),
+                         nbins, 1 if log_power else 0, P(out_t))
+        return out_t
+    return call
+
+
+def throat_turn_phase(f):
+    def call(bins, hz, frac, period, spread, has_spread, scatter, has_scatter, lo, hi, before, after,
+             sr, fft, tx_spread, tx_scatter, scatter_from, scatter_span):
+        bins, hz, frac, period = F(bins), F(hz), F(frac), F(period)
+        spread, scatter = F(spread), F(scatter)
+        before, after = F(before), F(after)
+        lo32, hi32 = _i32(lo), _i32(hi)
+        rows, nbins = len(frac), len(bins)
+        scat_cols = scatter.shape[1] if scatter.ndim == 2 else 0
+        out = np.empty((rows, nbins))
+        W.throat_turn_phase(P(bins), P(hz), P(frac), P(period), rows, nbins, P(spread), 1 if has_spread else 0,
+                            P(scatter), scat_cols, 1 if has_scatter else 0, P(lo32), P(hi32), P(before), P(after),
+                            float(sr), float(fft), float(tx_spread), float(tx_scatter), float(scatter_from),
+                            float(scatter_span), P(out))
+        return out
+    return call
+
+
+def throat_noise_mask(f):
+    def call(noise, m):
+        work = noise if (noise.dtype == np.float64 and noise.flags.c_contiguous) else F(noise)
+        m32 = _i32(m)
+        W.throat_noise_mask(P(work), work.shape[0], work.shape[1], P(m32))
+        if work is not noise:
+            noise[...] = work
+    return call
+
+
+def throat_noise_sub_dc(f):
+    def call(noise, m, dc):
+        work = noise if (noise.dtype == np.float64 and noise.flags.c_contiguous) else F(noise)
+        m32, dc = _i32(m), F(dc)
+        W.throat_noise_sub_dc(P(work), work.shape[0], work.shape[1], P(m32), P(dc))
+        if work is not noise:
+            noise[...] = work
+    return call
+
+
+def throat_assemble(f):
+    def call(periodic, aperiodic, hann, lead):
+        periodic, aperiodic, hann = F(periodic), F(aperiodic), F(hann)
+        rows, fft = periodic.shape
+        out = np.empty((rows, fft + fft // 2))
+        W.throat_assemble(P(periodic), P(aperiodic), rows, fft, P(hann), int(lead), P(out))
+        return out
+    return call
+
+
+def throat_lay(f):
+    def call(y, at, response):
+        work = y if (y.dtype == np.float64 and y.flags.c_contiguous) else F(y)
+        at32, response = _i32(at), F(response)
+        W.throat_lay(P(work), P(at32), P(response), response.shape[0], response.shape[1])
+        if work is not y:
+            y[...] = work
+    return call
+
+
+def throat_assemble_lay(f):
+    def call(y, at, periodic, aperiodic, hann, lead):
+        work = y if (y.dtype == np.float64 and y.flags.c_contiguous) else F(y)
+        at32 = _i32(at)
+        periodic, aperiodic, hann = F(periodic), F(aperiodic), F(hann)
+        W.throat_assemble_lay(P(work), P(at32), P(periodic), P(aperiodic), periodic.shape[0], periodic.shape[1],
+                              P(hann), int(lead))
+        if work is not y:
+            y[...] = work
+    return call
+
+
 PORTS = {
     "synth.pluck._loop": pluck_loop,
     "synth.pluck._bank": pluck_bank,
@@ -310,6 +398,13 @@ PORTS = {
     "synth.bowed.run": bowed_run,
     "synth.pipe.run": pipe_run,
     "synth.reed._read": reed_read,
+    "synth.throat._to_bins": throat_to_bins,
+    "synth.throat._turn_phase": throat_turn_phase,
+    "synth.throat._noise_mask": throat_noise_mask,
+    "synth.throat._noise_sub_dc": throat_noise_sub_dc,
+    "synth.throat._assemble": throat_assemble,
+    "synth.throat._lay": throat_lay,
+    "synth.throat._assemble_lay": throat_assemble_lay,
 }
 
 

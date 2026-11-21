@@ -1,6 +1,6 @@
 {
  "synth.accordion._arm": {
-  "file": "songbird/synth/accordion.py",
+  "file": "synth/accordion.py",
   "line": 315,
   "fastmath": false,
   "params": [
@@ -44,7 +44,7 @@
   "source": "6a85430bb29b1e76"
  },
  "synth.amp._dot": {
-  "file": "songbird/synth/amp.py",
+  "file": "synth/amp.py",
   "line": 470,
   "fastmath": false,
   "params": [
@@ -97,7 +97,7 @@
   "source": "0724ff2827b6c3c2"
  },
  "synth.amp._run": {
-  "file": "songbird/synth/amp.py",
+  "file": "synth/amp.py",
   "line": 490,
   "fastmath": false,
   "params": [
@@ -371,7 +371,7 @@
   "source": "7bedec7f6a7312ec"
  },
  "synth.amp._shape": {
-  "file": "songbird/synth/amp.py",
+  "file": "synth/amp.py",
   "line": 705,
   "fastmath": false,
   "params": [
@@ -460,7 +460,7 @@
   "source": "f9963fc7f8e78b9a"
  },
  "synth.amp._spring": {
-  "file": "songbird/synth/amp.py",
+  "file": "synth/amp.py",
   "line": 268,
   "fastmath": false,
   "params": [
@@ -595,7 +595,7 @@
   "source": "795ee2193d3903e9"
  },
  "synth.analog._delays": {
-  "file": "songbird/synth/analog.py",
+  "file": "synth/analog.py",
   "line": 554,
   "fastmath": false,
   "params": [
@@ -669,7 +669,7 @@
   "source": "43ab093f1d53c994"
  },
  "synth.analog._ladder": {
-  "file": "songbird/synth/analog.py",
+  "file": "synth/analog.py",
   "line": 294,
   "fastmath": false,
   "params": [
@@ -682,7 +682,7 @@
   "source": "5ea65db7c57a63e1"
  },
  "synth.analog._ladder_step": {
-  "file": "songbird/synth/analog.py",
+  "file": "synth/analog.py",
   "line": 256,
   "fastmath": false,
   "params": [
@@ -776,7 +776,7 @@
   "source": "b51b3a9c8b837850"
  },
  "synth.analog._sat": {
-  "file": "songbird/synth/analog.py",
+  "file": "synth/analog.py",
   "line": 245,
   "fastmath": false,
   "params": [
@@ -801,7 +801,7 @@
   "source": "174f76a7233e45e5"
  },
  "synth.analog._sub": {
-  "file": "songbird/synth/analog.py",
+  "file": "synth/analog.py",
   "line": 480,
   "fastmath": false,
   "params": [
@@ -981,7 +981,7 @@
   "source": "5b40a5c5b8f96f55"
  },
  "synth.analog._voice": {
-  "file": "songbird/synth/analog.py",
+  "file": "synth/analog.py",
   "line": 335,
   "fastmath": false,
   "params": [
@@ -1289,7 +1289,7 @@
   "source": "4fafc6a01e7db003"
  },
  "synth.analog._wave": {
-  "file": "songbird/synth/analog.py",
+  "file": "synth/analog.py",
   "line": 316,
   "fastmath": false,
   "params": [
@@ -1332,7 +1332,7 @@
   "source": "3e88174958d3bfd3"
  },
  "synth.bowed._read": {
-  "file": "songbird/synth/bowed.py",
+  "file": "synth/bowed.py",
   "line": 29,
   "fastmath": false,
   "params": [
@@ -1400,7 +1400,7 @@
   "source": "5403f64c2025e331"
  },
  "synth.bowed._read_masked": {
-  "file": "songbird/synth/bowed.py",
+  "file": "synth/bowed.py",
   "line": 89,
   "fastmath": false,
   "params": [
@@ -1468,7 +1468,7 @@
   "source": "a1672b35a7144830"
  },
  "synth.bowed.run": {
-  "file": "songbird/synth/bowed.py",
+  "file": "synth/bowed.py",
   "line": 48,
   "fastmath": false,
   "params": [
@@ -1568,7 +1568,7 @@
   "source": "155947e8244e2290"
  },
  "synth.bowed.run_primed": {
-  "file": "songbird/synth/bowed.py",
+  "file": "synth/bowed.py",
   "line": 107,
   "fastmath": false,
   "params": [
@@ -1700,7 +1700,7 @@
   "source": "2f46ac4339620a8d"
  },
  "synth.chip._lfsr": {
-  "file": "songbird/synth/chip.py",
+  "file": "synth/chip.py",
   "line": 298,
   "fastmath": false,
   "params": [
@@ -1711,7 +1711,7 @@
   "source": "d8efd651f3efec72"
  },
  "synth.chip._mix_tnd": {
-  "file": "songbird/synth/chip.py",
+  "file": "synth/chip.py",
   "line": 354,
   "fastmath": false,
   "params": [
@@ -1788,7 +1788,7 @@
   "source": "771b0bd280854992"
  },
  "synth.chip._noise_events": {
-  "file": "songbird/synth/chip.py",
+  "file": "synth/chip.py",
   "line": 307,
   "fastmath": false,
   "params": [
@@ -1803,7 +1803,7 @@
   "source": "659d1fdca08aa073"
  },
  "synth.chip._pulse_events": {
-  "file": "songbird/synth/chip.py",
+  "file": "synth/chip.py",
   "line": 213,
   "fastmath": false,
   "params": [
@@ -1917,7 +1917,7 @@
   "source": "f3e0105df1f8265b"
  },
  "synth.chip._staircase": {
-  "file": "songbird/synth/chip.py",
+  "file": "synth/chip.py",
   "line": 183,
   "fastmath": false,
   "params": [
@@ -1980,7 +1980,7 @@
   "source": "5ee3b48f79716e2f"
  },
  "synth.chip._triangle_events": {
-  "file": "songbird/synth/chip.py",
+  "file": "synth/chip.py",
   "line": 264,
   "fastmath": false,
   "params": [
@@ -2058,7 +2058,7 @@
   "source": "11acdc4e0d766151"
  },
  "synth.cymbals._fdn": {
-  "file": "songbird/synth/cymbals.py",
+  "file": "synth/cymbals.py",
   "line": 194,
   "fastmath": false,
   "params": [
@@ -2175,8 +2175,8 @@
   "source": "8708628613a24753"
  },
  "synth.drum._ring": {
-  "file": "songbird/synth/drum.py",
-  "line": 63,
+  "file": "synth/drum.py",
+  "line": 69,
   "fastmath": false,
   "params": [
    "freqs",
@@ -2275,7 +2275,7 @@
   "source": "688511c8a5704ef7"
  },
  "synth.drummachine._bank": {
-  "file": "songbird/synth/drummachine.py",
+  "file": "synth/drummachine.py",
   "line": 270,
   "fastmath": false,
   "params": [
@@ -2341,7 +2341,7 @@
   "source": "b5ca0593c986644a"
  },
  "synth.drummachine._hat808": {
-  "file": "songbird/synth/drummachine.py",
+  "file": "synth/drummachine.py",
   "line": 290,
   "fastmath": false,
   "params": [
@@ -2491,7 +2491,7 @@
   "source": "30b25884a9bd211d"
  },
  "synth.drummachine._ring": {
-  "file": "songbird/synth/drummachine.py",
+  "file": "synth/drummachine.py",
   "line": 218,
   "fastmath": false,
   "params": [
@@ -2509,7 +2509,7 @@
   "source": "993b490707ccc826"
  },
  "synth.drummachine._square": {
-  "file": "songbird/synth/drummachine.py",
+  "file": "synth/drummachine.py",
   "line": 252,
   "fastmath": false,
   "params": [
@@ -2552,7 +2552,7 @@
   "source": "06706a2b9f821b01"
  },
  "synth.epiano._electrostatic": {
-  "file": "songbird/synth/epiano.py",
+  "file": "synth/epiano.py",
   "line": 189,
   "fastmath": false,
   "params": [
@@ -2615,7 +2615,7 @@
   "source": "61d09c2d27c0edaf"
  },
  "synth.epiano._magnetic": {
-  "file": "songbird/synth/epiano.py",
+  "file": "synth/epiano.py",
   "line": 173,
   "fastmath": false,
   "params": [
@@ -2675,7 +2675,7 @@
   "source": "0d7cbe768c54ff99"
  },
  "synth.fretboard._combed": {
-  "file": "songbird/synth/fretboard.py",
+  "file": "synth/fretboard.py",
   "line": 344,
   "fastmath": false,
   "params": [
@@ -2751,7 +2751,7 @@
   "source": "064ef5416c81fe61"
  },
  "synth.fretboard._two_planes": {
-  "file": "songbird/synth/fretboard.py",
+  "file": "synth/fretboard.py",
   "line": 251,
   "fastmath": false,
   "params": [
@@ -2912,7 +2912,7 @@
   "source": "17ab6c8de54eb19d"
  },
  "synth.fretwork._string": {
-  "file": "songbird/synth/fretwork.py",
+  "file": "synth/fretwork.py",
   "line": 253,
   "fastmath": false,
   "params": [
@@ -3154,7 +3154,7 @@
   "source": "e779813d8a77def4"
  },
  "synth.fx._apply": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 438,
   "fastmath": false,
   "params": [
@@ -3229,7 +3229,7 @@
   "source": "36c8a379de7e0fb6"
  },
  "synth.fx._ballistics": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 424,
   "fastmath": false,
   "params": [
@@ -3276,7 +3276,7 @@
   "source": "a43c94053907dd20"
  },
  "synth.fx._block_peaks": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 609,
   "fastmath": false,
   "params": [
@@ -3330,7 +3330,7 @@
   "source": "fe30b6155a2cdb5a"
  },
  "synth.fx._block_power": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 372,
   "fastmath": false,
   "params": [
@@ -3381,7 +3381,7 @@
   "source": "926629e949e93902"
  },
  "synth.fx._detect_every": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 404,
   "fastmath": false,
   "params": [
@@ -3437,7 +3437,7 @@
   "source": "6fb83c25dd9cc338"
  },
  "synth.fx._extended": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 282,
   "fastmath": false,
   "params": [
@@ -3469,7 +3469,7 @@
   "source": "3f3a1c2f0e97417f"
  },
  "synth.fx._follow": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 577,
   "fastmath": false,
   "params": [
@@ -3546,7 +3546,7 @@
   "source": "534d8f5d7b68dbe1"
  },
  "synth.fx._four": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 83,
   "fastmath": false,
   "params": [
@@ -3639,7 +3639,7 @@
   "source": "ee4b159799a508f7"
  },
  "synth.fx._hold": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 341,
   "fastmath": false,
   "params": [
@@ -3673,7 +3673,7 @@
   "source": "7864ed53f577f9ea"
  },
  "synth.fx._one": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 124,
   "fastmath": false,
   "params": [
@@ -3724,7 +3724,7 @@
   "source": "d613a4db8f6063dd"
  },
  "synth.fx._products": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 215,
   "fastmath": false,
   "params": [
@@ -3758,7 +3758,7 @@
   "source": "51fbb8c80c269ac5"
  },
  "synth.fx._running_mean": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 239,
   "fastmath": false,
   "params": [
@@ -3820,7 +3820,7 @@
   "source": "4cf787d234d992bd"
  },
  "synth.fx._saturate": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 646,
   "fastmath": false,
   "params": [
@@ -3898,7 +3898,7 @@
   "source": "d7ca094d45220af7"
  },
  "synth.fx._sliding_min": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 293,
   "fastmath": false,
   "params": [
@@ -3969,7 +3969,7 @@
   "source": "61fc57f131e2cf81"
  },
  "synth.fx._soft": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 635,
   "fastmath": false,
   "params": [
@@ -3994,7 +3994,7 @@
   "source": "bfa091d7c3231c4e"
  },
  "synth.fx._span": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 186,
   "fastmath": false,
   "params": [
@@ -4041,7 +4041,7 @@
   "source": "b3a1e0241449a824"
  },
  "synth.fx._two": {
-  "file": "songbird/synth/fx.py",
+  "file": "synth/fx.py",
   "line": 108,
   "fastmath": false,
   "params": [
@@ -4106,7 +4106,7 @@
   "source": "d7f39fbbaae1c4a3"
  },
  "synth.harmonica._hands": {
-  "file": "songbird/synth/harmonica.py",
+  "file": "synth/harmonica.py",
   "line": 251,
   "fastmath": false,
   "params": [
@@ -4122,7 +4122,7 @@
   "source": "d3fe27e0b1d8fbad"
  },
  "synth.instruments._placed": {
-  "file": "songbird/synth/instruments.py",
+  "file": "synth/instruments.py",
   "line": 163,
   "fastmath": false,
   "params": [
@@ -4179,6 +4179,49 @@
    },
    {
     "args": [
+     "readonly array(float64, 2d, F)",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "array(float64, 2d, C)"
+    ],
+    "return": "none",
+    "locals": {
+     "cos": [
+      "float64"
+     ],
+     "i": [
+      "int64"
+     ],
+     "mid": [
+      "float64"
+     ],
+     "out": [
+      "array(float64, 2d, C)"
+     ],
+     "root2": [
+      "float64"
+     ],
+     "side": [
+      "float64"
+     ],
+     "sin": [
+      "float64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "width": [
+      "float64"
+     ],
+     "y": [
+      "readonly array(float64, 2d, F)"
+     ]
+    }
+   },
+   {
+    "args": [
      "array(float64, 2d, F)",
      "float64",
      "float64",
@@ -4224,7 +4267,7 @@
   "source": "2da4983ae00cf554"
  },
  "synth.kit._contacts": {
-  "file": "songbird/synth/kit.py",
+  "file": "synth/kit.py",
   "line": 297,
   "fastmath": false,
   "params": [
@@ -4313,7 +4356,7 @@
   "source": "7217b56d9ca2c3f7"
  },
  "synth.kit._grains": {
-  "file": "songbird/synth/kit.py",
+  "file": "synth/kit.py",
   "line": 336,
   "fastmath": false,
   "params": [
@@ -4386,7 +4429,7 @@
   "source": "874700ba08655085"
  },
  "synth.master._abs_max": {
-  "file": "songbird/synth/master.py",
+  "file": "synth/master.py",
   "line": 192,
   "fastmath": false,
   "params": [
@@ -4426,7 +4469,7 @@
   "source": "60632c430fdb1f14"
  },
  "synth.master._hop_power": {
-  "file": "songbird/synth/master.py",
+  "file": "synth/master.py",
   "line": 50,
   "fastmath": false,
   "params": [
@@ -4437,7 +4480,7 @@
   "source": "2809d5bf0c9a67ac"
  },
  "synth.master._mean_ahead": {
-  "file": "songbird/synth/master.py",
+  "file": "synth/master.py",
   "line": 228,
   "fastmath": false,
   "params": [
@@ -4504,7 +4547,7 @@
   "source": "1eb25e425f79273a"
  },
  "synth.master._over": {
-  "file": "songbird/synth/master.py",
+  "file": "synth/master.py",
   "line": 218,
   "fastmath": false,
   "params": [
@@ -4540,8 +4583,8 @@
   "source": "505beaa8f46dae01"
  },
  "synth.master._recover": {
-  "file": "songbird/synth/master.py",
-  "line": 303,
+  "file": "synth/master.py",
+  "line": 305,
   "fastmath": false,
   "params": [
    "held",
@@ -4578,7 +4621,7 @@
   "source": "c0c1df3e52e61e33"
  },
  "synth.master._weighted_hop_power": {
-  "file": "songbird/synth/master.py",
+  "file": "synth/master.py",
   "line": 65,
   "fastmath": false,
   "params": [
@@ -4684,7 +4727,7 @@
   "source": "2832b342fda0749c"
  },
  "synth.master._windows": {
-  "file": "songbird/synth/master.py",
+  "file": "synth/master.py",
   "line": 205,
   "fastmath": false,
   "params": [
@@ -4739,7 +4782,7 @@
   "source": "593db61817e2062a"
  },
  "synth.modal.ring": {
-  "file": "songbird/synth/modal.py",
+  "file": "synth/modal.py",
   "line": 31,
   "fastmath": false,
   "params": [
@@ -4921,7 +4964,7 @@
   "source": "766a21d8320cd9d2"
  },
  "synth.organ._expression": {
-  "file": "songbird/synth/organ.py",
+  "file": "synth/organ.py",
   "line": 397,
   "fastmath": false,
   "params": [
@@ -5033,7 +5076,7 @@
   "source": "f31a8a8762f31d9c"
  },
  "synth.organ._generator": {
-  "file": "songbird/synth/organ.py",
+  "file": "synth/organ.py",
   "line": 247,
   "fastmath": false,
   "params": [
@@ -5218,7 +5261,7 @@
   "source": "322c357b904f6bfe"
  },
  "synth.organ._read": {
-  "file": "songbird/synth/organ.py",
+  "file": "synth/organ.py",
   "line": 433,
   "fastmath": false,
   "params": [
@@ -5273,7 +5316,7 @@
   "source": "c1d4d8af0f62a3a1"
  },
  "synth.organ._rotors": {
-  "file": "songbird/synth/organ.py",
+  "file": "synth/organ.py",
   "line": 446,
   "fastmath": false,
   "params": [
@@ -5504,7 +5547,7 @@
   "source": "a54f93afb34c5d5d"
  },
  "synth.organ._scanner": {
-  "file": "songbird/synth/organ.py",
+  "file": "synth/organ.py",
   "line": 334,
   "fastmath": false,
   "params": [
@@ -5655,8 +5698,8 @@
   "source": "4a9801a0566ba413"
  },
  "synth.osc._blamp": {
-  "file": "songbird/synth/osc.py",
-  "line": 76,
+  "file": "synth/osc.py",
+  "line": 78,
   "fastmath": false,
   "params": [
    "t",
@@ -5666,8 +5709,8 @@
   "source": "36a23560de67577f"
  },
  "synth.osc._blep": {
-  "file": "songbird/synth/osc.py",
-  "line": 27,
+  "file": "synth/osc.py",
+  "line": 29,
   "fastmath": false,
   "params": [
    "t",
@@ -5677,8 +5720,8 @@
   "source": "ef16b19eaf9bc9dd"
  },
  "synth.osc._blep4": {
-  "file": "songbird/synth/osc.py",
-  "line": 39,
+  "file": "synth/osc.py",
+  "line": 41,
   "fastmath": false,
   "params": [
    "t"
@@ -5705,8 +5748,8 @@
   "source": "f5f0a3d44a281719"
  },
  "synth.osc._edges": {
-  "file": "songbird/synth/osc.py",
-  "line": 63,
+  "file": "synth/osc.py",
+  "line": 65,
   "fastmath": false,
   "params": [
    "p",
@@ -5741,8 +5784,8 @@
   "source": "67b6951750376b56"
  },
  "synth.osc.pulse": {
-  "file": "songbird/synth/osc.py",
-  "line": 102,
+  "file": "synth/osc.py",
+  "line": 104,
   "fastmath": false,
   "params": [
    "freq",
@@ -5754,8 +5797,8 @@
   "source": "7092bf85872ac7c9"
  },
  "synth.osc.saw": {
-  "file": "songbird/synth/osc.py",
-  "line": 88,
+  "file": "synth/osc.py",
+  "line": 90,
   "fastmath": false,
   "params": [
    "freq",
@@ -5766,8 +5809,8 @@
   "source": "2d204240dda979c3"
  },
  "synth.osc.stepped": {
-  "file": "songbird/synth/osc.py",
-  "line": 142,
+  "file": "synth/osc.py",
+  "line": 144,
   "fastmath": false,
   "params": [
    "freq",
@@ -5779,8 +5822,8 @@
   "source": "b4c43396c4dfa508"
  },
  "synth.osc.triangle": {
-  "file": "songbird/synth/osc.py",
-  "line": 123,
+  "file": "synth/osc.py",
+  "line": 125,
   "fastmath": false,
   "params": [
    "freq",
@@ -5791,7 +5834,7 @@
   "source": "f2a825ad03c46a53"
  },
  "synth.piano._spectrum": {
-  "file": "songbird/synth/piano.py",
+  "file": "synth/piano.py",
   "line": 262,
   "fastmath": false,
   "params": [
@@ -5853,7 +5896,7 @@
   "source": "1078ee5ccf84330d"
  },
  "synth.piano.hammer_force": {
-  "file": "songbird/synth/piano.py",
+  "file": "synth/piano.py",
   "line": 184,
   "fastmath": false,
   "params": [
@@ -6017,7 +6060,7 @@
   "source": "754462db264b07a3"
  },
  "synth.pipe.run": {
-  "file": "songbird/synth/pipe.py",
+  "file": "synth/pipe.py",
   "line": 31,
   "fastmath": false,
   "params": [
@@ -6139,7 +6182,7 @@
   "source": "61c277eda546710a"
  },
  "synth.pluck._bank": {
-  "file": "songbird/synth/pluck.py",
+  "file": "synth/pluck.py",
   "line": 221,
   "fastmath": false,
   "params": [
@@ -6231,7 +6274,7 @@
   "source": "6d85530e31849d57"
  },
  "synth.pluck._loop": {
-  "file": "songbird/synth/pluck.py",
+  "file": "synth/pluck.py",
   "line": 72,
   "fastmath": false,
   "params": [
@@ -6315,8 +6358,8 @@
   "source": "0719d74fac3af1ce"
  },
  "synth.rattle._collide": {
-  "file": "songbird/synth/rattle.py",
-  "line": 160,
+  "file": "synth/rattle.py",
+  "line": 155,
   "fastmath": false,
   "params": [
    "energy",
@@ -6537,8 +6580,8 @@
   "source": "bf1e0f275ea803b7"
  },
  "synth.rattle._next": {
-  "file": "songbird/synth/rattle.py",
-  "line": 138,
+  "file": "synth/rattle.py",
+  "line": 133,
   "fastmath": false,
   "params": [
    "state"
@@ -6565,8 +6608,8 @@
   "source": "eeea19c7ebe207ce"
  },
  "synth.rattle._wires": {
-  "file": "songbird/synth/rattle.py",
-  "line": 302,
+  "file": "synth/rattle.py",
+  "line": 297,
   "fastmath": false,
   "params": [
    "freqs",
@@ -6754,8 +6797,8 @@
   "source": "eda9c2ba1b51d1f7"
  },
  "synth.rattle.comb": {
-  "file": "songbird/synth/rattle.py",
-  "line": 414,
+  "file": "synth/rattle.py",
+  "line": 409,
   "fastmath": false,
   "params": [
    "x",
@@ -6792,7 +6835,7 @@
   "source": "b4053ae9575194f5"
  },
  "synth.reed._read": {
-  "file": "songbird/synth/reed.py",
+  "file": "synth/reed.py",
   "line": 83,
   "fastmath": false,
   "params": [
@@ -6854,7 +6897,7 @@
   "source": "c42464deab0cc168"
  },
  "synth.reed._read_mix": {
-  "file": "songbird/synth/reed.py",
+  "file": "synth/reed.py",
   "line": 64,
   "fastmath": false,
   "params": [
@@ -6938,7 +6981,7 @@
   "source": "a43ec03a11baddc8"
  },
  "synth.stringloop._run": {
-  "file": "songbird/synth/stringloop.py",
+  "file": "synth/stringloop.py",
   "line": 29,
   "fastmath": false,
   "params": [
@@ -7036,8 +7079,8 @@
   "source": "841b18abd483230d"
  },
  "synth.struck._bank": {
-  "file": "songbird/synth/struck.py",
-  "line": 36,
+  "file": "synth/struck.py",
+  "line": 38,
   "fastmath": false,
   "params": [
    "freqs",
@@ -7195,8 +7238,8 @@
   "source": "a565241774d4cc82"
  },
  "synth.struck._up2": {
-  "file": "songbird/synth/struck.py",
-  "line": 107,
+  "file": "synth/struck.py",
+  "line": 112,
   "fastmath": false,
   "params": [
    "x",
@@ -7250,8 +7293,438 @@
   ],
   "source": "2e49de4498e5cfc9"
  },
+ "synth.throat._assemble": {
+  "file": "synth/throat.py",
+  "line": 298,
+  "fastmath": false,
+  "params": [
+   "periodic",
+   "aperiodic",
+   "hann",
+   "lead"
+  ],
+  "signatures": [],
+  "source": "3ca0e102bb50347d"
+ },
+ "synth.throat._assemble_lay": {
+  "file": "synth/throat.py",
+  "line": 331,
+  "fastmath": false,
+  "params": [
+   "y",
+   "at",
+   "periodic",
+   "aperiodic",
+   "hann",
+   "lead"
+  ],
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 2d, C)",
+     "array(float64, 1d, C)",
+     "int64"
+    ],
+    "return": "none",
+    "locals": {
+     "aperiodic": [
+      "array(float64, 2d, C)"
+     ],
+     "at": [
+      "array(int64, 1d, C)"
+     ],
+     "c": [
+      "int64"
+     ],
+     "dc": [
+      "float64"
+     ],
+     "fft": [
+      "int64"
+     ],
+     "half": [
+      "int64"
+     ],
+     "hann": [
+      "array(float64, 1d, C)"
+     ],
+     "k": [
+      "int64"
+     ],
+     "lead": [
+      "int64"
+     ],
+     "periodic": [
+      "array(float64, 2d, C)"
+     ],
+     "post": [
+      "int64"
+     ],
+     "pre": [
+      "int64"
+     ],
+     "r": [
+      "int64"
+     ],
+     "rows": [
+      "int64"
+     ],
+     "start": [
+      "int64"
+     ],
+     "y": [
+      "array(float64, 1d, C)"
+     ]
+    }
+   }
+  ],
+  "source": "69a6dc2f389ee3f1"
+ },
+ "synth.throat._lay": {
+  "file": "synth/throat.py",
+  "line": 322,
+  "fastmath": false,
+  "params": [
+   "y",
+   "at",
+   "response"
+  ],
+  "signatures": [],
+  "source": "86ec0ed50ad52103"
+ },
+ "synth.throat._noise_mask": {
+  "file": "synth/throat.py",
+  "line": 277,
+  "fastmath": false,
+  "params": [
+   "noise",
+   "m"
+  ],
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 2d, C)",
+     "array(int64, 1d, C)"
+    ],
+    "return": "none",
+    "locals": {
+     "c": [
+      "int64"
+     ],
+     "cols": [
+      "int64"
+     ],
+     "m": [
+      "array(int64, 1d, C)"
+     ],
+     "mr": [
+      "int64"
+     ],
+     "noise": [
+      "array(float64, 2d, C)"
+     ],
+     "r": [
+      "int64"
+     ],
+     "rows": [
+      "int64"
+     ]
+    }
+   }
+  ],
+  "source": "7bb8fe419d0dcefd"
+ },
+ "synth.throat._noise_sub_dc": {
+  "file": "synth/throat.py",
+  "line": 286,
+  "fastmath": false,
+  "params": [
+   "noise",
+   "m",
+   "dc"
+  ],
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 2d, C)",
+     "array(int64, 1d, C)",
+     "array(float64, 1d, C)"
+    ],
+    "return": "none",
+    "locals": {
+     "c": [
+      "int64"
+     ],
+     "cols": [
+      "int64"
+     ],
+     "d": [
+      "float64"
+     ],
+     "dc": [
+      "array(float64, 1d, C)"
+     ],
+     "m": [
+      "array(int64, 1d, C)"
+     ],
+     "mr": [
+      "int64"
+     ],
+     "noise": [
+      "array(float64, 2d, C)"
+     ],
+     "r": [
+      "int64"
+     ],
+     "rows": [
+      "int64"
+     ]
+    }
+   }
+  ],
+  "source": "18c0bc796d6c4aa7"
+ },
+ "synth.throat._to_bins": {
+  "file": "synth/throat.py",
+  "line": 83,
+  "fastmath": false,
+  "params": [
+   "values",
+   "lo",
+   "hi",
+   "before",
+   "after",
+   "above",
+   "rolloff",
+   "log_power"
+  ],
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 2d, C)",
+     "readonly array(int64, 1d, C)",
+     "readonly array(int64, 1d, C)",
+     "readonly array(float64, 1d, C)",
+     "readonly array(float64, 1d, C)",
+     "readonly array(bool, 1d, C)",
+     "readonly array(float64, 1d, C)",
+     "bool"
+    ],
+    "return": "array(float64, 2d, C)",
+    "locals": {
+     "a": [
+      "float64"
+     ],
+     "above": [
+      "readonly array(bool, 1d, C)"
+     ],
+     "after": [
+      "readonly array(float64, 1d, C)"
+     ],
+     "b": [
+      "float64"
+     ],
+     "before": [
+      "readonly array(float64, 1d, C)"
+     ],
+     "c": [
+      "int64"
+     ],
+     "do_sub": [
+      "bool"
+     ],
+     "h": [
+      "int64"
+     ],
+     "hi": [
+      "readonly array(int64, 1d, C)"
+     ],
+     "l": [
+      "int64"
+     ],
+     "lo": [
+      "readonly array(int64, 1d, C)"
+     ],
+     "log_power": [
+      "bool"
+     ],
+     "nbins": [
+      "int64"
+     ],
+     "out_t": [
+      "array(float64, 2d, C)"
+     ],
+     "r": [
+      "int64"
+     ],
+     "rolloff": [
+      "readonly array(float64, 1d, C)"
+     ],
+     "rows": [
+      "int64"
+     ],
+     "sub": [
+      "float64"
+     ],
+     "v": [
+      "float64"
+     ],
+     "values": [
+      "array(float64, 2d, C)"
+     ]
+    }
+   }
+  ],
+  "source": "cd639cc020878a8d"
+ },
+ "synth.throat._turn_phase": {
+  "file": "synth/throat.py",
+  "line": 243,
+  "fastmath": false,
+  "params": [
+   "bins",
+   "hz",
+   "frac",
+   "period",
+   "spread",
+   "has_spread",
+   "scatter",
+   "has_scatter",
+   "lo",
+   "hi",
+   "before",
+   "after",
+   "sr",
+   "fft",
+   "tx_spread",
+   "tx_scatter",
+   "scatter_from",
+   "scatter_span"
+  ],
+  "signatures": [
+   {
+    "args": [
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "array(float64, 1d, C)",
+     "bool",
+     "array(float64, 2d, C)",
+     "bool",
+     "readonly array(int64, 1d, C)",
+     "readonly array(int64, 1d, C)",
+     "readonly array(float64, 1d, C)",
+     "readonly array(float64, 1d, C)",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64",
+     "float64"
+    ],
+    "return": "array(float64, 2d, C)",
+    "locals": {
+     "after": [
+      "readonly array(float64, 1d, C)"
+     ],
+     "before": [
+      "readonly array(float64, 1d, C)"
+     ],
+     "bins": [
+      "array(float64, 1d, C)"
+     ],
+     "c": [
+      "int64"
+     ],
+     "fft": [
+      "float64"
+     ],
+     "fr": [
+      "float64"
+     ],
+     "frac": [
+      "array(float64, 1d, C)"
+     ],
+     "h": [
+      "float64"
+     ],
+     "has_scatter": [
+      "bool"
+     ],
+     "has_spread": [
+      "bool"
+     ],
+     "hi": [
+      "readonly array(int64, 1d, C)"
+     ],
+     "hz": [
+      "array(float64, 1d, C)"
+     ],
+     "lo": [
+      "readonly array(int64, 1d, C)"
+     ],
+     "nbins": [
+      "int64"
+     ],
+     "neg_two_pi": [
+      "float64"
+     ],
+     "out": [
+      "array(float64, 2d, C)"
+     ],
+     "per": [
+      "float64"
+     ],
+     "period": [
+      "array(float64, 1d, C)"
+     ],
+     "r": [
+      "int64"
+     ],
+     "rows": [
+      "int64"
+     ],
+     "scatter": [
+      "array(float64, 2d, C)"
+     ],
+     "scatter_from": [
+      "float64"
+     ],
+     "scatter_span": [
+      "float64"
+     ],
+     "sm": [
+      "float64"
+     ],
+     "sp_scale": [
+      "float64"
+     ],
+     "spread": [
+      "array(float64, 1d, C)"
+     ],
+     "sr": [
+      "float64"
+     ],
+     "t": [
+      "float64"
+     ],
+     "tx_scatter": [
+      "float64"
+     ],
+     "tx_spread": [
+      "float64"
+     ]
+    }
+   }
+  ],
+  "source": "724941dedd58db8b"
+ },
  "synth.tube._scatter": {
-  "file": "songbird/synth/tube.py",
+  "file": "synth/tube.py",
   "line": 93,
   "fastmath": false,
   "params": [
@@ -7267,7 +7740,7 @@
   "source": "b47517c1149fdd3e"
  },
  "synth.tube.run": {
-  "file": "songbird/synth/tube.py",
+  "file": "synth/tube.py",
   "line": 108,
   "fastmath": false,
   "params": [

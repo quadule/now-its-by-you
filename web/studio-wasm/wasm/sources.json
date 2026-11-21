@@ -27,6 +27,13 @@
  "synth.pluck._bank": "6d85530e31849d57",
  "synth.pluck._loop": "0719d74fac3af1ce",
  "synth.reed._read": "c42464deab0cc168",
+ "synth.throat._assemble": "3ca0e102bb50347d",
+ "synth.throat._assemble_lay": "69a6dc2f389ee3f1",
+ "synth.throat._lay": "86ec0ed50ad52103",
+ "synth.throat._noise_mask": "7bb8fe419d0dcefd",
+ "synth.throat._noise_sub_dc": "18c0bc796d6c4aa7",
+ "synth.throat._to_bins": "cd639cc020878a8d",
+ "synth.throat._turn_phase": "724941dedd58db8b",
  "synth.throat._matmul": "eda2a738f84d9928",
  "pyodide": "314.0.7"
 }
