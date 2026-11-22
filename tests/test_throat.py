@@ -352,3 +352,32 @@ def test_a_machines_singer_is_a_blend_never_one_of_the_trained_singers(tmp_path)
         weights = np.array(list(mix.values()))
         assert abs(weights.sum() - 1.0) < 0.01 and weights.max() <= 0.6 + 1e-6
     assert T.machine_mix(3, 62.0, model) == T.machine_mix(3, 62.0, model)
+
+
+def test_skipping_the_hushed_silences_changes_no_sample(monkeypatch):
+    """Where nothing is sung the network and the vocoder are skipped (sing()'s `active`, the hush's margins and a
+    pad beyond them). The pad must cover everything that could still be heard at the hush's edge (a pulse's
+    response, the high-pass's tail): sung with nothing skipped, the same 16-bit samples, through rests short
+    and long, at the song's start, between phrases and after the last note."""
+    if not T.available():
+        pytest.skip("the shipped throat isn't here")
+    from songbird.score import Note
+    from songbird.synth.voice import VoiceParams
+
+    def word(t, text, pitch, end=False):
+        return Note("voice", t, 0.7, pitch, 0.8, syllable=text, word=text, line_end=end)
+
+    # a wait before the first word, rests of 0.5, 2 and 9 seconds between phrases, stops and vowels at their edges
+    notes = [word(3.0, "heart", 62.0), word(3.75, "and", 64.0, True), word(5.0, "old", 66.0, True),
+             word(7.7, "part", 62.0), word(8.45, "you", 59.0, True), word(18.2, "it", 64.0), word(18.95, "goes", 62.0, True)]
+    sr = 44100
+    pcm = lambda y: np.round(np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16)  # noqa: E731
+    for seed in (1, 2):
+        skipped = T.sing(notes, sr, VoiceParams(), seed=seed)
+        keep = T._hush_keep
+        with monkeypatch.context() as m:  # nothing skipped: every frame active (the hush itself, pad 0, as it is)
+            m.setattr(T, "_hush_keep", lambda phones, pad=0.0: np.ones(len(phones), dtype=bool) if pad else keep(phones, pad))
+            whole = T.sing(notes, sr, VoiceParams(), seed=seed)
+        assert len(skipped) == len(whole)
+        assert np.max(np.abs(skipped - whole)) < 1e-9
+        assert np.array_equal(pcm(skipped), pcm(whole))
