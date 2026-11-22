@@ -70,6 +70,7 @@ GRACE = 0.06  # s: a shorter note is a player's grace note (a whistle's cut), wh
 EDGE = 0.12  # s a level takes to change where two points fall at one place
 PICKUP = 0.6  # s before a section's first downbeat a line of it may begin
 SPLICE = 0.03  # s one take of the lead fades into the next
+COPY_FADE = 0.01  # s a copied section's edges crossfade into the surrounding stem (no step click on held pads)
 
 
 def exact(params) -> dict:
@@ -376,13 +377,15 @@ def spliced(takes: dict, plan: list[tuple[float, object]], sr: int, fade: float 
     f = int(fade * sr)
     for k, (t, key) in enumerate(plan):
         i0 = max(0, int(t * sr)) if k else 0
-        i1 = int(plan[k + 1][0] * sr) if k + 1 < len(plan) else length
+        i1 = min(length, int(plan[k + 1][0] * sr)) if k + 1 < len(plan) else length
         w = np.zeros(length)
         w[i0:i1] = 1.0
-        if k:
-            w[i0: i0 + f] = np.linspace(0.0, 1.0, f)
-        if k + 1 < len(plan):  # it fades as the next comes in
-            w[i1: i1 + f] = np.linspace(1.0, 0.0, f)
+        if k and i0 < length:
+            m = min(f, length - i0)
+            w[i0: i0 + m] = np.linspace(0.0, 1.0, f)[:m]
+        if k + 1 < len(plan) and i1 < length:  # it fades as the next comes in
+            m = min(f, length - i1)
+            w[i1: i1 + m] = np.linspace(1.0, 0.0, f)[:m]
         out += takes[key] * w
     return out
 
@@ -477,9 +480,25 @@ def jobs(score, sr: int, seed: int, voice, jobs: list) -> list:
 
             def theirs_here(make=theirs[name], copies=copies) -> np.ndarray:
                 y = make()
+                if not copies:
+                    return y
+                src = y.copy()
+                fade = int(COPY_FADE * sr)
                 for (a1, b1), a2 in copies:  # a section played as the part plays another (the same bars, chords)
-                    i1, i2, n = int(a1 * sr), int(a2 * sr), int((b1 - a1) * sr)
-                    y[i1: i1 + n] = y[i2: i2 + n]
+                    i1, i2 = max(0, int(a1 * sr)), max(0, int(a2 * sr))
+                    n = min(int((b1 - a1) * sr), len(y) - i1, len(src) - i2)
+                    if n <= 0:
+                        continue
+                    f = min(fade, n // 2)
+                    pasted = src[i2: i2 + n]
+                    if f > 1:
+                        ramp = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, f))
+                        w = ramp[:, None] if y.ndim == 2 else ramp
+                        y[i1: i1 + f] = y[i1: i1 + f] * (1.0 - w) + pasted[:f] * w
+                        y[i1 + f: i1 + n - f] = pasted[f: n - f]
+                        y[i1 + n - f: i1 + n] = y[i1 + n - f: i1 + n] * w + pasted[n - f:] * (1.0 - w)
+                    else:
+                        y[i1: i1 + n] = pasted
                 return y
             makes[name] = theirs_here
             notes_of[name] = copied_all(layer["score"], name, layer["copies"]).part(name)
