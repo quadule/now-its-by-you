@@ -236,3 +236,51 @@ def test_a_twin_can_play_its_players_notes_plainly_and_octaves_away():
     plain = S.twin_notes(notes, "bowedbass", {"shift": -24, "plain": True})
     assert [(n.pitch, n.art) for n in plain] == [(54.0, ""), (52.0, "slur"), (51.0, "")]
     assert [n.pitch for n in S.twin_notes(notes, "bowedbass", {"shift": -12})] == [66.0, 71.0, 64.0, 63.0]
+
+
+def test_copied_layer_crossfades_without_step_clicks(monkeypatch):
+    """Copying a continuous layered part (like a held synth pad) from another section crossfades its edges
+    instead of leaving sample-level discontinuities at the splice points."""
+    from songbird.synth import instruments
+
+    sr = 4000
+    score = variation.lay(realize(G, seed()), seed())
+    (_, a, b), (_, c, _) = score.sections[1], score.sections[3]
+    length = int(np.ceil(score.duration * sr))
+    t = np.arange(length) / sr
+    # A slow tone whose phase differs at the copy boundaries so a raw slice would jump
+    pad = np.repeat(np.sin(2.0 * np.pi * 17.3 * t)[:, None], 2, axis=1)
+    monkeypatch.setattr(instruments, "band_parts", lambda s, sr, seed: [("synthpad", lambda: pad.copy())])
+    plan = {"layers": [{"score": score, "seed": 1, "parts": ("synthpad",), "copies": [("synthpad", (a, b), c)]}]}
+    stems = dict((name, make()) for name, make in S.jobs(replace(score, stage=plan), sr, 1, None, []))
+    y = stems["synthpad"][:, 0]
+    # Maximum sample-to-sample step of the tone itself is 2*pi*17.3/sr ≈ 0.027; crossfaded edges stay smooth
+    assert float(np.max(np.abs(np.diff(y)))) < 0.05
+
+
+def test_spliced_clamps_fade_near_end():
+    sr = 1000
+    takes = {0.0: np.ones(100), 1.0: np.full(100, 2.0)}
+    y = S.spliced(takes, [(0.0, 0.0), (0.09, 1.0)], sr, fade=0.03)
+    assert y.shape == (100,) and np.all(np.isfinite(y))
+    assert y[0] == pytest.approx(1.0) and y[-1] > 1.0
+
+
+def test_stage_twins_carry_their_synthesizers_mix_roles():
+    """Each twin is mixed through the channel strip of the synthesizer that made it, not its acoustic parent."""
+    twins = {
+        "fiddle~": ["fiddle", "synthlead"],
+        "harp#": ["harp", "chip"],
+        "drummachine#": ["drummachine", "drums-808"],
+        "epiano~": ["whistle", "epiano"],
+        "bowedbass": ["whistle", "bowedbass"],
+    }
+    params = with_composition(seed(), exact={"twins": twins})
+    score = S.laid(G, params)
+    assert score.stage["roles"] == {
+        "fiddle~": "synth",
+        "harp#": "synth",
+        "drummachine#": "drummachine",
+        "epiano~": "keys",
+        "bowedbass": "strings",
+    }

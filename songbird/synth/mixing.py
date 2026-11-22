@@ -167,7 +167,8 @@ class Strip:
 ROLES: dict[str, Strip] = {
     # A plucked lute or cittern, doubling the tune under the words: boxiness and the voice's range cleared,
     # and it steps back while the voice sings the same notes.
-    "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9)), drive=0.1, duck=3.0),
+    "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2600, -3.0, 0.85), ("high", 7000, -1.5)),
+                  drive=0.1, duck=3.0),
     # A banjo comping (rolls, clawhammer): nothing under its lowest string, 1 dB of its ring out where the voice's
     # consonants are (the band's own dip does the rest while the voice sings), a compressor slow to grab and
     # leaning only on what stands 5 dB out of its bar, so the picks keep their edge and a roll its accents;
@@ -177,17 +178,22 @@ ROLES: dict[str, Strip] = {
     # A mandolin comping (strums, the chop): its weak low course cleared, nothing taken from its bark,
     # compressed gently and slowly (a tremolo evened, the chop untouched).
     "mandolin": Strip(eq=(("hp", 110),), comp=(10.0, 2.0, 0.02, 0.2, 1.5, 3.0), drive=0.05),
-    # The main accompaniment: weight kept, boom and clang tamed, sparkle above the voice.
-    "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8), ("high", 9000, 1.0)),
+    # The main accompaniment: weight kept, boom and clang tamed, smooth top without exaggerating pick noise.
+    "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8)),
                     comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.1, send=0.9),
     "harp": Strip(eq=(("hp", 70), ("peak", 2800, -1.5, 0.9)), send=1.2),
-    # Round and even: no rumble, mud out, no string noise, saturated so small speakers hear its pitch.
-    "bass": Strip(eq=(("hp", 40, 4), ("peak", 380, -2.0, 0.8), ("lp", 3000)),
+    # Round and even: sub-fundamental kept down to low D1/E1, mud out, no string noise, saturated so small speakers hear its pitch.
+    "bass": Strip(eq=(("hp", 30, 2), ("low", 95, 2.5), ("peak", 380, -2.5, 0.8), ("lp", 3000)),
                   comp=(10.0, 3.0, 0.01, 0.15, 1.5, 3.0), drive=0.35, send=0.25),
-    "fiddle": Strip(eq=(("hp", 180), ("peak", 2500, -2.5, 1.0), ("high", 8000, -1.0)),
-                    comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=2.0),
+    # Tame the violin body's +7 dB bridge hill (2.6 kHz) and bow glare so it sits warmly behind the voice.
+    "fiddle": Strip(eq=(("hp", 180), ("peak", 2600, -5.0, 0.85), ("high", 5500, -2.5)),
+                    comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=3.0),
     "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
-    "drum": Strip(eq=(("hp", 40), ("peak", 420, -2.0, 1.0), ("high", 8000, -1.0)), comp=(12.0, 3.0, 0.004, 0.12, 1.0, 4.0), send=0.6),
+    "drum": Strip(eq=(("hp", 35), ("low", 120, 1.5), ("peak", 420, -2.0, 1.0), ("high", 5500, -4.5)), trim=2.5,
+                  comp=(12.0, 2.5, 0.01, 0.14, 1.0, 4.0), send=0.55),
+    # A drum machine (808/909): deep kick kept down to 28 Hz, harsh 5.5 kHz hat/snare bite eased while keeping top air, slower attack so punch lands, less room.
+    "drummachine": Strip(eq=(("hp", 28), ("peak", 380, -1.5, 1.0), ("peak", 5500, -2.0, 0.9)),
+                         comp=(12.0, 2.5, 0.015, 0.15, 1.0, 4.0), drive=0.05, send=0.4),
     # A drum kit: the kick's 50 Hz kept, boxiness out, the cymbals' air left alone, a compressor slower to grab
     # than the frame drum's (a kit's transients are its point), half the band's room.
     "kit": Strip(eq=(("hp", 30), ("peak", 420, -2.0, 1.0)), comp=(12.0, 3.0, 0.02, 0.15, 1.0, 4.0), send=0.5),
@@ -212,8 +218,8 @@ ROLES: dict[str, Strip] = {
     # cut for boxiness at the B1 pair's boom (190 Hz), not in the cello's formant above it (250-500 Hz).
     "strings": Strip(eq=(("hp", 45), ("peak", 190, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
                      comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3),
-    # Synths: an arpeggio or a lead line, cleared around the voice.
-    "synth": Strip(eq=(("hp", 80), ("peak", 2800, -2.0, 0.9)), send=0.9, duck=1.5),
+    # Synths: an arpeggio or a lead line, cleared smoothly around the voice's presence and top.
+    "synth": Strip(eq=(("hp", 80), ("peak", 2600, -3.0, 0.85), ("high", 6000, -2.0)), send=0.9, duck=2.0),
     # A pedal steel: its low strings kept (B2 is 123 Hz, its warmth below 250), the voice's presence cleared, a
     # generous send; no compressor and no duck, since its own volume pedal swells it in and out under the voice.
     "steel": Strip(eq=(("hp", 70), ("peak", 2600, -2.0, 0.9), ("high", 8000, -1.0)), send=1.2),
@@ -240,8 +246,9 @@ NAMES = {
     "bass": ("bass", "contrabass", "upright"),
     "fiddle": ("fiddle", "violin", "bow"),
     "whistle": ("whistle", "flute", "pipe", "recorder", "fife", "blown"),
+    "drummachine": ("drummachine", "drums-808", "drums-909", "machine"),
     "drum": ("drum", "drums", "percussion", "bodhran", "tambourine", "shaker", "kick", "snare", "skin", "frame",
-             "claps", "clap", "stomps", "stomp", "cajon", "machine", "hats"),
+             "claps", "clap", "stomps", "stomp", "cajon", "hats"),
     "kit": ("kit",),
     "drone": ("drone", "pad", "shruti", "bagpipe", "hum"),
     "keys": ("piano", "epiano", "rhodes", "keys", "celesta", "musicbox", "music-box", "glock", "glockenspiel", "vibes",
@@ -264,18 +271,21 @@ SINGERS = ("voice", "choir")  # stems sung by the singers: matched by their whol
 def role_of(name: str) -> str:
     """The role a stem plays, from its name: "choir2" is choir, "guitar_low" guitar, anything unknown "band".
     Only a whole name makes a stem a singer ("synthlead" is a synth, never the lead voice)."""
-    word = re.sub(r"[\d_\-\s.]+$", "", name.lower())
+    raw = name.lower()
+    word = re.sub(r"[\d_\-\s.]+$", "", raw)
     for role, names in NAMES.items():
-        if word in names:
+        if raw in names or word in names:
             return role
     for role, names in NAMES.items():
-        if role not in SINGERS and any(n in word for n in names):
+        if role not in SINGERS and any(n in raw or n in word for n in names):
             return role
     return "band"
 
 
 # The voice and choir, in the same terms as the band's roles.
-VOICE_EQ = (("hp", 80), ("peak", 900, -2.0, 1.2), ("peak", 3500, 0.5, 0.9))  # presence 0.5 dB: at 2.0 the top notes are harsh
+# Boxiness (420 Hz), honk (900 Hz), front-vowel edge (2.4 kHz), and vocoder upper-band grain (6.5 kHz) eased.
+VOICE_EQ = (("hp", 80), ("peak", 420, -1.5, 1.1), ("peak", 900, -2.0, 1.2), ("peak", 2400, -2.2, 1.0),
+            ("high", 6500, -2.0))
 # The voice's air (7-14 kHz) against its body (0.5-2 kHz): natural singers (SoulX-Singer renders of our score)
 # measure -21 to -23 dB. A voice brighter than AIR is brought half way back, never by more than 3 dB.
 AIR = -20.0
@@ -283,7 +293,7 @@ AIR = -20.0
 # With a ride, the threshold is `above` dB over the level of the surrounding `ride` seconds (never under the
 # floor): a syllable is evened against its phrase, a strum against its bar, but a quiet verse stays quiet.
 VOICE_COMP = (10.0, 2.0, 0.015, 0.2, 3.0, 3.0)  # only the syllables that stand out of their phrase are leaned on
-CHOIR_EQ = (("hp", 120), ("low", 260, -2.0), ("peak", 3000, -2.5, 0.8), ("high", 9000, -2.0))
+CHOIR_EQ = (("hp", 120), ("low", 260, -2.0), ("peak", 2500, -3.0, 0.8), ("high", 7500, -2.5))
 CHOIR_COMP = (6.0, 2.0, 0.03, 0.3, 0.0, 0.0)
 PEAKS = 3.0  # dB over its loud peaks a choir's, drum's or the room's onset may reach before a peak stage rounds it off
 CHOIR_UNDER = 4.0  # dB the choir as a whole sits under the lead
@@ -294,19 +304,19 @@ CHOIR_LATER = 0.02  # s the choir's sound reaches the room after the band's: it 
 VOICE_ROOM = 0.08
 VOICE_PLATE = 0.18
 BAND_ROOM = 0.18
-CHOIR_ROOM = 0.5
-CHOIR_PLATE = 0.12
+CHOIR_ROOM = 0.24
+CHOIR_PLATE = 0.10
 PLATE_RT60 = 1.5
-RETURN_EQ = (("hp", 120), ("lp", 12000))  # wide enough that the harvested tone's ends are heard
+RETURN_EQ = (("hp", 180), ("lp", 11000))  # clean low end and smooth top so room tails never muddy the chords or splash sibilants
 RETURN_DIP = 3.0  # dB the room and plate give way while the voice sings
 MAKE_WAY = (0.02, 0.9)  # s the band and room take to make way for the voice (quick: its first consonants), and to come back after it (slow: no breathing)
-RIDE = (5.0, 1.5)  # dB the band comes up where the voice rests, over this many seconds
+RIDE = (3.0, 1.0, 1.3, 0.25)  # dB the band comes up where the voice rests; min-rest s, smooth fade s, quick vocal-release s
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
 CARVE_DEPTH = 6.0  # dB at full voice
-BAND_EQ = (("low", 200, 2.5), ("peak", 600, -2.0, 0.8))  # the band as a whole: warmer, and less boxy where the voice's vowels sit
+BAND_EQ = (("low", 140, 2.5), ("peak", 480, -2.0, 0.9), ("high", 10000, 0.5))  # deeper warmth, cleaner lower-mid pocket, gentle acoustic air
 BAND_COMP = (10.0, 1.5, 0.02, 0.2, 2.0, 3.0)  # the band together, lightly: its arc from sparse verses to full refrains is kept
-GLUE = (8.0, 1.5, 0.05, 0.4, 3.0, 3.0)  # the whole mix, lightly: what stands out of its surroundings, never the song's arc
+GLUE = (10.0, 1.75, 0.035, 0.25, 3.0, 1.5)  # musical bus glue (~1-1.5 dB on loud refrains), keeping quiet verses and the song's arc
 REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
 # The lead's saturation. At 0.2 its drive is set against the voice's typical peaks, and the throat's loudest
 # syllables (its crest is 13.7 dB) run 4-9 dB further into the curve: distortion above 2 kHz at -21 dB under
@@ -324,7 +334,7 @@ VOICE_SOFTEN = (6.0, 0.6)
 LEAD_ARC = (6.0, -2.0, 2.5, 1.0)
 THROWN_SEND = 0.5  # how much of a dub desk's echo or spring return reaches the room, against the band's send (synth.dub)
 ENERGY_REST = 0.55
-WARMTH = (("low", 180, 2.0),)  # the whole record: a little more weight under the voice, where only the band and a low singer reach
+WARMTH = (("low", 120, 1.5),)  # the whole record: focused sub-warmth under the voice, where only the band reaches
 
 
 # --- helpers ----------------------------------------------------------------------------
@@ -558,7 +568,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         if strip.comp:
             x = _compressed(x, sr, strip.comp, inplace=owned)
             owned = True
-        if role in ("drum", "kit"):
+        if role in ("drum", "drummachine", "kit"):
             y = _peaks(x, sr, inplace=owned)
             owned = owned or y is not x
             x = y
@@ -679,7 +689,9 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     if progress is not None:
         progress("mix")
     # The singers turned down or muted (p.voices): out of the record, their room and plate, and a desk's throws;
-    # what the band and the room do around them (singing, the choir's own space) stays as it was measured
+    # what the band and the room do around them (singing, the rest detector for the band ride, the choir's space)
+    # stays as it was measured on the un-muted voices.
+    rest_singing = fx.activity(voice, sr, attack=MAKE_WAY[0], release=RIDE[3]) if voice is not None else None
     choir_sang = None
     if p.voices < 1.0:
         if choir is not None and singing is not None:
@@ -706,12 +718,12 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         band *= gain
         band_send *= gain
         if singing is not None:
-            # where the voice rests a while (the intro, the turns), the band is ridden up, as an engineer would;
-            # the ride goes up and comes back down inside the rest, so the band is down again before the voice returns
-            # (minimum_filter1d's and uniform_filter1d's, and the ride's gain, each where the last left it)
-            ride = (singing < 0.05).astype(float)
+            # where the voice rests a while (the intro, the turns, the 2-bar breaths), the band is ridden up,
+            # as an engineer would; using a faster vocal-release follower lets 2-bar solos lift cleanly while
+            # short inter-line pauses stay untouched, and the ride comes back down before the voice returns.
+            ride = ((rest_singing if rest_singing is not None else singing) < 0.05).astype(float)
             fx.sliding_min(ride, int(RIDE[1] * sr), out=ride)
-            fx.running_mean(ride, int(RIDE[1] * sr / 2), out=ride)
+            fx.running_mean(ride, int(RIDE[2] * sr), out=ride)
             ride *= RIDE[0] * p.duck
             ride /= 20.0
             np.power(10.0, ride, out=ride)
@@ -720,6 +732,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
             del ride
             band = fx.dynamic_dip(band, sr, CARVE[0], CARVE[1], CARVE_DEPTH * p.duck * singing, inplace=True)
         band = fx.width(band, sr, p.width, inplace=True)
+    del rest_singing
 
     # The room, heard from each bus at its own distance; the plate for the singers.
     size = min(1.0, (1.1 / p.rt60) ** 0.25)  # a long room needs less sent to be heard as much
@@ -762,7 +775,7 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         choir_sang = None
         for a in range(0, length, 1 << 16):
             b = min(length, a + (1 << 16))
-            dip = RETURN_DIP * p.duck * singing[a:b] * (1.0 - choir_activity[a:b]
+            dip = RETURN_DIP * p.duck * singing[a:b] * (1.0 - 0.5 * choir_activity[a:b]
                                                       if choir_activity is not None else 1.0)
             wet[a:b] *= (10.0 ** (-dip / 20.0))[:, None]
             del dip

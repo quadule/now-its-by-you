@@ -98,3 +98,29 @@ def test_earlier_versions_sing_the_choir_in_their_own_voices():
     # a formant ancestor is heard through the throat as a singer of its own, in its own octave
     assert heard[1].engine == "learned" and heard[1].timbre.startswith("machine:") and heard[1].shift == -12
     assert ancestors_from([formant], learned=True)[0].timbre == heard[1].timbre
+
+
+def test_choir_harmonies_keep_upper_voicings_and_stay_above_floor(monkeypatch):
+    """A low stand-in (-12 shift) never drops an upper bridge harmony below the lead or any choir note below FLOOR."""
+    from dataclasses import replace
+    from songbird import genome as G, synth
+    from songbird.realize import Params, realize
+    from songbird.synth.voice import VoiceParams
+
+    g = G.load("songs/h-now-its-by-you.json")
+    p = replace(Params.from_dict(g.seed_params), tonic=57, choir=3, form=("bridge",))  # A major
+    score = realize(g, p)
+    seen = {}
+
+    def fake_sing(notes, sr, singer, seed, lexicon):
+        if notes:
+            seen[notes[0].part] = singer.shift
+        return np.zeros(int(score.duration * sr))
+
+    monkeypatch.setattr(synth, "sing", fake_sing)
+    low_ancestors = [VoiceParams(engine="learned", shift=-12) for _ in range(3)]
+    jobs, _ = synth.stem_jobs(score, 8000, seed=1, voice=VoiceParams(engine="learned"), ancestors=low_ancestors)
+    for name, make in jobs:
+        if name.startswith("choir"):
+            make()
+    assert seen == {"choir1": 0, "choir2": 0, "choir3": 0}

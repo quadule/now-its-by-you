@@ -26,7 +26,15 @@ its stops released as articulate makes them (tE's t).
   the whistle, the whistle over a held fiddle, the bowed bass. The intro's tune is a hollow square lead without the whistle's
   grace notes, an electric piano an octave under it, and its drums the 808 as a soft, worn kit.
 
+- `record-live-A.json` (A major, stage-hybrid live playback): `record-final-A.json` mastered and balanced for
+  live singing over the synthetic vocals starting at `refrain:0` ("Who made this song?") on a concert PA:
+  −12 LUFS target, drier room (`space` 0.6) for a real hall, fuller/wider band (`forward` 6.5, `width` 1.3),
+  the synthetic lead easing back −1.2 dB after `verse:0` so live voices own the front while keeping a clear
+  melody guide, the 808 `drummachine` returning at −2 dB in `refrain:2` with `guitar` eased −2 dB, and the
+  closing `bowedbass` tag trimmed slightly to breathe out of the climax.
+
     uv run python -m songbird render performance/genome.json --replay performance/record-final.json --out final.flac
+    uv run python -m songbird render performance/genome.json --replay performance/record-live-A.json --out live-A.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-B.json --out performance-B.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-arc-morph.json --out arc-morph.flac
 

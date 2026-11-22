@@ -124,11 +124,25 @@ def stem_jobs(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | No
     if (score.band or {}).get("parts") == "voices":  # voices alone: each part to the singer whose range it is
         singers = matched(score, choir, singers[: len(choir)])
     rounds = round_places(score, choir)
+    lead_mid = float(np.median([n.pitch for n in sung])) if sung else None
+    from ..theory import FLOOR
+
     for name, singer in zip(choir, singers):
         i = int(name[5:]) - 1
 
         def lineage(name=name, singer=singer, i=i) -> np.ndarray:
             mine = list(score.part(name))
+            if singer.shift < 0 and mine:
+                # A harmonized choir part is already placed in its intended register (and clamped to FLOOR):
+                # don't drop a voice below the throat's floor (sub-160 Hz buzz), pull an upper harmony
+                # (like choir2 above the lead) underneath the melody, or drop a round below the tune.
+                harmony = [n.pitch for n in mine if n.art != "round"]
+                too_low = bool(harmony) and min(harmony) + singer.shift < FLOOR
+                upper_dropped = (lead_mid is not None and bool(harmony)
+                                 and float(np.median(harmony)) > lead_mid
+                                 and float(np.median(harmony)) + singer.shift < lead_mid)
+                if too_low or upper_dropped:
+                    singer = replace(singer, shift=0)
             if singer.shift and any(n.art == "round" for n in mine):  # a round's voice sings the tune where it is
                 # written, as the singer does (songbird.canon): a low singer an octave down goes under the throat's floor
                 mine = [replace(n, pitch=n.pitch - singer.shift) if n.art == "round" else n for n in mine]
@@ -227,8 +241,16 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
         jobs = [(name, Cached(cache, identities[name], make, name) if name in identities else make)
                 for name, make in jobs]
     length = int(np.ceil(score.duration * sr))
+    sound = getattr(score, "sound", None) or None
+    twin_roles = (getattr(score, "stage", None) or {}).get("roles")
+    if twin_roles:
+        players = dict((sound or {}).get("players") or {})
+        for name, role in twin_roles.items():
+            if "role" not in (players.get(name) or {}):
+                players[name] = {**(players.get(name) or {}), "role": role}
+        sound = {**(sound or {}), "players": players}
     return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress,
-                           sound=getattr(score, "sound", None) or None)  # a person's sound design, if any
+                           sound=sound)  # a person's sound design and stage twin roles, if any
 
 
 def _handed(name: str, make, kept):

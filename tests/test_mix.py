@@ -323,13 +323,36 @@ def test_every_instrument_finds_its_strip():
     assert mixing.role_of("banjo") == "banjo" and mixing.role_of("mandolin") == "mandolin"
     assert mixing.ROLES["banjo"].duck == 0.0 and mixing.ROLES["mandolin"].duck == 0.0
     assert mixing.role_of("melody") == "lute" and mixing.ROLES["lute"].duck > 0.0
-    # a kit keeps its kick (a 30 Hz high-pass, not the frame drum's 40) and its cymbals' top
-    assert mixing.role_of("kit") == "kit" and mixing.role_of("drummachine") == "drum"
-    hp = dict((band[0], band[1]) for band in mixing.ROLES["kit"].eq)
-    assert hp["hp"] <= 30 and "high" not in hp and "lp" not in hp
-    assert mixing.ROLES["kit"].comp[2] > mixing.ROLES["drum"].comp[2]  # slower to grab: the strokes keep their edge
+    # a kit and a drum machine each keep their kick (<= 30 Hz HP) and highs, slower to grab than the frame drum
+    assert mixing.role_of("kit") == "kit" and mixing.role_of("drummachine") == "drummachine"
+    assert mixing.role_of("drums-808") == "drummachine" and mixing.role_of("drums-909") == "drummachine"
+    for role in ("kit", "drummachine"):
+        hp = dict((band[0], band[1]) for band in mixing.ROLES[role].eq)
+        assert hp["hp"] <= 30 and "high" not in hp and "lp" not in hp
+        assert mixing.ROLES[role].comp[2] > mixing.ROLES["drum"].comp[2]  # slower to grab: the strokes keep their edge
     for name in ("claps", "stomps", "cajon", "shaker", "tambourine"):
         assert mixing.role_of(name) == "drum", name  # the frame drum's strip, its 40 Hz high-pass
     # a harmonica's presence is its reed's own: its strip takes none of it, as the free reeds' still does
     assert mixing.role_of("harmonica") == "harmonica" and mixing.role_of("accordion") == "squeezebox"
     assert not any(band[0] == "peak" and 2000 <= band[1] <= 4000 for band in mixing.ROLES["harmonica"].eq)
+
+
+def test_band_ride_lifts_cleanly_in_two_bar_instrumental_breaks():
+    """A 5-second instrumental break (2 bars at 96 BPM) between vocal phrases gets a clear band ride lift,
+    while short inter-line pauses stay level."""
+    rng = np.random.default_rng(11)
+    seconds = 14.0
+    n = int(seconds * SR)
+    t = np.arange(n) / SR
+    buzz = sum(np.sin(2 * np.pi * 220 * k * t) / k for k in range(1, 14))
+    # Sing 0.5..4.0 s, rest 4.0..9.0 s (5 s two-bar break), sing 9.0..13.0 s
+    voice = 0.1 * buzz * (((t >= 0.5) & (t < 4.0)) | ((t >= 9.0) & (t < 13.0)))
+    band_tone = 0.05 * np.sin(2 * np.pi * 330 * t) + 0.02 * rng.standard_normal(n)
+    stems = {"voice": panned(voice, 0.0), "guitar": panned(band_tone, 0.2)}
+    taps_duck, taps_flat = {}, {}
+    mixing.mix(stems, SR, seed=1, params=MixParams(space=0.0, duck=1.0), taps=taps_duck)
+    mixing.mix(stems, SR, seed=1, params=MixParams(space=0.0, duck=0.0), taps=taps_flat)
+    brk = slice(int(4.5 * SR), int(8.5 * SR))
+    lifted = master.loudness(taps_duck["band"][brk], SR)
+    unridden = master.loudness(taps_flat["band"][brk], SR)
+    assert lifted - unridden > 2.0

@@ -1193,10 +1193,10 @@ def parse_mix(spec: str | dict | None) -> dict[str, float] | None:
 # louder bursts (0.3/0.06, +0 dB) read the same to Whisper (7.3% against 7.1% of H's words misheard, dry) and
 # sound made; these keep more of the sung consonant, softened and blended with the measured one.
 CLOSURE_DIP = {True: 0.5, False: 0.2}  # what is left of the throat's output through a voiced / voiceless stop's closure
-BURST = -3.0  # dB against the formant singer's burst levels (phonetics.BURSTS)
+BURST = -9.0  # dB against the formant singer's burst levels (phonetics.BURSTS); subtle enough not to read as noise bursts
 BURST_SPREAD = (1.5, 0.15)  # dB of level and log length one burst differs from the next, at voice.spread 1 (no two alike)
 ASPIRATION = -8.0  # dB under its burst the aspiration after a voiceless stop's release starts, fading to the stop's end
-WEAK_FRICATIVES = {"F": 6.0, "TH": 6.0, "V": 6.0, "DH": 4.0}  # dB over the formant singer's frication levels
+WEAK_FRICATIVES = {"F": 2.0, "TH": 2.0, "V": 2.0, "DH": 0.0}  # dB over the formant singer's frication levels
 FRICATIVE_DIP = 0.5  # what is left of the throat's output through a voiceless weak fricative
 NASAL_LIFT = 2.0  # dB a coda nasal comes up
 # A t's release on its own (the stop heard as harsh). Scylla's Band's t's, on the same notes and
@@ -1217,7 +1217,7 @@ T_AS_WAS = {"shape": None, "burst": 0.0, "ramp": 0.002, "longer": 1.0, "decay": 
 # "part" and "heart" a t (after the lead chain, 13-17 dB under the word, 22-25 ms long, where Scylla's heard t's are
 # 11-17 dB under for 15-40 ms). Sung when STOP_RELEASE["T"] is None (by default);
 # T_RELEASE.update(T_AS_WAS) sings the plain t.
-T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 8.0, "longer": 2.5,
+T_CHOSEN = {"shape": [(8000.0, 4000.0, 0.0), (3500.0, 1500.0, -12.0)], "ramp": 0.0005, "burst": 5.0, "longer": 2.5,
             "decay": 0.01, "aspiration": -6.0, "own": 0.3}
 T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
 # A t sung straight into the next word ("that you", "wrote this"): T_RELEASE's keys as they are there, and `rise`,
@@ -1226,7 +1226,7 @@ T_RELEASE = {**T_AS_WAS, **T_CHOSEN}
 # noise, and the next word starts at once at full level. Here the release is darker (3.4 kHz, a little at 5.2), 5 dB
 # softer and 18 ms long, and the voice returns over 30 ms: chosen by ear over one as bright and softer, and a 7 ms
 # tap. voice.linked 0 sings every t as T_RELEASE has it.
-T_LINKED = {"shape": [(3400.0, 1600.0, 0.0), (5200.0, 2500.0, -8.0)], "burst": 3.0, "longer": 1.5, "decay": 0.008,
+T_LINKED = {"shape": [(3400.0, 1600.0, 0.0), (5200.0, 2500.0, -8.0)], "burst": 0.0, "longer": 1.5, "decay": 0.008,
             "aspiration": -6.0, "rise": 0.03}
 # A d sung straight into the next word's vowel ("old and", "saved it") is carried over as singers carry it ("ol
 # dand"): the network is told it begins that syllable (its word-final consonants are soft, a d there a gap with no
@@ -1234,7 +1234,7 @@ T_LINKED = {"shape": [(3400.0, 1600.0, 0.0), (5200.0, 2500.0, -8.0)], "burst": 3
 # the seconds it lasts, taken from a longer sound before it, which keeps `keeps` of its own length; `burst`: dB
 # added to the release; `longer`: how many times as long it lasts; `closure`: what is left of the throat's own sound
 # through the closure, held as given (None: an onset d's, CLOSURE_DIP's).
-D_LINKED = {"closure": None, "burst": 6.0, "longer": 1.0, "least": 0.07, "keeps": 0.6}
+D_LINKED = {"closure": None, "burst": -3.0, "longer": 1.0, "least": 0.07, "keeps": 0.6}
 LINKED = 0.08  # s: the next word's sound begins within this of the t's end (a rest or a breath is longer)
 
 # A release made as an airway makes one (as Chimera's physical model does, jamesondh/chimera-vocal-synth), for a
@@ -1439,7 +1439,7 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
 # A real voice is part noise at the top: in the natural reference's vowels the aperiodicity runs 0.32 to 0.65 from
 # 2 to 8 kHz, the throat's 0.18 to 0.48, and its harmonics stand as clean lines to 10 kHz (a buzz heard as
 # robotic). voice.air sets a floor the aperiodicity never falls under, rising from AIR_FROM to AIR_TO Hz.
-AIR_FROM, AIR_TO = 2500.0, 8000.0
+AIR_FROM, AIR_TO = 3500.0, 8000.0
 
 
 def air_floor(air: float, points: int) -> np.ndarray:
