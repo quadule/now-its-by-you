@@ -227,8 +227,16 @@ def render(score: Score, sr: int = SR, seed: int = 0, voice: VoiceParams | None 
         jobs = [(name, Cached(cache, identities[name], make, name) if name in identities else make)
                 for name, make in jobs]
     length = int(np.ceil(score.duration * sr))
+    sound = getattr(score, "sound", None) or None
+    twin_roles = (getattr(score, "stage", None) or {}).get("roles")
+    if twin_roles:
+        players = dict((sound or {}).get("players") or {})
+        for name, role in twin_roles.items():
+            if "role" not in (players.get(name) or {}):
+                players[name] = {**(players.get(name) or {}), "role": role}
+        sound = {**(sound or {}), "players": players}
     return mixing.mix_made(jobs, length, sr, seed, mix_params, lift=lift_of(score, sr, length), progress=progress,
-                           sound=getattr(score, "sound", None) or None)  # a person's sound design, if any
+                           sound=sound)  # a person's sound design and stage twin roles, if any
 
 
 def _handed(name: str, make, kept):

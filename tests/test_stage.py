@@ -264,3 +264,23 @@ def test_spliced_clamps_fade_near_end():
     y = S.spliced(takes, [(0.0, 0.0), (0.09, 1.0)], sr, fade=0.03)
     assert y.shape == (100,) and np.all(np.isfinite(y))
     assert y[0] == pytest.approx(1.0) and y[-1] > 1.0
+
+
+def test_stage_twins_carry_their_synthesizers_mix_roles():
+    """Each twin is mixed through the channel strip of the synthesizer that made it, not its acoustic parent."""
+    twins = {
+        "fiddle~": ["fiddle", "synthlead"],
+        "harp#": ["harp", "chip"],
+        "drummachine#": ["drummachine", "drums-808"],
+        "epiano~": ["whistle", "epiano"],
+        "bowedbass": ["whistle", "bowedbass"],
+    }
+    params = with_composition(seed(), exact={"twins": twins})
+    score = S.laid(G, params)
+    assert score.stage["roles"] == {
+        "fiddle~": "synth",
+        "harp#": "synth",
+        "drummachine#": "drummachine",
+        "epiano~": "keys",
+        "bowedbass": "strings",
+    }

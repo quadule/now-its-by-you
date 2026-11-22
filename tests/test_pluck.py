@@ -63,3 +63,16 @@ def test_open_strings_answer_what_shares_their_harmonics():
     tuned = sympathetic(note, SR, [50, 57])  # open D3 and A3
     detuned = sympathetic(note, SR, [51, 56])  # open strings sharing nothing with it
     assert np.sqrt(np.mean(tuned**2)) > 4 * np.sqrt(np.mean(detuned**2))
+
+
+def test_dc_blocker_preserves_low_bass_fundamentals():
+    """The 10 Hz DC blocker removes DC without eating the bass's low E1 (41.2 Hz)."""
+    y = pluck(41.2, 1.5, SR, np.random.default_rng(1), brightness=0.3, decay=2.0)
+    assert abs(float(np.mean(y))) < 1e-3
+    # Fundamental around 41 Hz should remain strong relative to the 2nd harmonic (~82 Hz)
+    seg = y[int(0.05 * SR): int(1.05 * SR)] * np.hanning(SR)
+    spec = np.abs(np.fft.rfft(seg, 4 * SR))
+    freqs = np.fft.rfftfreq(4 * SR, 1 / SR)
+    f1 = spec[(freqs > 38) & (freqs < 45)].max()
+    f2 = spec[(freqs > 78) & (freqs < 86)].max()
+    assert 20 * np.log10(f1 / (f2 + 1e-12)) > -6.0

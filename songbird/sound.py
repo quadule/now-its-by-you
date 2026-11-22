@@ -457,7 +457,7 @@ def produce(genome, params, placed, clock, notes: list, desk: dict | None = None
         entry = {k: mine[k] for k in RENDER if k in mine}
         if "kit" in mine:
             module, _ = KITS[mine["kit"]]
-            entry["role"] = "kit" if module == "kit" else "drum"
+            entry["role"] = "kit" if module == "kit" else "drummachine"
         if "send" in mine:
             entry["send"] = mine["send"]
         if "sidechain" in mine and mine["sidechain"]["depth"] > 0:  # a pump turned off pumps nowhere

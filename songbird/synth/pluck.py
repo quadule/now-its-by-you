@@ -195,7 +195,8 @@ def pluck(
         _touch_into(y, sr, held, freq, touch * vel, rng)
     tail = min(length, int(0.004 * sr))
     y[length - tail:] *= np.linspace(1.0, 0.0, tail)
-    return lfilter([1.0, -1.0], [1.0, -0.995], y)  # remove the pluck's DC
+    pole = float(np.exp(-2.0 * np.pi * 10.0 / sr))
+    return lfilter([1.0, -1.0], [1.0, -pole], y)  # remove the pluck's DC without eating the bass's low notes
 
 
 def _attack_into(y: np.ndarray, sr: int, hardness: float, vel: float, rng: np.random.Generator) -> None:

@@ -277,7 +277,10 @@ def prepare(genome, params, score, phrasing=None, choir=(), lyrics=None):
     if "levels" in ex:
         levels = ex["levels"]
     if twins:
+        from .synth.mixing import role_of
+
         plan["twins"] = twins
+        plan["roles"] = {name: role_of(pair[1]) for name, pair in twins.items()}
     if levels:
         plan["levels"] = {name: points(row, secs, lines) for name, row in levels.items()}
         plan["levels"] = {name: tg for name, tg in plan["levels"].items() if tg[0]}
@@ -341,6 +344,8 @@ def shifted(plan: dict, start: float, t0: float, t1: float, cut) -> dict:
         out["plan"] = [(t - start, h) for t, h in joins[first:] if t < t1]
     if plan.get("twins"):
         out["twins"] = plan["twins"]
+    if plan.get("roles"):
+        out["roles"] = plan["roles"]
     if plan.get("levels"):
         out["levels"] = {name: ([t - start for t in ts], gs) for name, (ts, gs) in plan["levels"].items()}
     for layer in plan.get("layers") or []:

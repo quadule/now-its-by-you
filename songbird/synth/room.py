@@ -37,7 +37,7 @@ OCTAVES = 31.25 * 2.0 ** np.arange(10)  # 31 Hz .. 16 kHz: the tail is shaped oc
 SPEED = 343.0  # m/s
 
 # The plate: decay per band relative to its RT60, its colour, and where the ears stop agreeing.
-PLATE_AIR = (0.75, 0.95, 1.0, 0.95, 0.8)
+PLATE_AIR = (0.75, 0.95, 1.0, 0.85, 0.6)
 PLATE_TONE = (0.35, 0.8, 1.0, 1.0, 0.75)
 
 
