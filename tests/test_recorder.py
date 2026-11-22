@@ -261,3 +261,79 @@ def test_everyones_way_blends_every_ticked_take_and_the_choir_keeps_three_voices
     voices = argv[argv.index("--choir-phrasing") + 1:argv.index("--out")]
     assert [json.loads(Path(v).read_text()) for v in voices] == [["ana", "di"], ["bo", "ed"], ["cy"]]
     assert all(Path(v).name.startswith("h-short.choir.") for v in voices)  # no singer's folder can be called that
+
+
+def test_the_stage_version_is_what_the_machine_sings_and_the_volunteers_can_sing_with_it(workspace, monkeypatch):
+    """Where the song's first set is a rendition (the stage version), Hear the machine replays its record: as
+    recorded with no phrasing given, its own choir unless the singers sing it. With --with, the earlier song's
+    ticked takes whose audio is gone count by what was measured, each person once, beside today's."""
+    import songbird.cli
+
+    path = short(workspace)
+    monkeypatch.setattr(recorder, "ROOT", workspace)
+    monkeypatch.setattr(recorder.Recorder, "genome_path", path, raising=False)
+    monkeypatch.setattr(recorder.Recorder, "genome", G.load(path))
+    record = workspace / "performance" / "record.json"
+    monkeypatch.setattr(recorder.Recorder, "stage_record", lambda self: record)
+    monkeypatch.setattr(recorder.Recorder, "also", "earlier")
+    for who in ("Ana", "Bo"):
+        K.keep_sung(path.stem, who, b"RIFF-" + who.encode(), "abc123abc123")
+    K.PEOPLE.parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(K, "PEOPLE", workspace / "recordings" / "people.json")
+    K.PEOPLE.write_text(json.dumps({"wu-again": "wu"}))  # one person under two names, counted once
+    for who, use in (("Vi", True), ("Wu", True), ("Wu again", True), ("Xo", False)):
+        gone = K.keep_sung("earlier", who, b"RIFF-" + who.encode(), "abc123abc123")
+        gone.use = use
+        gone.save()
+        K.caches(gone)[0].parent.mkdir(parents=True, exist_ok=True)
+        K.caches(gone)[0].write_text("{}")
+        gone.path.unlink()  # its audio deleted, its measurement kept
+    K.keep_sung("earlier", "Yu", b"RIFF-y", "abc123abc123").path.unlink()  # nothing measured: not counted
+    blended, rendered = [], []
+
+    def singer_phrasing(genome_path, genome, takes, credit=None):
+        blended.append(sorted({f"{t.person}:{t.weight:g}" for t in takes}))
+        return {}, {"source_detail": ""}, []
+
+    def write(data, phrasing, out):
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        Path(out).write_text(json.dumps(blended[-1]))
+
+    monkeypatch.setattr(T, "singer_phrasing", singer_phrasing)
+    monkeypatch.setattr(T, "write", write)
+    monkeypatch.setattr(songbird.cli, "main", rendered.append)
+    handler = recorder.Recorder.__new__(recorder.Recorder)
+    assert handler.machine() == {"stage": True, "earlier": {"singers": 2, "takes": 3}, "weights": [1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0]}
+    handler.render({"lead": "", "choir": False})
+    assert rendered[-1][:4] == ["render", str(path), "--replay", str(record)] and rendered[-1][4] == "--out"
+    handler.render({"lead": "with", "choir": True, "weight": 1.5})  # this round's singers count 1.5 each
+    argv = rendered[-1]
+    assert json.loads(Path(argv[argv.index("--phrasing") + 1]).read_text()) == ["ana:1.5", "bo:1.5", "vi:1", "wu:1"]
+    assert "--choir" not in argv  # the rendition's own number of voices
+    voices = argv[argv.index("--choir-phrasing") + 1:argv.index("--out")]
+    assert [json.loads(Path(v).read_text()) for v in voices] == [["ana:1.5", "wu:1"], ["bo:1.5"], ["vi:1"]]
+    with pytest.raises(ValueError):
+        handler.render({"lead": "with", "weight": 7})
+
+
+def test_a_render_is_sent_in_ranges_so_the_player_can_seek(workspace, monkeypatch):
+    """Hear the machine's player seeks by asking for part of the file: the page answers with that part."""
+    monkeypatch.setattr(recorder, "ROOT", workspace)
+    (workspace / "renders").mkdir(parents=True, exist_ok=True)
+    body = bytes(range(256)) * 4
+    (workspace / "renders" / "x.flac").write_bytes(body)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), recorder.Recorder)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/renders/x.flac"
+    try:
+        with urllib.request.urlopen(url) as r:
+            assert r.status == 200 and r.headers["Accept-Ranges"] == "bytes" and r.read() == body
+        for asked, part in (("100-199", body[100:200]), ("1000-", body[1000:]), ("-24", body[-24:])):
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": f"bytes={asked}"})) as r:
+                assert r.status == 206 and r.read() == part
+                assert r.headers["Content-Range"].endswith(f"/{len(body)}")
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(urllib.request.Request(url, headers={"Range": "bytes=5000-"}))
+        assert e.value.code == 416
+    finally:
+        server.shutdown()

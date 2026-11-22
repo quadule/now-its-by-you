@@ -170,7 +170,8 @@
     <h2>Hear the machine</h2>
     <div class="row">
       <select id="lead"></select>
-      <label class="check hint"><input type="checkbox" id="choir"> with the lineage choir</label>
+      <select id="weight" hidden title="How many volunteers each of you counts as"></select>
+      <label class="check hint"><input type="checkbox" id="choir"> <span id="choirLabel">with the lineage choir</span></label>
       <button id="machine">▶ Sing</button>
     </div>
     <div class="hint" id="machineNote"></div>
@@ -623,6 +624,7 @@ function show(pos) {
 
 async function loadSingers() {
   try { S.singers = await getJSON("/singers"); } catch (e) { S.singers = []; }
+  try { S.machine = await getJSON("/machine"); } catch (e) { S.machine = null; }  // an older server: its own way
   drawSingers();
   drawParts();
   // name the sections of the takes sung to other versions, once their words are here
@@ -700,9 +702,15 @@ function drawLead() {
   const have = S.singers.filter(s => s.phrasing);
   const singing = S.singers.filter(s => s.takes.some(t => t.use));  // everyone's way needs no phrasing made first
   lead.innerHTML = "";
+  const m = S.machine || {}, earlier = m.earlier;
   for (const s of have) option(lead, s.who, `${s.name}'s way`);
   if (singing.length >= 2) option(lead, "everyone", `everyone's way, blended (${singing.length} singers)`);
-  option(lead, "", "its own way (no phrasing)");
+  if (earlier && singing.length) option(lead, "with", `everyone's way, with the volunteers (${singing.length + earlier.singers} singers)`);
+  option(lead, "", m.stage ? "as recorded" : "its own way (no phrasing)");
+  const weight = $("weight");
+  if (!weight.options.length) for (const w of m.weights || [1]) option(weight, w, w === 1 ? "each of you counts once" : `each of you counts as ${w} people`);
+  weight.hidden = lead.value !== "with";
+  $("choirLabel").textContent = m.stage ? "the choir sings their way too" : "with the lineage choir";
   lead.value = was !== undefined && [...lead.options].some(o => o.value === was) ? was : lead.options[0].value;
   $("machineNote").textContent = singing.length >= 2
     ? "With the choir, the other singers sing its three harmony voices, each their own way (more than three share them)."
@@ -885,13 +893,13 @@ $("calibrate").onclick = async () => {
     + `so takes will be shifted ${nudge} ms more from now on. Tapping tends to run a little early, so fine-tune by ear with the slider after a take.`;
 };
 
-$("lead").onchange = () => { S.lead = $("lead").value; };
+$("lead").onchange = () => { S.lead = $("lead").value; $("weight").hidden = S.lead !== "with"; };
 $("machine").onclick = async () => {
   $("machine").disabled = true;
   const label = $("machine").textContent;
   $("machine").textContent = "The machine is learning the song…";
   try {
-    const r = await post("/render", JSON.stringify({ lead: $("lead").value, choir: $("choir").checked }));
+    const r = await post("/render", JSON.stringify({ lead: $("lead").value, choir: $("choir").checked, weight: Number($("weight").value || 1) }));
     $("player").src = r.url;
     $("player").hidden = false;
     $("player").play();

@@ -36,6 +36,12 @@ ROOT = Path(__file__).parent.parent
 RECORDINGS = ROOT / "recordings"
 GUIDES = RECORDINGS / "guides"
 NOT_SINGERS = ("guides", "words")  # folders in recordings/ that hold no one's takes
+PEOPLE = RECORDINGS / "people.json"  # folders that are one person, each by the folder it counts as: {"milo-test-x": "milo"}
+
+
+def people() -> dict[str, str]:
+    """recordings/people.json: each folder that is the same person as another, by the folder it counts as."""
+    return json.loads(PEOPLE.read_text()) if PEOPLE.exists() else {}
 
 
 def slug(name: str) -> str:
@@ -57,11 +63,18 @@ class Take:
     guide: str | None = None  # digest of the guide score it was sung to; None: whatever the guide is now
     use: bool = True  # whether it goes into the singer's phrasing
     info: dict = field(default_factory=dict)  # everything else the sidecar says
+    weight: float = 1.0  # how much its person counts in a blend, beside others at 1 (never saved)
 
     @property
     def who(self) -> str:
         """The singer's folder name."""
         return self.path.parent.name
+
+    @property
+    def person(self) -> str:
+        """Who sang it, as a blend counts people: its folder, or the folder recordings/people.json says it is
+        the same person as (one singer who sang under several names in one round counts once)."""
+        return people().get(self.who, self.who)
 
     @property
     def rel(self) -> str:
@@ -145,6 +158,17 @@ def takes(song: str, who: str | None = None) -> list[Take]:
     return sorted(found, key=lambda t: t.path.name)
 
 
+def measured_only(song: str) -> list[Take]:
+    """The takes of a song whose audio is gone and whose measurement is kept (renders/measured/): the volunteers'
+    since September 30. They count as any take does, by what was measured."""
+    found = []
+    for side in sorted(RECORDINGS.glob(f"*/{song}-*.json")):
+        wav = side.with_suffix(".wav")
+        if side.parent != GUIDES and not wav.exists() and caches(wav)[0].exists():
+            found.append(load(wav))
+    return sorted(found, key=lambda t: t.path.name)
+
+
 def singers(song: str) -> dict[str, list[Take]]:
     """Folder name -> that singer's takes of the song."""
     out: dict[str, list[Take]] = {}
@@ -222,8 +246,12 @@ def keep_guide(song: str, score: Path) -> str:
 
 
 def guide_score(song: str, d: str | None) -> Path | None:
-    kept = GUIDES / f"{song}.{d}.score.json" if d else None
-    return kept if kept and kept.exists() else None
+    """The guide score kept under its digest: the song's own, or another song's of the same digest (the stage
+    version's genome is the song's file under another name, and its volunteers sang to the song's guides)."""
+    if not d:
+        return None
+    kept = GUIDES / f"{song}.{d}.score.json"
+    return kept if kept.exists() else next(iter(sorted(GUIDES.glob(f"*.{d}.score.json"))), None)
 
 
 def keep(song: str, singer: str, wav: bytes, score: Path, **info) -> Take:

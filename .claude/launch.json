@@ -345,6 +345,8 @@
         "python",
         "tools/recorder.py",
         "performance/genome.json",
+        "--with",
+        "h-now-its-by-you",
         "--port",
         "8841"
       ],

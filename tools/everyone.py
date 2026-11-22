@@ -39,7 +39,7 @@ def blend(genome_path: Path, genome, name: str, takes: list) -> Path:
     """A phrasing from these takes, each person counting once, kept under `name`."""
     with contextlib.redirect_stdout(io.StringIO()):
         phrasing, data, _ = T.singer_phrasing(genome_path, genome, takes)
-    data["source_detail"] = f"{len(takes)} sung takes by {len({t.who for t in takes})} singers"
+    data["source_detail"] = f"{len(takes)} sung takes by {len({t.person for t in takes})} singers"
     out = phrasing_path(Path(genome_path).stem, name)
     T.write(data, phrasing, out)
     return out
@@ -48,11 +48,11 @@ def blend(genome_path: Path, genome, name: str, takes: list) -> Path:
 def choir_blends(genome_path: Path, genome, counted: list, lead: str = "everyone", choir: int = CHOIR) -> list[Path]:
     """The choir's voices' phrasings: the singers other than the lead (everyone: all of them), round robin
     into `choir` voices; a voice whose singers never sang a whole note is skipped (a stand-in sings it)."""
-    others = sorted({t.who for t in counted} - {lead})
+    others = sorted({t.person for t in counted} - {lead})
     voices = []
     for i in range(min(choir, len(others))):
         with contextlib.suppress(ValueError):
-            voices.append(blend(genome_path, genome, f"choir.{i + 1}", [t for t in counted if t.who in others[i::choir]]))
+            voices.append(blend(genome_path, genome, f"choir.{i + 1}", [t for t in counted if t.person in others[i::choir]]))
     return voices
 
 
@@ -82,7 +82,7 @@ def main() -> None:
     if not counted:
         raise SystemExit("no takes are marked to count")
     render = render_args(genome_path, genome, counted, args.choir)
-    print(f"everyone: {len(counted)} takes by {len({t.who for t in counted})} singers -> {render[1]}")
+    print(f"everyone: {len(counted)} takes by {len({t.person for t in counted})} singers -> {render[1]}")
     for i, voice in enumerate(render[render.index("--choir-phrasing") + 1:] if "--choir-phrasing" in render else []):
         print(f"choir voice {i + 1}: {voice}")
     if args.stamp:

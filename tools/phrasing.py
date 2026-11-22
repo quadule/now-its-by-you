@@ -710,6 +710,10 @@ def measured(genome_path: Path, genome, take) -> dict:
         part = {k: v for f in reversed(about) if f.exists() for k, v in json.loads(f.read_text()).items()
                 if k in ("from_s", "to_s")}
         take = K.Take(path, "", genome_path.stem, pinned, info=part)
+    name = take.path.relative_to(ROOT).as_posix() if take.path.is_relative_to(ROOT) else take.path.as_posix().lstrip("/")
+    cache = MEASURED / (name.replace("/", "__").removesuffix(".wav") + ".json")
+    if not take.path.exists() and cache.exists():  # its audio deleted (K.measured_only): what was measured stands
+        return json.loads(cache.read_text())
     g = guide(genome_path, genome, take.guide)
     window = window_of(take, g)
     stat = take.path.stat()
@@ -719,8 +723,6 @@ def measured(genome_path: Path, genome, take) -> dict:
         if not WINDOW_MFA:
             stamp["aligner"] = None
         stamp.update(from_s=round(window[0], 4), to_s=round(window[1], 4), window=window_version())
-    name = take.path.relative_to(ROOT).as_posix() if take.path.is_relative_to(ROOT) else take.path.as_posix().lstrip("/")
-    cache = MEASURED / (name.replace("/", "__").removesuffix(".wav") + ".json")
     if cache.exists():
         data = json.loads(cache.read_text())
         if data.get("stamp") == stamp:
@@ -784,8 +786,10 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
     (outside its part of the song) isn't a sighting at all, and where the tune
     has changed a note since a take was sung, that sighting keeps its timing,
     loudness and the rest but not its tuning. Each person counts
-    once at each place in the song, however many of their takes sang it: a
-    take of the whole song sings every place, a take of one section its own.
+    once at each place in the song, however many of their takes sang it (a
+    take's weight, if it has one, times that): a take of the whole song sings
+    every place, a take of one section its own. A person is a take's
+    K.Take.person, so several folders of one person's count once.
     measurements: the takes already measured (measured()'s dicts, one for each take, in order), for takes that
     were never kept as files (webstudio/: a take sung in the web studio is measured and its audio deleted).
     Last, what the sightings are: each key's kind of note, sighting by sighting (songbird.phrasing.kind), the
@@ -795,7 +799,8 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
     seen: dict[tuple[str, int], list[P.Gesture]] = defaultdict(list)
     words: dict[tuple[str, int], list[str]] = defaultdict(list)  # who sang it to what: singer|syllable
     weights: dict[tuple[str, int], list[float]] = defaultdict(list)
-    who = [t.who if isinstance(t, K.Take) else "" for t in takes]
+    who = [t.person if isinstance(t, K.Take) else "" for t in takes]
+    weight = [t.weight if isinstance(t, K.Take) else 1.0 for t in takes]
     data = measurements if measurements is not None else [measured(genome_path, genome, take) for take in takes]
     # a note on a line a person wrote (its guide says which: guide_lines) is a sighting of that line's note, kept
     # by the line's key, never of the tune line it stands in for; its shape is the one the latest take sang it in
@@ -812,7 +817,7 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
     portrait = []
     kinds: dict[tuple[str, int], list[str | None]] = defaultdict(list)
     now, tonic = written(genome), choose_params(genome).tonic
-    for d, singer, keys, t in zip(data, who, keyed, told):
+    for d, singer, keys, t, w in zip(data, who, keyed, told, weight):
         gestures = gestures_of(d)
         sung_to = guide(genome_path, genome, d["stamp"]["guide"]).notes
         shift = transposed(genome_path, d["stamp"]["guide"])
@@ -827,7 +832,7 @@ def sightings(genome_path: Path, genome, takes, measurements: list[dict] | None 
             at = t["notes"][k][1] if t is not None else key[1]
             kinds[key].append(P.kind(list(shapes), at) if at < len(shapes) else None)
             words[key].append(f"{singer}|{(note.syllable or '').lower()}")
-            weights[key].append(1.0 / heard[(singer, key, place)])  # only takes that actually sang this place
+            weights[key].append(w / heard[(singer, key, place)])  # only takes that actually sang this place
         sung = [k for k, n in enumerate(d["notes"]) if n["gesture"] is not None]
         portrait.append((d["take"], d["lag"], d["key"], [gestures[k] for k in sung],
                          [d["notes"][k]["off"] for k in sung]))
