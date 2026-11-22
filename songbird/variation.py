@@ -929,14 +929,15 @@ def choose_form(out: dict, ctx: Context) -> None:
 
     The verse count pulls the parent's toward the machine's taste (a rich
     vocabulary tells longer stories), moved by its drift. Each optional
-    section (an intro, the turns, a break, the tag, an outro) is decided once
+    section (an intro, the turns, a break, an outro) is decided once
     for the whole form: its score is how often the parent played it (1 or 0,
     or 0.5 if the parent had no place for it) pulled toward the machine's
     habit (0.5 for a neutral voice), plus SECTION_SPAN of its drift; it plays
     above 0.5, so a lineage remembers its form and a machine's habits pull it.
     Two verses to a refrain is scored the same way against a machine that
     leans away from it, since a verse and then its refrain is the song's
-    shape: rare where the parent never did it."""
+    shape: rare where the parent never did it. The song's ending is its outro: a template's tag is never
+    chosen, and a parent's tag counts as its outro."""
     if out.get("composition", {}).get("order"):
         out["form"] = list(out["composition"]["order"])
         return  # a person's arrangement is carried; its words and other choices still evolve
@@ -980,11 +981,15 @@ def choose_form(out: dict, ctx: Context) -> None:
             name = it.tokens[0][0]
             possible[name] = possible.get(name, 0) + 1
             played[name] = played.get(name, 0) + bool(text)
+    if "tag" in possible and "outro" in possible:  # the song's ending is its outro: a parent's tag is heard as one
+        played["outro"] = max(played["outro"], played["tag"])
     habit = ctx.habit("pairs")
     pairs = plays(float(sung > 0 and paired / sung >= 0.5), 0.25 if habit is None else habit / 2, "pairs")
     decided = {name: plays(float(played[name] / n >= 0.5) if n else 0.5, ctx.habit(name),
                            name if name in DIMENSIONS else "other")
                for name, n in possible.items()}
+    if "tag" in decided:  # and no tag is chosen
+        decided["tag"] = False
 
     plan = units(genome, verses, pairs)
     present = {}

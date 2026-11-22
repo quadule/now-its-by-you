@@ -130,7 +130,7 @@
   // (docs/notes/STUDIO-CLIPS.md, "For the editor"). The view's composition.clips: the arrangement (stored, or the
   // form's own implicit one) and each clip with its lines, its instances (indexes in the sections) and what can be
   // done with it.
-  const ROLE_NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", break: "Break", bridge: "Bridge", tag: "Tag", outro: "Outro" };
+  const ROLE_NAMES = { intro: "Intro", verse: "Verse", refrain: "Refrain", turn: "Turn", break: "Break", bridge: "Bridge", tag: "Outro", outro: "Outro" };  // a tag (an older ending, sung) is an outro
   const SUNG_ROLES = ["verse", "refrain", "bridge", "tag"];
   const NEW_SECTION = { role: "verse", sung: true, bars: 8, lines: 4 };  // what + adds
   // the clip a section of the song is, and which time it comes (0 the first; a linked repeat 1, 2...)

@@ -93,10 +93,10 @@ def test_the_shape_changes_part_by_part_and_holds_as_the_day_moves():
     q = choose_params(g, None, ADA, later, overrides={"form.verses": 4, "form.intro": False})
     assert E.shape(g, q.form)["verses"] == 4 and not E.shape(g, q.form)["intro"]
     # five verses are refused, and the rest of the shape kept
-    o = E.Overrides(g, {"form.verses": 5, "form.tag": True})
+    o = E.Overrides(g, {"form.verses": 5, "form.outro": True})
     p = choose_params(g, None, ADA, DAY, overrides=o)
     assert o.problems[0]["path"] == "form.verses" and "2 to 4 verses" in o.problems[0]["why"]
-    assert E.shape(g, p.form)["tag"] and E.shape(g, p.form)["verses"] == parts["verses"]
+    assert E.shape(g, p.form)["outro"] and E.shape(g, p.form)["verses"] == parts["verses"]
     for choice in E.shapes(g, generated):
         assert choice["allowed"] == (E.form_problem(g, E.build(g, dict(parts, **{choice["part"]: choice["value"]}))) is None)
 
@@ -348,3 +348,19 @@ def test_a_persons_own_tempo_and_mode_are_free_of_the_style_and_the_songs_chords
     assert (again.params.tempo, again.params.mode) == (220.0, "dorian")  # it replays
     for mode in E.bounds(g)["mode"]["options"]:
         assert choose_params(g, None, ADA, DAY, overrides=E.Overrides(g, {"mode": mode})).mode == mode
+
+
+def test_the_ending_is_the_outro_and_a_sung_tag_is_kept_as_one():
+    """The shape offers one ending, the outro. A form that ends on a sung tag (the published one) reads as having
+    it and keeps it sung through other changes; switched off and on, the ending is an outro."""
+    seed = tuple(g.seed_params["form"])
+    assert seed[-1] == "tag" and "tag" not in E.optional(g) and "outro" in E.optional(g)
+    parts = E.shape(g, seed)
+    assert parts["outro"] and E.build(g, parts) == seed
+    assert E.build(g, dict(parts, intro=not parts["intro"]))[-1] == "tag"  # another part changed: still sung
+    off = E.build(g, dict(parts, outro=False))
+    assert "tag" not in off and "outro" not in off
+    on = E.build(g, dict(E.shape(g, off), outro=True))
+    assert on[-1] == "outro" and "tag" not in on
+    both = (*seed, "outro")
+    assert E.shape(g, both)["outro"] and E.build(g, E.shape(g, both))[-2:] == ("refrain", "outro")

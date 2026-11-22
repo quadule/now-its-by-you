@@ -192,7 +192,7 @@ def optional(genome: Genome) -> tuple[str, ...]:
     names = []
     for it in variation.items(genome):
         for name, flag in it.tokens[1:] if it.repeat else it.tokens:
-            if flag == "?" and name not in names:
+            if flag == "?" and name not in names and name != "tag":  # the tag: an outro (shape)
                 names.append(name)
     if any(it.repeat and len(it.tokens) > 1 for it in variation.items(genome)):
         names.insert(0, "pairs")
@@ -214,7 +214,9 @@ def shape(genome: Genome, form) -> dict | None:
                                for it in variation.items(genome) if it.repeat and len(it.tokens) > 1
                                for chunk in parsed.get(f"t{it.index}", "").split(f"{variation.refrain_of(genome, it)},"))
         else:
-            out[name] = name in form
+            out[name] = name in form or (name == "outro" and "tag" in form)
+    if "tag" in form and "outro" in out:  # an older form's sung tag is its outro (build): kept as sung while it's on
+        out["tag"] = "outro" not in form
     return out
 
 
@@ -224,8 +226,11 @@ def build(genome: Genome, parts: dict) -> tuple[str, ...]:
     for it in variation.items(genome):
         for name, flag in it.tokens[1:] if it.repeat else it.tokens:
             if flag == "?":
+                on = bool(parts.get(name))
+                if name in ("tag", "outro"):  # one ending, the outro, a sung tag where the form had one
+                    on = bool(parts.get("outro")) and bool(parts.get("tag")) == (name == "tag")
                 for r in range(8):
-                    present[(it.index, name, r)] = bool(parts.get(name))
+                    present[(it.index, name, r)] = on
     return variation.build(genome, int(parts["verses"]), present, bool(parts.get("bridge2")), bool(parts.get("pairs")))
 
 

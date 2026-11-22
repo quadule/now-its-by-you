@@ -129,7 +129,7 @@ PATTERNS = {"lilt": "a lilting strum", "strum": "a steady strum", "pick": "finge
 PATTERN_DETAIL = {"lilt": "the strum follows the tune's long-short-short", "strum": "a steady strum in the player's own groove",
                   "pick": "picked strings, no strumming", "air": "rolled chords and held notes, no drum"}
 SECTIONS = {"intro": "Intro", "verse": "Verse", "refrain": "Refrain", "breath": "Breath", "turn": "Turn", "break": "Break",
-            "bridge": "Bridge", "bridge2": "Bridge again", "tag": "Tag", "outro": "Outro"}
+            "bridge": "Bridge", "bridge2": "Bridge again", "tag": "Outro", "outro": "Outro"}  # a tag (an older ending, sung) is an outro
 PARTS = {"verses": "how many verses", "pairs": "verses in pairs", "intro": "an intro",
          "breath": "a breath before the refrains",
          "turn": "a turn after the refrains", "break": "a break before the bridge", "bridge2": "the bridge twice",

@@ -78,7 +78,7 @@ def test_the_lead_songs_forms(h):
             seen |= set(p.form)
             score = realize(h, p)  # every form can be sung
             assert score.part("voice")
-    assert {"intro", "turn", "tag", "outro"} <= seen
+    assert {"intro", "turn", "outro"} <= seen and "tag" not in seen  # the ending is the outro
 
 
 def test_same_machine_instant_and_parent_same_child(h):
