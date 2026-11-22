@@ -31,6 +31,14 @@ from scipy.signal import lfilter, sosfilt
 from .iir import butter
 
 LAGRANGE_ORDER = 3
+DC_CORNER = 10.0  # Hz: under the lowest string (a bass's E, 41 Hz), which keeps all but 0.3 dB of it
+
+
+def without_dc(y: np.ndarray, sr: int) -> np.ndarray:
+    """A string's sound without its DC: a one-pole DC blocker (a zero at DC, a pole just inside it) with its
+    corner at DC_CORNER, set from the rate so it is the same at any rate. A pluck leaves the string bent to one
+    side, and that offset dies away slowly; the blocker takes it out and leaves the notes."""
+    return lfilter([1.0, -1.0], [1.0, -np.exp(-2.0 * np.pi * DC_CORNER / sr)], y)
 
 
 def _lagrange(delay: float) -> np.ndarray:
@@ -195,7 +203,7 @@ def pluck(
         _touch_into(y, sr, held, freq, touch * vel, rng)
     tail = min(length, int(0.004 * sr))
     y[length - tail:] *= np.linspace(1.0, 0.0, tail)
-    return lfilter([1.0, -1.0], [1.0, -0.995], y)  # remove the pluck's DC
+    return without_dc(y, sr)
 
 
 def _attack_into(y: np.ndarray, sr: int, hardness: float, vel: float, rng: np.random.Generator) -> None:

@@ -4,11 +4,6 @@
 
 ## Read while writing a study guide to the code (November 21, 2026)
 
-- **The pluck's DC filter takes some of the bass's fundamental.** `pluck.pluck` ends with
-  `lfilter([1, -1], [1, -0.995])`, a one-pole DC blocker whose corner is fixed as a fraction of the rate: −3 dB
-  at about 35 Hz at 44.1 kHz. Every plucked part goes through it, the bass's low notes too: −2.4 dB at low E
-  (41 Hz), −1.5 dB at A (55 Hz), −0.7 dB at 82 Hz. A pole set from a corner in hertz (say 10 Hz) would keep
-  them, but it changes how the bass sounds, so it waits for the artist's ears.
 - **The take recorder allocates on the audio thread.** `web/sing/public/recorder.js` copies each block of
   about 2,048 frames (`buf.slice`) to post it to the page, roughly every 46 ms at 44.1 kHz. That is the
   ordinary way to get audio out of an AudioWorklet, and the copies are small; a ring buffer in shared memory

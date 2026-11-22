@@ -250,11 +250,12 @@ def _bowing(seconds: float = 10.0, up: float = 0.0):
     return [n for n in notes if n.start < seconds - 1.0]
 
 
-# What the bowed strings made of _bowing() before 2026-09-30 (the tree at 02384c8).
+# What the bowed strings make of _bowing(): the bowing as the tree at 02384c8 made it, the pizzicato through the
+# pluck's DC blocker at its 10 Hz corner.
 BOWED = {
-    "cello": "8ae2c85148929a492e1f925ba2e751f3cebf657a1639681af7cdb025ea5675d5",
-    "viola": "f1bf4b3c73e5248078ebb36fb1cc0925afd9d38b823b6392134ce5644f3362e0",
-    "strings": "6514f9b8a9ef6eca3849ab7c75518fbf29aee39b6c60fd12685e10af1c1cc8fb",
+    "cello": "07d77c5a2f8060273e798a9c3d21ab4cf201d816a62796d9ad87fb134d302c62",
+    "viola": "d1a362380b5fd4f8a274f0ff5c02483bae09fbaa0082adad96f231be295aac2b",
+    "strings": "8b5ec52b0604aa0d3443e9578684f1bf14e1aca3bb1b73d58a215c2c043e8463",
 }
 
 

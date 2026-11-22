@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import numpy as np
 from numba import njit
-from scipy.signal import lfilter
 
 from . import pluck as _pluck
 
@@ -203,4 +202,4 @@ def note(freq: float, dur: float, sr: int, rng: np.random.Generator, *, cents: n
         y += _pluck._touch(sr, held, length, freq, touch * vel, rng)
     tail = min(length, int(0.004 * sr))
     y[length - tail:] *= np.linspace(1.0, 0.0, tail)
-    return lfilter([1.0, -1.0], [1.0, -0.995], y)  # no DC leaves the string
+    return _pluck.without_dc(y, sr)
