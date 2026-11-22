@@ -356,3 +356,17 @@ def test_band_ride_lifts_cleanly_in_two_bar_instrumental_breaks():
     lifted = master.loudness(taps_duck["band"][brk], SR)
     unridden = master.loudness(taps_flat["band"][brk], SR)
     assert lifted - unridden > 2.0
+
+
+def test_the_leads_edge_comes_down_only_where_it_is_loud():
+    """A harmonic standing out at 2.3 kHz is turned down, the same voice with a quiet one is left as it is."""
+    t = np.arange(SR) / SR
+    body = 0.2 * np.sin(2 * np.pi * 330 * t)
+    edge = np.sin(2 * np.pi * 2310 * t)
+    loud, quiet = panned(body + 0.1 * edge, 0.0), panned(body + 0.002 * edge, 0.0)
+    y, gain = fx.unedge(loud, SR)
+    assert -6.01 <= gain.min() < -3.0
+    spectrum = lambda x: np.abs(np.fft.rfft(x[SR // 4:, 0] * np.hanning(SR - SR // 4)))
+    k = int(np.argmax(spectrum(loud)[2000:])) + 2000
+    assert 3.0 < 20 * np.log10(spectrum(loud)[k] / spectrum(y)[k]) < 6.5
+    assert np.allclose(fx.unedge(quiet, SR)[0], quiet, atol=1e-9)

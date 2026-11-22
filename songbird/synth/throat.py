@@ -1112,19 +1112,30 @@ def warp(values: np.ndarray, factor: float) -> np.ndarray:
 
 
 SHARPEN = 1.5  # how far sing() pushes a predicted envelope's formants from its trend (1 leaves it; docs/THROAT.md)
+# A sharpened peak above `from` Hz stands at most `most` dB over its trend, and keeps `keeps` of what is over:
+# the second and third formants of a front vowel are pushed 3 dB further than predicted at their sharpest (10.9 dB
+# over the trend against 7.3), and a harmonic that lands on one rings ("sing", "it's" on E4). The first formant,
+# 17 to 20 dB over its trend, is under `from` and sharpened whole.
+SHARPEN_MOST = {"from": 1500.0, "most": 4.0, "keeps": 0.25}
 
 
 def sharpen(sp: np.ndarray, amount: float, width: int = 17) -> np.ndarray:
     """A log-power envelope on the mel grid with its peaks and valleys pushed `amount` times as far
     from its own trend (a Hann over `width` grid points), each frame's power kept. A network's
-    envelope is an average, and averages flatten the formants a voice has."""
+    envelope is an average, and averages flatten the formants a voice has. Its upper peaks are held to
+    SHARPEN_MOST."""
     if abs(amount - 1.0) < 1e-6:
         return sp
     from scipy.ndimage import convolve1d
 
     k = np.hanning(width + 2)[1:-1]
     trend = convolve1d(sp, k / k.sum(), axis=1, mode="nearest")
-    out = trend + amount * (sp - trend)
+    pushed = amount * (sp - trend)
+    if SHARPEN_MOST:
+        most = SHARPEN_MOST["most"] * np.log(10.0) / 10.0  # dB of power as the envelope's natural log
+        over = (pushed > most) & (grid(sp.shape[1]) >= SHARPEN_MOST["from"])[None, :]
+        pushed = np.where(over, most + (pushed - most) * SHARPEN_MOST["keeps"], pushed)
+    out = trend + pushed
     df = np.gradient(grid(sp.shape[1]))  # Hz each point stands for
     top = sp.max(axis=1, keepdims=True)
     before = np.log(np.exp(sp - top) @ df)

@@ -327,6 +327,11 @@ VOICE_DRIVE = 0.05
 # excess taken off), before the saturation, which would harden what it leaves: the learned voice's consonant
 # bursts read as clipping (Whisper in the mix 11.4% -> 11.9% of words, within noise). None: off.
 VOICE_SOFTEN = (6.0, 0.6)
+# The lead's edge: its band around 2.3 kHz (Hz, Q) is turned down where it stands within 14 dB of the voice's
+# loud passages, by a ratio of 3 and never more than 6 dB (fx.unedge). A front vowel on a note whose harmonic
+# lands on its second formant ("sing", "tak-ing", "mak-ing" on E4 and F#4) stands 10 dB over the same band in
+# the words around it; those come down about 4 dB, a third of the singing a little, the rest not at all.
+VOICE_EDGE = (2300.0, 1.2, -14.0, 3.0, 6.0)
 # The singers rise and fall with the arrangement's energy (songbird.band: each section's, 0..1, arcing across
 # the song): LEAD_ARC[0] dB per unit of energy above ENERGY_REST, held between LEAD_ARC[1] and LEAD_ARC[2] dB and
 # smoothed over LEAD_ARC[3] s. Without it the lead comes out at REFERENCE in every sung section, whatever the band
@@ -522,6 +527,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
     def lead(x, owned):
         x = fx.equalize(x, fx.design(VOICE_EQ + _sizzle(x, sr), sr), inplace=owned)  # VOICE_EQ: a copy if not
         x = fx.deess(x, sr, inplace=True)[0]
+        if VOICE_EDGE:
+            x = fx.unedge(x, sr, *VOICE_EDGE, inplace=True)[0]
         x = _compressed(x, sr, VOICE_COMP, inplace=True)
         if VOICE_SOFTEN:
             x = fx.soften(x, sr, *VOICE_SOFTEN, inplace=True)

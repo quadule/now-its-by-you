@@ -407,3 +407,17 @@ def test_carried_d_releases_stay_gentle_without_noise_burst_spikes():
                  for t in (0.86, 1.51)
                  for i in range(int((t - 0.08) * sr), int((t + 0.06) * sr), w // 2))
     assert 20 * np.log10((peak_d + 1e-12) / (vowel_rms + 1e-12)) < -20.0
+
+
+def test_sharpening_holds_the_upper_formants_and_leaves_the_first(monkeypatch):
+    """A peak above 1.5 kHz stands no more than a little over SHARPEN_MOST's 4 dB; one under it is pushed whole."""
+    points = 60
+    f = T.grid(points)
+    lo, hi = int(np.argmin(abs(f - 500.0))), int(np.argmin(abs(f - 2300.0)))
+    sp = np.zeros((1, points))
+    sp[0, lo] = sp[0, hi] = 2.0
+    held = T.sharpen(sp, 1.5)
+    monkeypatch.setattr(T, "SHARPEN_MOST", None)
+    whole = T.sharpen(sp, 1.5)
+    assert (whole[0, hi] - held[0, hi]) * 10 / np.log(10) > 3.0
+    assert held[0, lo] - held[0, lo + 3] == pytest.approx(whole[0, lo] - whole[0, lo + 3], abs=1e-9)

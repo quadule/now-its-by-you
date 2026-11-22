@@ -563,6 +563,24 @@ def deess(x: np.ndarray, sr: int, split: float = 3500.0, excess: float = 1.0, ra
     return y.reshape(x.shape), gain
 
 
+def unedge(x: np.ndarray, sr: int, f: float = 2300.0, q: float = 1.2, excess: float = -16.0, ratio: float = 3.0,
+           most: float = 6.0, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
+    """Turn a voice's edge down where it is loudest: the band around `f` (a front vowel's second formant, where
+    a sung "sing" or "take" on a note whose harmonic lands there is piercing) is compressed on its own. Where
+    the band rises more than `excess` dB over the voice's loud passages (a negative number: it sits under them)
+    it is reduced by `ratio`, never by more than `most` dB, as a peaking cut whose depth moves (dynamic_dip).
+    Where nothing is reduced the output is the input."""
+    x2 = _stereo(x)
+    band = _biquads(x2, bandpass(f, q, sr)[None])
+    over = db(_detect_every(band, _coef(0.008, sr), STEP)) - loud_level(x2, sr) - excess
+    target = np.clip(-over * (1.0 - 1.0 / ratio), -most, 0.0)
+    rate = sr / STEP
+    gain = _ballistics(target, _coef(0.005, rate), _coef(0.08, rate))
+    out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
+    y = _apply(x2, 10.0 ** (gain / 20.0), STEP, band, out)
+    return y.reshape(x.shape), gain
+
+
 def dynamic_dip(x: np.ndarray, sr: int, f: float, q: float, depth_db: np.ndarray, inplace: bool = False) -> np.ndarray:
     """A peaking cut at f whose depth (dB, >= 0, per sample) moves: the band is
     taken out in proportion, x + (g - 1) * bandpass(x), which at g = 1 is x. inplace: written over x (when x
