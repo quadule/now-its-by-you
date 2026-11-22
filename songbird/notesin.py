@@ -28,11 +28,10 @@ from bisect import bisect_left, bisect_right
 
 from . import composition as C
 from . import midi
-from .theory import MODES, SEVENTHS, chord_bass, chord_tones, degree_semitones
+from .theory import MODES, SEVENTHS, chord_bass, chord_tones, chromatic_roots, degree_semitones
 
 MAX_TAKE = 4096  # notes in one take
 MAX_CHORD_NOTES = 20_000  # notes in a file's Chords track
-ROOTS = ("I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII")
 QUALITIES = ("", "maj", "m", "dim", "aug", "sus2", "sus4",  # the plainest first: the triads, then a fourth tone
              "7", "m7", "maj7", "m7b5", "dim7", "6", "m6", "add9", "madd9", "7sus4", "7sus2")
 
@@ -604,7 +603,7 @@ def chord_table(mode: str) -> dict:
     if mode not in _NAMED:
         table: dict = {}
         for quality_rank, quality in enumerate(QUALITIES):
-            for root in ROOTS:
+            for root in chromatic_roots(mode):
                 for bass in ("", "/3", "/5") + (("/7",) if quality in SEVENTHS else ()):
                     symbol = root + quality + bass
                     tones = frozenset(t % 12 for t in chord_tones(symbol, mode))

@@ -591,9 +591,9 @@ def key_sevenths(params) -> list[dict]:
 def chord_choices(params) -> dict:
     """What the chord card offers in this key: the chords of the key (a numeral each, with its name), its seventh
     chords, and every root a chord can have (the twelve numerals, each with its note)."""
-    from .theory import root_name
+    from .theory import chromatic_roots, root_name
 
-    roots = ["I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII"]
+    roots = chromatic_roots(params.mode)
     diatonic = []
     for numeral in ("I", "II", "III", "IV", "V", "VI", "VII"):
         name = chord_name(numeral, params.tonic, params.mode)

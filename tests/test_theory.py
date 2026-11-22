@@ -1,6 +1,6 @@
 import pytest
 
-from songbird.theory import chord_tones, degree_semitones, harmony, parse_chord
+from songbird.theory import MODES, chord_tones, chromatic_roots, degree_semitones, harmony, parse_chord
 
 
 def test_degrees_wrap_octaves():
@@ -46,3 +46,12 @@ def test_a_choir_voice_led_from_where_it_was_holds_what_the_next_chord_shares():
     # takes the fifth above the floor, not the note the low voice has (F#) and not a root it can't sing
     assert harmony(57, "I", d, "ionian", 2, previous=38) == 57
     assert harmony(57, "I", d, "ionian", 0) == 54
+
+
+def test_every_mode_offers_each_of_the_twelve_roots_once():
+    for mode in MODES:
+        roots = chromatic_roots(mode)
+        assert sorted(chord_tones(r + "maj", mode)[0] % 12 for r in roots) == list(range(12)), mode
+        assert all(r in roots for r in ("I", "II", "III", "IV", "V", "VI", "VII")), mode  # the mode's own, plain
+    assert chromatic_roots("ionian") == ("I", "bII", "II", "bIII", "III", "IV", "#IV", "V", "bVI", "VI", "bVII", "VII")
+    assert chromatic_roots("aeolian")[10:] == ("VII", "#VII")  # in A minor G, then the leading tone G#

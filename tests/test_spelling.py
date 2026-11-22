@@ -82,4 +82,5 @@ def test_the_page_is_given_the_keys_names_with_the_composition():
     view = C.view(G, params, None)
     assert view["names"][8] == "G♯" and view["names"][3] == "D♯"
     roots = {r["numeral"]: r["note"] for r in C.chord_choices(params)["roots"]}
-    assert roots["V"] == "G♯" and roots["II"] == "D♯" and roots["bVII"] == "B♭"
+    assert roots["V"] == "G♯" and roots["II"] == "D♯" and roots["VII"] == "B" and roots["#VII"] == "B♯"
+    assert len(roots) == 12 and "bVII" not in roots  # the minor key's seventh is its own VII, not a borrowed one

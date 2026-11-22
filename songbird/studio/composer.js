@@ -1011,6 +1011,12 @@
     if (!m || !NUMERALS[m[2].toLowerCase()]) return null;
     return { root: m[1] + m[2].toUpperCase(), accidental: m[1], degree: NUMERALS[m[2].toLowerCase()], quality: m[3] || "", bass: Number(m[4] || 1) };
   }
+  // The key's twelve roots, and a root the chord already has that is written another way (a song's bVII in a minor
+  // key, the list's #VI), so the menu shows the chord as it is
+  function rootOptions(roots, root) {
+    const options = roots.map((r) => [r.numeral, `${r.numeral} · ${r.note}`]);
+    return roots.some((r) => r.numeral === root) ? options : [[root, root], ...options];
+  }
   function chordSymbol(parts) {
     const bass = parts.bass === 7 && !WITH_SEVENTH.has(parts.quality) ? 1 : parts.bass; // no seventh: no seventh below
     return `${parts.root}${parts.quality || ""}${bass && bass !== 1 ? `/${bass}` : ""}`;
@@ -1111,7 +1117,7 @@
           choices.sevenths.map((d) => button(d.name, () => setChord(d.symbol), { class: `sbc-button${d.symbol.toUpperCase() === h.symbol.toUpperCase() ? " is-on" : ""}`,
             title: `${d.symbol}: ${d.name}`, "aria-pressed": d.symbol.toUpperCase() === h.symbol.toUpperCase() ? "true" : "false" })))) : null,
       el("div", { class: "sbc-chord-row" },
-        select("Root", parts.root, choices.roots.map((r) => [r.numeral, `${r.numeral} · ${r.note}`]), (value) => setChord(chordSymbol({ ...parts, root: value })), { id: "sbc-chord-root" }),
+        select("Root", parts.root, rootOptions(choices.roots, parts.root), (value) => setChord(chordSymbol({ ...parts, root: value })), { id: "sbc-chord-root" }),
         select("Quality", parts.quality, choices.qualities, (value) => setChord(chordSymbol({ ...parts, quality: value })), { id: "sbc-chord-quality" }),
         select("Bass", parts.bass, choices.basses.filter(([b]) => b !== 7 || WITH_SEVENTH.has(parts.quality)), (value) => setChord(chordSymbol({ ...parts, bass: Number(value) })), { id: "sbc-chord-bass" }),
         select("Chords in this bar", p.chords[h.bar].length, counts.map((n) => [n, String(n)]), (value) => setChordsInBar(Number(value)), { id: "sbc-chord-count" }),

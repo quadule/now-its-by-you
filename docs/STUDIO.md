@@ -691,8 +691,10 @@ A change on a weak beat is written with repeats (`I I I V`), which the band
 plays as a new strike of the same chord. A pickup sings over its line's first
 chord. Each chord is:
 
-- a **root**, as a function of the key: I, bII, II, bIII, III, IV, #IV, V,
-  bVI, VI, bVII, VII (so the chords move with a key change);
+- a **root**, as a function of the key, one of twelve: the mode's own seven degrees and the five between, a
+  sharp or flat on the mode's own degree (in major I, bII, II, bIII, III, IV, #IV, V, bVI, VI, bVII, VII; in
+  minor III, VI and VII are the mode's own, and #III, #VI and #VII the notes above them), so the chords move with
+  a key change;
 - a **quality**: as the key has it (the default, which follows a mode
   change), or a fixed one, kept whatever the mode: major, minor, diminished,
   augmented, sus2, sus4, or a lead sheet's four-tone chord ("Sevenths, sixths

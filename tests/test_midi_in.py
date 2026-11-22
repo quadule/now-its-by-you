@@ -222,6 +222,7 @@ def test_a_chord_is_named_as_the_grammar_writes_it():
     assert name([62, 66, 69]) == "I" and name([59, 62, 66]) == "vi" and name([66, 69, 74]) == "I/3"
     assert name([57, 61, 64]) == "V" and name([60, 64, 67]) == "bVII"  # A; C, borrowed
     assert name([57, 61, 64], "aeolian") == "Vmaj"  # a dominant in a minor song
+    assert name([61, 64, 67], "aeolian") == "#VIIdim"  # C# E G in D minor: on the leading tone, which a minor key has to raise
     assert name([62, 64, 69]) == "Isus2" and name([57, 62, 64]) == "Vsus4"
     # four notes: a seventh, a sixth, an added ninth, the seventh in the bass; the root in the bass named first
     assert name([62, 66, 69, 72]) == "I7" and name([61, 62, 66, 69]) == "Imaj7/7" and name([62, 66, 69, 73]) == "Imaj7"

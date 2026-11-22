@@ -95,10 +95,31 @@ def chord_tones(symbol: str, mode: str) -> tuple[int, ...]:
     )
 
 
+# the degree whose letter a major key writes each semitone above the tonic on: I, bII, II, bIII, III, IV, #IV...
+_MAJOR_DEGREES = (1, 2, 2, 3, 3, 4, 4, 5, 6, 6, 7, 7)
+_NUMERALS = ("I", "II", "III", "IV", "V", "VI", "VII")
+
+
+@lru_cache(maxsize=16)
+def chromatic_roots(mode: str) -> tuple[str, ...]:
+    """A numeral for each of the twelve roots a chord can have, a semitone apart from the tonic up. A numeral's
+    sharp or flat moves the mode's own degree (chord_tones), so each root is the mode's own degree where it is one,
+    and otherwise keeps the letter a major key gives it, with whatever sign puts that letter on it in this mode:
+    in a minor key the third, sixth and seventh are III, VI and VII, and the semitones above them #III, #VI and
+    #VII (in A minor C, F, G and C♯, F♯, G♯)."""
+    out = []
+    for pc, degree in enumerate(_MAJOR_DEGREES):
+        if pc in MODES[mode]:  # the mode's own degree is plain, wherever a major key puts it (Locrian's V on E♭)
+            degree = MODES[mode].index(pc) + 1
+        alter = pc - degree_semitones(degree, mode)
+        out.append({-1: "b", 0: "", 1: "#"}[alter] + _NUMERALS[degree - 1])
+    return tuple(out)
+
+
 NOTE_NAMES = ("C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B")  # a tonic's name, out of any key
 
 # Spelling in a key (its signature): each degree of the scale on its own letter, so C♯ minor has G♯ and D♯, not
-# A♭ and E♭, and a chord's root is spelt by its numeral's degree (bVII in C♯ minor is B, in C major B♭).
+# A♭ and E♭, and a chord's root is spelt by its numeral's degree (VII in C♯ minor is B, bVII in C major B♭).
 LETTERS = "CDEFGAB"
 _NATURAL = (0, 2, 4, 5, 7, 9, 11)
 _SIGN = {-2: "𝄫", -1: "♭", 0: "", 1: "♯", 2: "𝄪"}
