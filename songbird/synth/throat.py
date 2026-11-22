@@ -1439,7 +1439,7 @@ def articulate(y: np.ndarray, segs: list, sr: int, voice, rng: np.random.Generat
 # A real voice is part noise at the top: in the natural reference's vowels the aperiodicity runs 0.32 to 0.65 from
 # 2 to 8 kHz, the throat's 0.18 to 0.48, and its harmonics stand as clean lines to 10 kHz (a buzz heard as
 # robotic). voice.air sets a floor the aperiodicity never falls under, rising from AIR_FROM to AIR_TO Hz.
-AIR_FROM, AIR_TO = 2500.0, 8000.0
+AIR_FROM, AIR_TO = 3500.0, 8000.0
 
 
 def air_floor(air: float, points: int) -> np.ndarray:

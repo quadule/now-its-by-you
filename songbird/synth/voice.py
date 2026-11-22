@@ -87,7 +87,7 @@ class VoiceParams:
     focus: float = 1.0  # dB more on a word the lyric marks as its line's focus (*word*), most on its stressed syllable (2 cost words)
     reduce: float = 0.0  # how far a little word's vowel off the beat moves toward "uh" (0.3 cost the words: WER 15% -> 18%)
     mouth: float = 1.0  # cm radius of the mouth opening: small keeps the upper resonances ringing
-    air: float = 0.4  # the top of the voice part breath: the learned throat's aperiodicity floor, rising from 2.5 kHz to this at 8 kHz (throat.air_floor; at 0 the harmonics stand as clean lines to 10 kHz, a buzz); for the formant singer, noise above 3.5 kHz pulsing with the voicing
+    air: float = 0.28  # the top of the voice part breath: the learned throat's aperiodicity floor, rising from 3.5 kHz to this at 8 kHz (throat.air_floor; at 0 the harmonics stand as clean lines to 10 kHz, a buzz); for the formant singer, noise above 3.5 kHz pulsing with the voicing
     crisp: float = 0.6  # the learned throat's consonants sharpened: its stops given their closure and release, weak fricatives their hiss, coda nasals lifted (throat.articulate; 0 leaves the throat's own, which loses the ends of words; 1 reads as clipping, 0.6 with the mix's transient softener chosen by ear)
     linked: float = 1.0  # the learned throat sings a stop that runs straight into the next word its own way, not as a phrase's last (throat.T_LINKED, D_LINKED; 0: every stop alike)
     engine: str = "learned"  # "learned" (songbird.synth.throat, the default), "formant" (Klatt cascade) or "tube" (waveguide, experimental)

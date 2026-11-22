@@ -167,7 +167,8 @@ class Strip:
 ROLES: dict[str, Strip] = {
     # A plucked lute or cittern, doubling the tune under the words: boxiness and the voice's range cleared,
     # and it steps back while the voice sings the same notes.
-    "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2800, -2.0, 0.9)), drive=0.1, duck=3.0),
+    "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2600, -3.0, 0.85), ("high", 7000, -1.5)),
+                  drive=0.1, duck=3.0),
     # A banjo comping (rolls, clawhammer): nothing under its lowest string, 1 dB of its ring out where the voice's
     # consonants are (the band's own dip does the rest while the voice sings), a compressor slow to grab and
     # leaning only on what stands 5 dB out of its bar, so the picks keep their edge and a roll its accents;
@@ -184,14 +185,15 @@ ROLES: dict[str, Strip] = {
     # Round and even: sub-fundamental kept down to low D1/E1, mud out, no string noise, saturated so small speakers hear its pitch.
     "bass": Strip(eq=(("hp", 30, 2), ("low", 95, 2.5), ("peak", 380, -2.5, 0.8), ("lp", 3000)),
                   comp=(10.0, 3.0, 0.01, 0.15, 1.5, 3.0), drive=0.35, send=0.25),
-    "fiddle": Strip(eq=(("hp", 180), ("peak", 2500, -2.5, 1.0), ("high", 8000, -1.0)),
-                    comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=2.0),
+    # Tame the violin body's +7 dB bridge hill (2.6 kHz) and bow glare so it sits warmly behind the voice.
+    "fiddle": Strip(eq=(("hp", 180), ("peak", 2600, -5.0, 0.85), ("high", 5500, -2.5)),
+                    comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=3.0),
     "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
     "drum": Strip(eq=(("hp", 35), ("low", 120, 1.5), ("peak", 420, -2.0, 1.0), ("high", 5500, -4.5)), trim=2.5,
                   comp=(12.0, 2.5, 0.01, 0.14, 1.0, 4.0), send=0.55),
-    # A drum machine (808/909): deep kick kept down to 28 Hz, hats untouched, slower attack so punch lands, less room.
-    "drummachine": Strip(eq=(("hp", 28), ("peak", 380, -1.5, 1.0)), comp=(12.0, 2.5, 0.015, 0.15, 1.0, 4.0),
-                         drive=0.05, send=0.4),
+    # A drum machine (808/909): deep kick kept down to 28 Hz, harsh 5.5 kHz hat/snare bite eased while keeping top air, slower attack so punch lands, less room.
+    "drummachine": Strip(eq=(("hp", 28), ("peak", 380, -1.5, 1.0), ("peak", 5500, -2.0, 0.9)),
+                         comp=(12.0, 2.5, 0.015, 0.15, 1.0, 4.0), drive=0.05, send=0.4),
     # A drum kit: the kick's 50 Hz kept, boxiness out, the cymbals' air left alone, a compressor slower to grab
     # than the frame drum's (a kit's transients are its point), half the band's room.
     "kit": Strip(eq=(("hp", 30), ("peak", 420, -2.0, 1.0)), comp=(12.0, 3.0, 0.02, 0.15, 1.0, 4.0), send=0.5),
@@ -216,8 +218,8 @@ ROLES: dict[str, Strip] = {
     # cut for boxiness at the B1 pair's boom (190 Hz), not in the cello's formant above it (250-500 Hz).
     "strings": Strip(eq=(("hp", 45), ("peak", 190, -1.5, 1.0), ("peak", 2500, -2.0, 1.0), ("high", 8000, -1.0)),
                      comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3),
-    # Synths: an arpeggio or a lead line, cleared around the voice.
-    "synth": Strip(eq=(("hp", 80), ("peak", 2800, -2.0, 0.9)), send=0.9, duck=1.5),
+    # Synths: an arpeggio or a lead line, cleared smoothly around the voice's presence and top.
+    "synth": Strip(eq=(("hp", 80), ("peak", 2600, -3.0, 0.85), ("high", 6000, -2.0)), send=0.9, duck=2.0),
     # A pedal steel: its low strings kept (B2 is 123 Hz, its warmth below 250), the voice's presence cleared, a
     # generous send; no compressor and no duck, since its own volume pedal swells it in and out under the voice.
     "steel": Strip(eq=(("hp", 70), ("peak", 2600, -2.0, 0.9), ("high", 8000, -1.0)), send=1.2),
@@ -281,9 +283,9 @@ def role_of(name: str) -> str:
 
 
 # The voice and choir, in the same terms as the band's roles.
-# Boxiness (420 Hz), honk (900 Hz), front-vowel harshness (2.3 kHz), and vocoder upper-band grain (7.5 kHz) eased.
-VOICE_EQ = (("hp", 80), ("peak", 420, -1.5, 1.1), ("peak", 900, -2.0, 1.2), ("peak", 2300, -1.8, 1.4),
-            ("high", 7500, -1.5))
+# Boxiness (420 Hz), honk (900 Hz), front-vowel edge (2.4 kHz), and vocoder upper-band grain (6.5 kHz) eased.
+VOICE_EQ = (("hp", 80), ("peak", 420, -1.5, 1.1), ("peak", 900, -2.0, 1.2), ("peak", 2400, -2.2, 1.0),
+            ("high", 6500, -2.0))
 # The voice's air (7-14 kHz) against its body (0.5-2 kHz): natural singers (SoulX-Singer renders of our score)
 # measure -21 to -23 dB. A voice brighter than AIR is brought half way back, never by more than 3 dB.
 AIR = -20.0
@@ -291,7 +293,7 @@ AIR = -20.0
 # With a ride, the threshold is `above` dB over the level of the surrounding `ride` seconds (never under the
 # floor): a syllable is evened against its phrase, a strum against its bar, but a quiet verse stays quiet.
 VOICE_COMP = (10.0, 2.0, 0.015, 0.2, 3.0, 3.0)  # only the syllables that stand out of their phrase are leaned on
-CHOIR_EQ = (("hp", 120), ("low", 260, -2.0), ("peak", 3000, -2.5, 0.8), ("high", 9000, -2.0))
+CHOIR_EQ = (("hp", 120), ("low", 260, -2.0), ("peak", 2500, -3.0, 0.8), ("high", 7500, -2.5))
 CHOIR_COMP = (6.0, 2.0, 0.03, 0.3, 0.0, 0.0)
 PEAKS = 3.0  # dB over its loud peaks a choir's, drum's or the room's onset may reach before a peak stage rounds it off
 CHOIR_UNDER = 4.0  # dB the choir as a whole sits under the lead
@@ -312,7 +314,7 @@ RIDE = (3.0, 1.0, 1.3, 0.25)  # dB the band comes up where the voice rests; min-
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
 CARVE_DEPTH = 6.0  # dB at full voice
-BAND_EQ = (("low", 140, 2.5), ("peak", 480, -2.0, 0.9), ("high", 10000, 1.5))  # deeper warmth, cleaner lower-mid pocket, subtle acoustic air
+BAND_EQ = (("low", 140, 2.5), ("peak", 480, -2.0, 0.9), ("high", 10000, 0.5))  # deeper warmth, cleaner lower-mid pocket, gentle acoustic air
 BAND_COMP = (10.0, 1.5, 0.02, 0.2, 2.0, 3.0)  # the band together, lightly: its arc from sparse verses to full refrains is kept
 GLUE = (10.0, 1.75, 0.035, 0.25, 3.0, 1.5)  # musical bus glue (~1-1.5 dB on loud refrains), keeping quiet verses and the song's arc
 REFERENCE = -20.0  # LUFS the voice is brought to before the balance is set
