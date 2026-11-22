@@ -1,0 +1,12 @@
+{
+ "song": "genome",
+ "about": "The stage version (performance/README.md), sung as its record has it.",
+ "sets": [
+  {
+   "id": "stage",
+   "name": "The stage version",
+   "about": "The song as it will be performed, in A major, with a breath before each refrain",
+   "record": "performance/record-final-A.json"
+  }
+ ]
+}

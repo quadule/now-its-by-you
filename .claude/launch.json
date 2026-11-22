@@ -336,6 +336,20 @@
       ],
       "port": 8790,
       "url": "http://127.0.0.1:8790"
+    },
+    {
+      "name": "recorder-stage",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "tools/recorder.py",
+        "performance/genome.json",
+        "--port",
+        "8841"
+      ],
+      "port": 8841,
+      "url": "http://127.0.0.1:8841"
     }
   ]
 }

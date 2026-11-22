@@ -180,7 +180,8 @@ class Recorder(BaseHTTPRequestHandler):
             self.send(SCRIPTS[self.path].read_bytes(), "text/javascript; charset=utf-8")
         elif self.path == "/variants":
             offered = M.variants(self.genome_path)
-            if SLOWER in offered["tempos"]:  # a singer starts a little slower than written: easier to learn
+            # a singer starts a little slower than written: easier to learn (a rendition's set, as it is performed)
+            if SLOWER in offered["tempos"] and not M.sets(self.genome_path)[0].get("record"):
                 offered["default"] = {**offered["default"], "tempo": SLOWER}
             self.send_json(offered)
         elif self.path == "/guide.wav" and "spec" in query:

@@ -283,6 +283,8 @@ def sets(genome_path: Path, genome=None) -> list[dict]:
     for s in data.get("sets") or []:
         if not SET_ID.match(str(s.get("id", ""))):
             raise ValueError(f"{path.name}: a set's id is 1 to 8 lowercase letters and digits, not {s.get('id')!r}")
+        if s.get("record") and not s.get("form"):  # a rendition's own form (recorded())
+            s = {**s, "form": list(json.loads((ROOT / s["record"]).read_text())["params"]["form"])}
         if not s.get("form"):
             from songbird import genome as G
             from songbird.realize import choose_params
@@ -290,7 +292,8 @@ def sets(genome_path: Path, genome=None) -> list[dict]:
             genome = genome if genome is not None else G.load(genome_path)
             s = {**s, "form": list(choose_params(genome).form)}
         out.append({"id": s["id"], "name": s.get("name") or f"Set {s['id'].upper()}", "about": s.get("about", ""),
-                    "form": [str(name) for name in s["form"]], "words": s.get("words") or None})
+                    "form": [str(name) for name in s["form"]], "words": s.get("words") or None,
+                    **({"record": str(s["record"])} if s.get("record") else {})})
     ids = [s["id"] for s in out]
     if not ids or len(set(ids)) != len(ids):
         raise ValueError(f"{path.name}: {'no sets' if not ids else 'two sets with one id'}")
@@ -328,6 +331,25 @@ def arrangement(genome, form) -> tuple[str, ...]:
     return tuple(out)
 
 
+def recorded(genome, chosen: dict, spec: Spec):
+    """A set that is a rendition (its "record": a record's path from the repository's root, the stage version's):
+    the score as the record sings it, its own words, form, singer, band and stage plan, as `songbird render
+    --replay` lays it, the key moved and the tempo scaled; with its parameters and the record."""
+    from songbird import pack, phrasing as phrasing_mod, stage
+    from songbird.arrange import Lyrics
+    from songbird.realize import Params
+
+    record = pack.read_record(ROOT / chosen["record"])
+    params = Params.from_dict(record["params"])
+    params = replace(params, singer=record.get("singer") or params.singer, mix=record.get("mix") or params.mix,
+                     tempo=params.tempo * spec.tempo / 100.0, tonic=params.tonic + spec.key)
+    lyrics = Lyrics.from_dict(record["lyrics"]) if record.get("lyrics") else None
+    phrasing_json, choir_json = phrasing_mod.inherited(genome.source, record)
+    phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
+    choir = [phrasing_mod.from_json(d) for d in choir_json]
+    return stage.laid(genome, params, phrasing=phrasing, choir=choir, lyrics=lyrics), params, record
+
+
 def realized(genome, chosen: dict, spec: Spec) -> dict:
     """A spec's score as its file keeps it (write_guide's, plus "spec"): the seed's rendition, no
     variants drawn, in the singer's arrangement of the set's form, the key moved and the tempo
@@ -335,6 +357,11 @@ def realized(genome, chosen: dict, spec: Spec) -> dict:
     from songbird import arrange
     from songbird.realize import choose_params, realize, timeline
 
+    if chosen.get("record"):  # a rendition as its record sings it, in its own arrangement
+        score, params, _ = recorded(genome, chosen, spec)
+        beats = [[t, int(bar)] for t, bar in timeline(genome, params).beats()]
+        return {**score.to_dict(), "tempo": params.tempo, "seed": params.seed, "transpose": spec.key, "beats": beats,
+                "spec": spec.to_dict(), "record": chosen["record"]}
     seed = choose_params(genome)
     form = arrangement(genome, chosen["form"])
     params = replace(seed, form=form, tempo=seed.tempo * spec.tempo / 100.0, tonic=seed.tonic + spec.key, variants=())
@@ -381,6 +408,8 @@ def _inputs(genome_path: Path, chosen: dict, spec: Spec) -> str:
     the key and speed, and the code that arranges and realizes it."""
     h = hashlib.sha256(Path(genome_path).read_bytes())
     h.update(json.dumps({"form": chosen["form"], "words": chosen.get("words"), "spec": spec.id}, sort_keys=True).encode())
+    if chosen.get("record"):
+        h.update((ROOT / chosen["record"]).read_bytes())
     h.update(arranging().encode())
     return h.hexdigest()[:12]
 
@@ -446,7 +475,8 @@ def ensure_spec(genome_path: Path, spec, mix: str = DEFAULT, stems: bool = False
         wanted = [*MIXES, *(STEMS if stems else ())]
         if (rebuild or {k: made.get(k) for k in stamp} != stamp or (stems and not made.get("stems"))
                 or not all(spec_path(stem, spec, p).exists() for p in wanted)):
-            write_spec(score, stem, spec.id, stems=stems or bool(made.get("stems")) and not rebuild, phrasing=phrasing)
+            write_spec(score, stem, spec.id, stems=stems or bool(made.get("stems")) and not rebuild, phrasing=phrasing,
+                       genome_path=genome_path)
             note = {**_read(note_path), "audio": {**stamp, "stems": stems or bool(made.get("stems")) and not rebuild}}
             _write(note_path, json.dumps(note) + "\n")
         return Mix(out, score, digest)
@@ -464,7 +494,8 @@ def stems(genome_path: Path, spec, phrasing: Path | None = None) -> tuple[Path, 
     return band.wav, spec_path(Path(genome_path).stem, spec, "lead"), band.score
 
 
-def write_spec(score_path: Path, stem: str, spec: str, stems: bool = False, phrasing: Path | None = None) -> None:
+def write_spec(score_path: Path, stem: str, spec: str, stems: bool = False, phrasing: Path | None = None,
+               genome_path: Path | None = None) -> None:
     """Render a spec's guides from its score: full, melody and voice, mastered, as 16-bit WAVs;
     with stems, the band and the lead, unmastered, as float WAVs (split()). Each file whole or
     not at all."""
@@ -473,12 +504,36 @@ def write_spec(score_path: Path, stem: str, spec: str, stems: bool = False, phra
 
     score, data = load_score(score_path)
     seed, sr = int(data.get("seed", 0)), synth.SR
+    beats = [(float(t), bool(b)) for t, b in data["beats"]]
+    if data.get("record"):  # a rendition (recorded()): the full guide is the rendition itself, as its record mixes it
+        from songbird import cli, genome as G
+
+        if stems:
+            raise ValueError("a rendition's set has no band and lead stems")
+        genome = G.load(genome_path)
+        live, params, record = recorded(genome, find_set(genome_path, Spec.parse(spec).set, genome), Spec.parse(spec))
+        singer = cli._singer(params, [])
+        mixed = mixing.MixParams.from_dict(params.mix or {})
+        _, ancestors = cli.choir_of(cli.parent_of(record), singer)
+        heard: dict = {}
+
+        def keep(name, stem_) -> None:
+            if name == "voice":
+                heard[name] = stem_.copy()
+        full = master.master(synth.render(live, seed=params.seed, voice=singer, mix_params=mixed, ancestors=ancestors,
+                                          kept=keep), sr, target=float(getattr(params, "loudness", master.TARGET_LUFS)))
+        voice = master.master(mixing.mix(heard, sr, seed, mixed), sr) if heard else np.zeros((1, 2))
+        for mix, x in (("full", full), ("voice", voice),
+                       ("melody", master.master(render_melody(score, beats, sr, seed), sr))):
+            _write_wav(spec_path(stem, spec, mix), master.to_pcm16(x, seed=seed), sr, "PCM_16")
+        for name in STEMS:
+            spec_path(stem, spec, name).unlink(missing_ok=True)
+        return
     parts = synth.render_stems(phrased(score, data, phrasing) if phrasing else score, sr, seed)
     taps: dict = {}
     full = mixing.mix(parts, sr, seed, taps=taps)
     alone: dict = {}
     voice = mixing.mix({"voice": parts["voice"]}, sr, seed, taps=alone) if "voice" in parts else np.zeros((1, 2))
-    beats = [(float(t), bool(b)) for t, b in data["beats"]]
     for mix, x in (("full", full), ("voice", voice), ("melody", render_melody(score, beats, sr, seed))):
         _write_wav(spec_path(stem, spec, mix), master.to_pcm16(master.master(x, sr), seed=seed), sr, "PCM_16")
     if stems:
