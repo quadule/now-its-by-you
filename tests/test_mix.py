@@ -355,4 +355,4 @@ def test_band_ride_lifts_cleanly_in_two_bar_instrumental_breaks():
     brk = slice(int(4.5 * SR), int(8.5 * SR))
     lifted = master.loudness(taps_duck["band"][brk], SR)
     unridden = master.loudness(taps_flat["band"][brk], SR)
-    assert lifted - unridden > 3.0
+    assert lifted - unridden > 2.0

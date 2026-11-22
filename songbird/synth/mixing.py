@@ -306,7 +306,7 @@ PLATE_RT60 = 1.5
 RETURN_EQ = (("hp", 180), ("lp", 11000))  # clean low end and smooth top so room tails never muddy the chords or splash sibilants
 RETURN_DIP = 3.0  # dB the room and plate give way while the voice sings
 MAKE_WAY = (0.02, 0.9)  # s the band and room take to make way for the voice (quick: its first consonants), and to come back after it (slow: no breathing)
-RIDE = (5.0, 0.8, 0.6, 0.18)  # dB the band comes up where the voice rests; min-rest s, fade s, quick vocal-release s
+RIDE = (3.0, 1.0, 1.3, 0.25)  # dB the band comes up where the voice rests; min-rest s, smooth fade s, quick vocal-release s
 
 CARVE = (2600.0, 0.7)  # the band's dip for the voice: centre Hz, Q
 CARVE_DEPTH = 6.0  # dB at full voice
