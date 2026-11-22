@@ -357,6 +357,11 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .sbc-button.is-on { border-color: var(--ink); background: var(--wash); font-weight: 600; }
 .sbc-button.sbc-quiet { border-color: transparent; background: transparent; color: var(--ink-2); }
 .sbc-button-group { display: flex; gap: 5px; flex-wrap: wrap; }
+.sbc-phrase-actions, .inspector .sbc-phrase-actions { position: relative; border: 0; margin: 0; padding: 0; }
+.sbc-phrase-actions > summary, .inspector .sbc-phrase-actions > summary { cursor: pointer; margin: 0; color: var(--ink); font-size: 12px; }
+.sbc-phrase-actions > summary::marker { content: ""; }
+.sbc-phrase-actions > summary::after { content: "\25BE"; color: var(--ink-3); }
+.sbc-phrase-actions > .sbc-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--card); border: 1px solid var(--rule-strong); border-radius: var(--radius); box-shadow: 0 6px 18px rgb(0 0 0 / 0.3); }
 /* a line with its own count: its words, written for its notes (docs/notes/OWN-COUNT-LINES.md) */
 .sbc-own { grid-column: 1 / -1; display: grid; gap: 5px; padding: 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--card); }
 .sbc-own-words { font-size: 13px; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--card); color: var(--ink); padding: 4px 6px; width: 100%; box-sizing: border-box; }

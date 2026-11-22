@@ -445,7 +445,9 @@
       button("Paste notes", () => pasteNotes(), { disabled: !clipboard, title: "Paste (Ctrl+V)" }),
       button("Quantize", quantize, { title: "Put the selected notes, or the phrase, on the snap" }),
       button("Write line", writeLine, { disabled: !p?.own_path || !!state.draft }),
-      el("details", { class: "sbc-phrase-actions" }, el("summary", {}, "Phrase"),
+      // a menu over the page, so opening it moves nothing beside it; a choice closes it
+      el("details", { class: "sbc-phrase-actions", onclick: (e) => { if (e.target.closest("button")) e.currentTarget.open = false; } },
+        el("summary", { class: "sbc-button" }, "Phrase"), el("div", { class: "sbc-menu" },
         button("Copy phrase", () => {
           if (state.draft) { bridge().toast?.("Apply or cancel this line's draft before copying the phrase."); return; }
           phraseClipboard = JSON.parse(JSON.stringify(p)); paint(); bridge().toast?.("Phrase copied: words, melody, chords and custom instrumental notes.");
@@ -455,7 +457,7 @@
             if (state.draft) throw new Error("Apply or cancel this line's draft before pasting.");
             await bridge().applyPatch(window.SongbirdModel.phrasePatch(phraseClipboard, p), "Paste phrase");
           } catch (error) { bridge().toast?.(error.message); }
-        }, { disabled: !phraseClipboard })));
+        }, { disabled: !phraseClipboard }))));
   }
   function joinNote() {
     const p = phrase(), i = state.note, n = note();

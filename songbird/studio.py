@@ -756,6 +756,10 @@ class Studio:
         """The version's own title (a person's, else its parent's), or None when it goes by the song's."""
         return explain.version_name_of(self.context, v)
 
+    def title_of(self, v: explain.Version) -> str:
+        """What the version is called: its own title, else the song's."""
+        return self.name_of(v) or self.genome.title
+
     def key(self, v: explain.Version, section: int | None) -> str:
         """What a render depends on, hashed: the same rendition and section are made once."""
         choir = v.choir_phrasings
@@ -774,6 +778,8 @@ class Studio:
         _, base, keys = kcache
         if section not in keys:
             material = {**base, "section": section, "marks": v.marks if section is None else None}
+            if section is None and self.name_of(v):  # the whole song's record and tags carry its title
+                material["name"] = self.name_of(v)
             keys[section] = hashlib.sha256(json.dumps(material, sort_keys=True, default=str).encode()).hexdigest()[:24]
         return keys[section]
 
@@ -1018,7 +1024,7 @@ class Studio:
     # ------------------------------------------------------------ exporting for musicians
 
     def export_name(self, v: explain.Version, suffix: str) -> str:
-        return f"{slug(self.genome.title)}.{self.day}.{self.key(v, None)[:6]}{suffix}"
+        return f"{slug(self.title_of(v))}.{self.day}.{self.key(v, None)[:6]}{suffix}"
 
     def export(self, edits: dict, what: str, by: tuple[str, str] | None = None) -> dict:
         """Files for a musician's own tools, of the version as the page has it: "midi", every part as MIDI
@@ -1030,7 +1036,7 @@ class Studio:
         if what == "midi":
             path = self.cache / f"{key}.mid"
             if not path.exists():
-                data, _ = midi.from_score(self.genome, v.params, self._score(v), title=self.genome.title, lyrics=v.lyrics)
+                data, _ = midi.from_score(self.genome, v.params, self._score(v), title=self.title_of(v), lyrics=v.lyrics)
                 path.write_bytes(data)
             return {"state": "done", "progress": 1.0,
                     "url": f"/export/{key}.mid?name={self.export_name(v, '.mid')}", "label": "the MIDI file"}
@@ -1057,7 +1063,7 @@ class Studio:
 
     def recording_name(self, record: dict) -> str:
         """A recording's file name without its extension, as Record it names it (_keep)."""
-        return f"{slug(self.genome.title)}.{(record.get('rendered_at') or self.day)[:10]}.{record['id'][:6]}"
+        return f"{slug(record.get('name') or self.genome.title)}.{(record.get('rendered_at') or self.day)[:10]}.{record['id'][:6]}"
 
     def stems_name(self, key: str) -> str:
         """The name the stems of the version cached under key go by: their recording's."""
@@ -1067,12 +1073,12 @@ class Studio:
         """What keeps the stems as the whole song is made (stems.Kept), with the MIDI file's lead-in and the file."""
         from .cli import choir_of
 
-        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title, lyrics=v.lyrics)
+        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.title_of(v), lyrics=v.lyrics)
         singer = explain.singer_of(v.params)
         jobs, _ = synth.stem_jobs(score, seed=v.params.seed, voice=singer,
                                   ancestors=choir_of(self.parent_record, singer)[1])
         parts = stems_mod.in_order([name for name, _ in jobs])
-        return stems_mod.Kept(parts, int(round(-lead_in * synth.SR)), self.genome.title), lead_in, data
+        return stems_mod.Kept(parts, int(round(-lead_in * synth.SR)), self.title_of(v)), lead_in, data
 
     def _zip_stems(self, key: str, v: explain.Version, record: dict, order: list[str], gain: float, flac_of,
                    midi_file: bytes, lead_in: float) -> str:
@@ -1084,7 +1090,7 @@ class Studio:
             for i, part in enumerate(order, 1):
                 z.writestr(f"{stem}/{i:02d}-{part}.flac", flac_of(part))
             z.writestr(f"{stem}/{stem}.mid", midi_file)
-            z.writestr(f"{stem}/README.txt", stems_note(self.genome.title, v.params, -lead_in, gain, order,
+            z.writestr(f"{stem}/README.txt", stems_note(self.title_of(v), v.params, -lead_in, gain, order,
                                                         recording=(f"{stem}.flac", record["id"])))
         tmp.replace(self.cache / f"{key}.zip")
         prune(self.cache, CACHE_LIMIT)
@@ -1107,7 +1113,7 @@ class Studio:
         job.stage = stage_words("score")
         score = self._score(v)
         job.plan = [p for p in stages(score) if p[0] not in ("mix", "master")] + [("master", 1.0)]
-        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.genome.title, lyrics=v.lyrics)
+        data, lead_in = midi.from_score(self.genome, v.params, score, title=self.title_of(v), lyrics=v.lyrics)
         singer = explain.singer_of(v.params)
         stems = synth.render_stems(score, seed=v.params.seed, voice=singer,
                                    ancestors=choir_of(self.parent_record, singer)[1], progress=job.report)
@@ -1117,7 +1123,7 @@ class Studio:
         gain = stems_mod.gain_of(max((stems_mod.peak_of(x) for x in stems.values()), default=0.0))
         order = stems_mod.in_order(list(stems))
         name = self._zip_stems(key, v, record, order, gain,
-                               lambda part: stems_mod.packed(stems_mod.padded(stems[part], pad, gain), self.genome.title),
+                               lambda part: stems_mod.packed(stems_mod.padded(stems[part], pad, gain), self.title_of(v)),
                                data, lead_in)
         job.url = f"/export/{key}.zip?name={name}"
         return {"url": job.url, "parts": len(order)}
@@ -1229,8 +1235,7 @@ class Studio:
         """The recording copied from the cache to where recordings go, as <song>.<day>.<its id's first six>.flac:
         one file, the program, the song and the record inside it."""
         record = json.loads((folder / "rendition.json").read_text(encoding="utf-8"))
-        day = (record.get("rendered_at") or self.day)[:10]
-        flac = self.out / f"{slug(self.genome.title)}.{day}.{record['id'][:6]}.flac"
+        flac = self.out / f"{self.recording_name(record)}.flac"
         if self.downloads is not None:  # open to the public: kept a while to download, not here for good
             self.downloads.keep(folder / "rendition.flac", folder.name)
             return {"recorded": {"flac": flac.name, "name": flac.name, "id": record["id"],
@@ -1542,7 +1547,7 @@ class Studio:
                      "name": self.name_of(v), "packet": self.runs_with()}
         answer = {"key": key, "label": label, "kind": spec["kind"], "spec": json.dumps(spec, default=str)}
         if section is None:  # what the recording is called, as _keep names it (the day, then its id's first six)
-            answer["name"] = {"song": slug(self.name_of(v) or self.genome.title), "day": self.day}
+            answer["name"] = {"song": slug(self.title_of(v)), "day": self.day}
             answer["bar_seconds"] = bar_seconds(self.genome, v.params)  # its clock, as _whole's job ends with it
         return answer
 

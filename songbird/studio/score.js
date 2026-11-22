@@ -483,7 +483,13 @@
   const PENCIL = () => { const x = h("span", { class: "pencil", "aria-hidden": "true" }); x.innerHTML = '<svg viewBox="0 0 20 20"><path d="M4 16l1-4 9-9 3 3-9 9z"/><path d="M12.5 4.5l3 3"/></svg>'; return x; };
   // The Page has one way to change a section's words, where they stand: Edit (or a click on a line) turns its
   // lines into fields, with the words that can be swapped and the other verses to sing under them; Done closes it.
-  function write(sid, line = null) {
+  // Opening another section does what Done does to the open one first: what was typed goes in, or, when a line
+  // can't be sung, that section stays open saying why.
+  async function write(sid, line = null) {
+    const open = S.writing;
+    if (sid && open && open !== sid && window.SongbirdAuthor?.dirty(open)) {
+      if (await window.SongbirdAuthor.finish(open) === false) return;
+    }
     S.writing = sid;
     renderPage();
     if (!sid) return;
