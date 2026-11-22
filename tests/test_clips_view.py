@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
+from _golden import pinned
 
 from songbird import studio as S
 
@@ -65,21 +66,16 @@ def test_the_cards_say_what_the_clips_are(st):
     assert not any("intro" in c["value"] or "verses" in c["value"] for c in view["cards"] if c["id"] in ("shape", "words"))
 
 
-# each song's words and its shape and words cards, in its own form: as they read without clips, byte for byte
-OWN_FORM = {
-    ("h-now-its-by-you", None): "6b479741b672aff8da93013c255b79931e4b9fa62b32c2f6db657c8c247e1f05",
-    ("h-now-its-by-you", "jazz"): "24a03685797e7c2a53e1929b4858b9826b3186214939ae0b32b7bf10c00c586e",
-    ("a-nobody-knows", None): "61b203cd1e4524ea24bb4cc21244bcfc725d5e5d4d6e6b341232a23b297117a0",
-    ("a-nobody-knows", "jazz"): "2572798abb0a13f1c1031d18e45cbd292079f52296c6211f2fb157d084b57a52",
-    ("g-hweelonalay", None): "16448faec2698a5e90706e605cd37739a86c74f19c98d87dbce490a6678a2f88",
-    ("g-hweelonalay", "jazz"): "d4389604291be9b2f2c36b2e4a3fd10c6e0b80fe7ec465e18009d301632a1ac2",
-}
+# each song's words and its shape and words cards, in its own form: as they read without clips, byte for byte, pinned
+# per platform (golden/clips-own-form.<platform>.json: the view reads differently on the artist's Mac and on Linux)
+OWN_FORM = [("h-now-its-by-you", None), ("h-now-its-by-you", "jazz"), ("a-nobody-knows", None),
+            ("a-nobody-knows", "jazz"), ("g-hweelonalay", None), ("g-hweelonalay", "jazz")]
 
 
-@pytest.mark.parametrize("song,style", list(OWN_FORM))
+@pytest.mark.parametrize("song,style", OWN_FORM)
 def test_a_song_in_its_own_form_reads_as_it_does_without_clips(tmp_path, song, style):
     st = S.Studio(None, str(ROOT / "songs" / f"{song}.json"), "none", home=tmp_path)
     edits = {"date": DAY, **({"form.order": None, "style": {"name": style}} if style else {})}
     view = st.song(edits)
     got = {"words": view["words"], "cards": [c for c in view["cards"] if c["id"] in ("shape", "words")]}
-    assert hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest() == OWN_FORM[(song, style)]
+    pinned("clips-own-form", (song, style or "None"), hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest(), None)
