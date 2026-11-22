@@ -177,8 +177,8 @@ ROLES: dict[str, Strip] = {
     # A mandolin comping (strums, the chop): its weak low course cleared, nothing taken from its bark,
     # compressed gently and slowly (a tremolo evened, the chop untouched).
     "mandolin": Strip(eq=(("hp", 110),), comp=(10.0, 2.0, 0.02, 0.2, 1.5, 3.0), drive=0.05),
-    # The main accompaniment: weight kept, boom and clang tamed, sparkle above the voice.
-    "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8), ("high", 9000, 1.0)),
+    # The main accompaniment: weight kept, boom and clang tamed, smooth top without exaggerating pick noise.
+    "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8)),
                     comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.1, send=0.9),
     "harp": Strip(eq=(("hp", 70), ("peak", 2800, -1.5, 0.9)), send=1.2),
     # Round and even: sub-fundamental kept down to low D1/E1, mud out, no string noise, saturated so small speakers hear its pitch.
@@ -187,7 +187,7 @@ ROLES: dict[str, Strip] = {
     "fiddle": Strip(eq=(("hp", 180), ("peak", 2500, -2.5, 1.0), ("high", 8000, -1.0)),
                     comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=2.0),
     "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
-    "drum": Strip(eq=(("hp", 35), ("low", 120, 1.5), ("peak", 420, -2.0, 1.0), ("high", 5500, -4.0)), trim=2.5,
+    "drum": Strip(eq=(("hp", 35), ("low", 120, 1.5), ("peak", 420, -2.0, 1.0), ("high", 5500, -4.5)), trim=2.5,
                   comp=(12.0, 2.5, 0.01, 0.14, 1.0, 4.0), send=0.55),
     # A drum machine (808/909): deep kick kept down to 28 Hz, hats untouched, slower attack so punch lands, less room.
     "drummachine": Strip(eq=(("hp", 28), ("peak", 380, -1.5, 1.0)), comp=(12.0, 2.5, 0.015, 0.15, 1.0, 4.0),
@@ -281,7 +281,9 @@ def role_of(name: str) -> str:
 
 
 # The voice and choir, in the same terms as the band's roles.
-VOICE_EQ = (("hp", 80), ("peak", 420, -1.5, 1.1), ("peak", 900, -2.0, 1.2), ("peak", 3500, 0.5, 0.9))  # boxiness and honk eased; presence 0.5 dB
+# Boxiness (420 Hz), honk (900 Hz), front-vowel harshness (2.3 kHz), and vocoder upper-band grain (7.5 kHz) eased.
+VOICE_EQ = (("hp", 80), ("peak", 420, -1.5, 1.1), ("peak", 900, -2.0, 1.2), ("peak", 2300, -1.8, 1.4),
+            ("high", 7500, -1.5))
 # The voice's air (7-14 kHz) against its body (0.5-2 kHz): natural singers (SoulX-Singer renders of our score)
 # measure -21 to -23 dB. A voice brighter than AIR is brought half way back, never by more than 3 dB.
 AIR = -20.0

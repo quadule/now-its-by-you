@@ -178,3 +178,20 @@ def test_an_instruments_streams_are_its_own():
     assert [instruments.stream(n) for n in instruments.INSTRUMENTS] == list(range(8))  # the seed's band is unmoved
     others = [instruments.stream(n) for n in instruments.KNOWN]
     assert len(set(others)) == len(others) and min(others) >= 1000
+
+
+def test_guitar_pick_noise_stays_subtle_beneath_the_strings():
+    """Strummed pick noise adds subtle wooden attack without exceeding the strings' own upper-band energy."""
+    from scipy.signal import welch
+    from songbird.synth import instruments
+
+    notes = tuple(Note("guitar", 0.2 + 0.008 * k, 0.8, p, 0.7, art="down")
+                  for k, p in enumerate((45.0, 52.0, 57.0, 61.0, 64.0, 69.0)))
+    length = 2 * SR
+    spec = dict(brightness=0.625, decay=3.2, pick=0.22, hardness=0.7, planes=0.35, touch=0.15, damp=0.05)
+    force = instruments._strings(notes, SR, length, np.random.default_rng(1), spec)
+    pn = instruments.pick_noise(notes, force, SR)
+    f, pf = welch(force, SR, nperseg=4096)
+    _, pp = welch(pn, SR, nperseg=4096)
+    hi = (f >= 4000) & (f < 16000)
+    assert 10 * np.log10((pp[hi].sum() + 1e-20) / (pf[hi].sum() + 1e-20)) < -3.0

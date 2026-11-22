@@ -208,8 +208,8 @@ def _strings(notes, sr: int, length: int, rng: np.random.Generator, spec: dict, 
     return force
 
 
-# A strum's pick noise: the "chk" of the pick crossing the strings, its level against the strings' own peak.
-PICK_NOISE = {"down": 0.07, "up": 0.09, "mute": 0.16}
+# A strum's pick noise: the gentle brush of the pick crossing the strings, its level against the strings' own peak.
+PICK_NOISE = {"down": 0.018, "up": 0.022, "mute": 0.055}
 
 
 def pick_noise(notes, force: np.ndarray, sr: int) -> np.ndarray:
@@ -226,7 +226,7 @@ def pick_noise(notes, force: np.ndarray, sr: int) -> np.ndarray:
             groups[-1].append(n)
         else:
             groups.append([n])
-    bands = {art: butter(2, [2000.0, 7000.0] if art != "up" else [2600.0, 8500.0], btype="bandpass", fs=sr, output="sos")
+    bands = {art: butter(2, [1600.0, 4800.0] if art != "up" else [2000.0, 5600.0], btype="bandpass", fs=sr, output="sos")
              for art in PICK_NOISE}
     for g in groups:
         if len(g) < 2:

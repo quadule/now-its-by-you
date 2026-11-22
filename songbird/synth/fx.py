@@ -530,8 +530,8 @@ def _both_ways(x2: np.ndarray, sos: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(_biquads(back, sos, inplace=True)[::-1])
 
 
-def deess(x: np.ndarray, sr: int, split: float = 4500.0, excess: float = 1.8, ratio: float = 3.5,
-          most: float = 9.5, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
+def deess(x: np.ndarray, sr: int, split: float = 3500.0, excess: float = 1.0, ratio: float = 4.0,
+          most: float = 11.5, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """Turn the highs down while they outweigh the voice's body: a split-band
     de-esser whose threshold is the voice's own balance, so it hears an "s"
     by its spectrum, not by how loud the singer is. It listens to the band
