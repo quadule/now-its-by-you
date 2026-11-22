@@ -245,16 +245,14 @@ def convolve(send: np.ndarray, early: np.ndarray | None, tail: np.ndarray, extra
         out[: len(y), 1] -= y
         del y
     del side
-    for ear in range(2):
-        y = oa.convolve(mid, response[:, ear], workers=WORKERS)
-        out[: len(y), ear] += y
-        del y
+    y = oa.convolve_shared(mid, response, workers=WORKERS)
+    out[: len(y)] += y
+    del y
     del mid
     for mono, r in extra:
-        for ear in range(2):
-            y = oa.convolve(mono, r[:, ear], workers=WORKERS)
-            out[: len(y), ear] += y
-            del y
+        y = oa.convolve_shared(mono, r, workers=WORKERS)
+        out[: len(y)] += y
+        del y
     return out
 
 

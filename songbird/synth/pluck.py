@@ -166,56 +166,59 @@ def pluck(
     if mute:
         held = min(int(0.006 * sr), length)
         release_t60 = 0.05
-    strings = [(0.0, 0, vel)] if course <= 0.0 else [
-        (-course / 2.0, 0, vel * 0.72),
-        (course / 2.0, int(round(spread * sr)), vel * 0.72 * rng.uniform(0.75, 1.0)),
-    ]
-    y = np.zeros(length)
-    for cents, lag, v in strings:
-        f = freq * 2.0 ** (cents / 1200.0)
-        x = _excitation(sr / f, pick * rng.uniform(0.9, 1.1), hardness, v, rng, sr)
+    if course <= 0.0:
+        x = _excitation(sr / freq, pick * rng.uniform(0.9, 1.1), hardness, vel, rng, sr)
         split = rng.uniform(0.2, 0.8)  # the second plane sits a fraction of a cent away
-        across = _plane(f, x, sr, loss, 0.8 * t60, held - lag, length - lag, release_t60)
-        along = _plane(f * 2.0 ** (split / 1200.0), x * planes, sr, loss, 2.0 * t60, held - lag, length - lag,
-                       release_t60)
-        y[lag:] += across + along
-    y += _attack(sr, hardness, vel, length, rng)
+        y = _plane(freq, x, sr, loss, 0.8 * t60, held, length, release_t60)
+        y += _plane(freq * 2.0 ** (split / 1200.0), x * planes, sr, loss, 2.0 * t60, held, length, release_t60)
+    else:
+        strings = [
+            (-course / 2.0, 0, vel * 0.72),
+            (course / 2.0, int(round(spread * sr)), vel * 0.72 * rng.uniform(0.75, 1.0)),
+        ]
+        y = np.zeros(length)
+        for cents, lag, v in strings:
+            f = freq * 2.0 ** (cents / 1200.0)
+            x = _excitation(sr / f, pick * rng.uniform(0.9, 1.1), hardness, v, rng, sr)
+            split = rng.uniform(0.2, 0.8)  # the second plane sits a fraction of a cent away
+            across = _plane(f, x, sr, loss, 0.8 * t60, held - lag, length - lag, release_t60)
+            along = _plane(f * 2.0 ** (split / 1200.0), x * planes, sr, loss, 2.0 * t60, held - lag, length - lag,
+                           release_t60)
+            across += along
+            y[lag:] += across
+    _attack_into(y, sr, hardness, vel, rng)
     if mute:  # a chop: the pick's scrape across strings the hand has already deadened
         n = min(length, int(0.02 * sr))
         scrape = sosfilt(butter(2, [700.0, 5000.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(n + 64))
         y[:n] += scrape[64:] * np.exp(-np.arange(n) / (0.004 * sr)) * 0.25 * vel * (0.4 + 0.6 * hardness)
     if touch > 0.0 and held < length and not mute:
-        y += _touch(sr, held, length, freq, touch * vel, rng)
+        _touch_into(y, sr, held, freq, touch * vel, rng)
     tail = min(length, int(0.004 * sr))
     y[length - tail:] *= np.linspace(1.0, 0.0, tail)
     return lfilter([1.0, -1.0], [1.0, -0.995], y)  # remove the pluck's DC
 
 
-def _attack(sr: int, hardness: float, vel: float, length: int, rng: np.random.Generator) -> np.ndarray:
+def _attack_into(y: np.ndarray, sr: int, hardness: float, vel: float, rng: np.random.Generator) -> None:
     """The pick or nail leaving the string: a click of a few milliseconds, bright
     and longer for a pick, which scrapes as it goes; a fingertip barely clicks."""
-    n = min(length, int((0.002 + 0.006 * hardness) * sr))
-    burst = np.zeros(length)
+    n = min(len(y), int((0.002 + 0.006 * hardness) * sr))
     if n < 8:
-        return burst
+        return
     noise = rng.standard_normal(n + 64)
     noise = sosfilt(butter(2, 1500.0 + 4000.0 * hardness, btype="highpass", fs=sr, output="sos"), noise)[64:]
-    burst[:n] = noise * np.exp(-np.arange(n) / ((0.0005 + 0.0015 * hardness) * sr)) * 0.1 * hardness**1.5 * vel
-    return burst
+    y[:n] += noise * np.exp(-np.arange(n) / ((0.0005 + 0.0015 * hardness) * sr)) * 0.1 * hardness**1.5 * vel
 
 
-def _touch(sr: int, at: int, length: int, freq: float, level: float, rng: np.random.Generator) -> np.ndarray:
+def _touch_into(y: np.ndarray, sr: int, at: int, freq: float, level: float, rng: np.random.Generator) -> None:
     """A finger landing on a sounding string: a soft, low buzz of a few hundredths of a second."""
-    n = min(length - at, int(0.03 * sr))
-    y = np.zeros(length)
+    n = min(len(y) - at, int(0.03 * sr))
     if n < 8:
-        return y
+        return
     noise = rng.standard_normal(n + 64)
     noise = sosfilt(butter(2, [max(80.0, 0.8 * freq), min(3000.0, 6.0 * freq)], btype="bandpass", fs=sr,
                            output="sos"), noise)[64:]
     env = np.sin(np.pi * np.arange(n) / n) ** 2
-    y[at : at + n] = noise * env * 0.05 * level
-    return y
+    y[at : at + n] += noise * env * 0.05 * level
 
 
 @njit(cache=True, nogil=True)

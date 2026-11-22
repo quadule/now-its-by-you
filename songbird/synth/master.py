@@ -408,19 +408,23 @@ def master(x: np.ndarray, sr: int, target: float = TARGET_LUFS, ceiling_db: floa
 def to_pcm16(x: np.ndarray, seed: int = 0) -> np.ndarray:
     """Quantize to 16-bit with seeded TPDF dither."""
     rng = np.random.default_rng(seed)
-    # x * 32767 + (u1 + u2), rounded and clipped: the second draw and the scaled signal added a stretch at a
-    # time (the same draws in the same order, the same sums), rounded and clipped where they lie
+    # x * 32767 + (u1 + u2), rounded and clipped: the first draw fills dither, then each stretch adds the
+    # second draw and scaled signal, rounds, clips and narrows while cache-hot (same draws, same sums).
     x = np.asarray(x)
     dither = rng.uniform(-0.5, 0.5, x.shape)
     flat = dither.reshape(-1)
     scaled = np.ascontiguousarray(x).reshape(-1)
+    out = np.empty(x.shape, dtype="<i2")
+    out_flat = out.reshape(-1)
     for a in range(0, len(flat), 1 << 18):
-        flat[a: a + (1 << 18)] += rng.uniform(-0.5, 0.5, len(flat[a: a + (1 << 18)]))
-    for a in range(0, len(flat), 1 << 18):
-        flat[a: a + (1 << 18)] += scaled[a: a + (1 << 18)] * 32767.0
-    np.round(dither, out=dither)
-    np.clip(dither, -32768, 32767, out=dither)
-    return dither.astype("<i2")
+        b = min(len(flat), a + (1 << 18))
+        chunk = flat[a:b]
+        chunk += rng.uniform(-0.5, 0.5, b - a)
+        chunk += scaled[a:b] * 32767.0
+        np.round(chunk, out=chunk)
+        np.clip(chunk, -32768, 32767, out=chunk)
+        out_flat[a:b] = chunk
+    return out
 
 
 def pcm_sha256(pcm: np.ndarray) -> str:

@@ -39,13 +39,14 @@ DISABLED = set(filter(None, os.environ.get("SONGBIRD_JS_DISABLE", "").split(",")
 _DT = {"f8": np.float64, "i8": np.int64, "b1": np.bool_}
 
 
-def _view(a: np.ndarray, back: list, layout: str | None, k: int = -1):
+def _view(a: np.ndarray, back: list, keep: list, layout: str | None, k: int = -1):
     """A JS descriptor over a (float64, in place) or over a float64 copy of it (copied back after); k: which
     argument it is (a kernel returning it returns that array, as numba does)."""
     work = a
     if a.dtype != np.float64 or (layout == "C" and not a.flags.c_contiguous) or a.ndim > 2 \
             or any(s % 8 for s in a.strides):
         work = np.ascontiguousarray(a, dtype=np.float64)
+        keep.append(work)
         if a.flags.writeable:
             back.append((a, work))
     if work.ndim == 0:
@@ -136,10 +137,11 @@ def _js_kernel(key: str, f, spec: dict):
 
     def call(*args):
         back = []
+        keep = []
         jsargs = []
         for k, (p, a) in enumerate(zip(params, args)):
             if isinstance(a, np.ndarray):
-                jsargs.append(_view(a, back, arrays.get(p, [None, None, None])[2], k))
+                jsargs.append(_view(a, back, keep, arrays.get(p, [None, None, None])[2], k))
             elif isinstance(a, np.generic):
                 jsargs.append(a.item())
             else:

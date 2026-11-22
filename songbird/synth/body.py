@@ -16,6 +16,7 @@ hears a different mix of the high modes, as two microphones would.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 from scipy.signal import sosfilt
@@ -123,8 +124,14 @@ def impulse_response(body: Body, sr: int, seed: int = 0, size: float = 1.0, chan
     named ones, a few percent either way. alike is the share of the scattered
     modes both microphones hear in the same phase (0: each its own, as two
     microphones apart hear them; a pair close together hears most alike, so
-    the two don't cancel where they are summed to mono).
+    the two don't cancel where they are summed to mono). Made once per
+    (body, sr, seed, size, channels, alike) and handed back read-only.
     """
+    return _impulse_response(body, int(sr), int(seed), float(size), int(channels), float(alike))
+
+
+@lru_cache(maxsize=32)
+def _impulse_response(body: Body, sr: int, seed: int, size: float, channels: int, alike: float) -> np.ndarray:
     rng = np.random.default_rng(seed)
     agree = np.random.default_rng([seed, 1]) if alike > 0.0 else None  # its own draws: the rest stay as they were
     n = int(body.length * sr)
@@ -179,7 +186,9 @@ def impulse_response(body: Body, sr: int, seed: int = 0, size: float = 1.0, chan
     fade = np.ones(n)
     tail = int(0.1 * n)
     fade[-tail:] = np.linspace(1.0, 0.0, tail) ** 2
-    return ir * fade[:, None]
+    out = ir * fade[:, None]
+    out.flags.writeable = False
+    return out
 
 
 def _band_gain(h: np.ndarray, sr: int, body: Body, size: float) -> float:

@@ -109,13 +109,15 @@ def vocoder_output(sr, frames, texture):
     return T.synthesize(f0, sp, ap, sr, np.random.default_rng(8), source=source, texture=tx)
 
 
-# Captured while the periodic buffer was still made by an inverse FFT of complex zeros.
-VOCODER = {(24000, 1, 0): 'dd11a53a7f02fa4f256fb2404459a563b8a980834725970af610d7ebab9274d4',
- (24000, 2, 1): 'a57e5cc6f2d99928f9104c14d6ab3e154070926940c255dda709442fe42cb97e',
- (24000, 100, 2): 'f7acd800238b4fa216cf7e85970b9d617391fd38c6a94e583b1f9d1d6157b54e',
- (44100, 40, 1): '26a5143f374aa2fdf51edeff3ad63546da4a0458ce4c54e1dd8e42ff317613ef',
- (16000, 100, 0): '3019aa0be76cf2e8075dc4a77e7f84ed290c3bb200ada81864b8785d4cdbaa12',
- (24000, 400, 1): '1359a787ab62aa0dd44faaca8eefdf05410ddfe7d365dd187e4b2e3a115a7ec3'}
+# Captured after fusing minimum-phase polar construction and phase turn into _polar_turn/_polar_mul
+# (uses sqrt(P) and a single cos/sin instead of double complex exp; within 3e-16 / -301 dB of prior float64
+# bytes and bit-identical after 16-bit PCM quantisation).
+VOCODER = {(24000, 1, 0): '872dbcefbc0228313683689715441fb638af6da60915098f679d6847d4c01d08',
+ (24000, 2, 1): 'e7edefb4ada6399e255f37616d9a97674a94bf8a604a0ecb95231f2cf3d2412e',
+ (24000, 100, 2): '63f360d812c0a8ab07adf0150d388e8ccd465cf037b3e3aed2323eeb75706777',
+ (44100, 40, 1): '51f8e056f11189373745f7b97f88f464272a03be33cc084cda7e18687d3d062f',
+ (16000, 100, 0): 'be25c2059f7f0d77fb2c2b805bdbfc4442ade30b1bb3756346f86ddf4eb46963',
+ (24000, 400, 1): '847a8cafa121a56bc234aea8e15c6902fad6693f9cbf7aa7f056c425180eadf9'}
 
 
 @pytest.mark.parametrize("case", list(VOCODER))

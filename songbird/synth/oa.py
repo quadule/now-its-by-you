@@ -114,12 +114,12 @@ def _into(y: np.ndarray, out: np.ndarray | None) -> np.ndarray:
     return out
 
 
-def convolve_shared(x: np.ndarray, h: np.ndarray, n: int | None = None) -> np.ndarray:
-    """Each column's convolve(x, h[:, ch])[:n], sharing the input FFTs.
+def convolve_shared(x: np.ndarray, h: np.ndarray, n: int | None = None, workers: int = 1) -> np.ndarray:
+    """Each column's convolve(x, h[:, ch], workers=workers)[:n], sharing the input FFTs.
 
-    The response and inverse FFTs keep convolve's two-dimensional row layout for each channel: transforming
-    all channels together uses another SIMD grouping and can change the last bits. Only the identical
-    input transforms are shared. The output is fresh; callers may place and scale it in place.
+    The response and inverse FFTs keep convolve's two-dimensional row layout and stretch grouping for each
+    channel: transforming all channels together uses another SIMD grouping and can change the last bits.
+    Only the identical input transforms are shared. The output is fresh; callers may place and scale it in place.
     """
     x, h = np.asarray(x), np.asarray(h)
     s1, s2 = len(x), len(h)
@@ -132,7 +132,7 @@ def convolve_shared(x: np.ndarray, h: np.ndarray, n: int | None = None) -> np.nd
     def separately():
         out = np.empty((n, channels))
         for ch in range(channels):
-            convolve(x, h[:, ch], n, out=out[:, ch])
+            convolve(x, h[:, ch], n, out=out[:, ch], workers=workers)
         return out
 
     if (sp_fft.get_workers() != 1 or x.ndim != 1 or h.ndim != 2 or x.dtype != np.float64
@@ -148,24 +148,50 @@ def convolve_shared(x: np.ndarray, h: np.ndarray, n: int | None = None) -> np.nd
     out = np.empty((n, channels))
     per = GROUP * max(1, CALL // (8 * block * GROUP))
     needed = min(steps, math.ceil(n / step1))
-    carries = [None] * channels
-    for a in range(0, needed, per):
-        b = min(a + per, steps)
-        blocks = np.zeros((b - a, step1))
-        take = x[a * step1: min(b * step1, s1)]
-        blocks.reshape(-1)[:len(take)] = take
-        spectra = sp_fft.rfftn(blocks, [block], axes=[1])
-        del blocks
-        for ch in range(channels):
-            y = sp_fft.irfftn(spectra * spectra_h[ch], [block], axes=[1])
-            if carries[ch] is not None:
-                y[0, :overlap] += carries[ch]
-            y[1:, :overlap] += y[:-1, step1:]
-            carries[ch] = y[-1, step1:].copy()
-            flat = y[:, :step1].reshape(-1)
-            start = a * step1
-            out[start:min(n, start + len(flat)), ch] = flat[:n - start]
-            del y, flat
+    stretches = []
+    lo = 0
+    for size in (len(part) for part in np.array_split(np.arange(steps), max(1, int(workers)))):
+        if size and lo < needed:
+            stretches.append((lo, lo + size))
+        lo += size
+
+    def stretch(lo: int, hi: int) -> list[np.ndarray | None]:
+        carries: list[np.ndarray | None] = [None] * channels
+        a = lo
+        while a < hi and a < needed:
+            b = min(a + per, hi)
+            blocks = np.zeros((b - a, step1))
+            take = x[a * step1: min(b * step1, s1)]
+            blocks.reshape(-1)[:len(take)] = take
+            spectra = sp_fft.rfftn(blocks, [block], axes=[1])
+            del blocks
+            for ch in range(channels):
+                if ch == channels - 1:
+                    spectra *= spectra_h[ch]
+                    prod = spectra
+                else:
+                    prod = spectra * spectra_h[ch]
+                y = sp_fft.irfftn(prod, [block], axes=[1])
+                del prod
+                if carries[ch] is not None:
+                    y[0, :overlap] += carries[ch]
+                y[1:, :overlap] += y[:-1, step1:]
+                carries[ch] = y[-1, step1:].copy()
+                flat = y[:, :step1].reshape(-1)
+                start = a * step1
+                if start < n:
+                    out[start:min(n, start + len(flat)), ch] = flat[:n - start]
+                del y, flat
+            del spectra
+            a = b
+        return carries
+
+    tails = [tail for _, tail in threads.in_order([(k, partial(stretch, *bounds)) for k, bounds in enumerate(stretches)])]
+    for (lo, _), tail in zip(stretches[1:], tails[:-1]):
+        start = lo * step1
+        if start < n:
+            for ch in range(channels):
+                out[start:min(n, start + overlap), ch] += tail[ch][:n - start]
     return out
 
 

@@ -153,6 +153,254 @@ def pipe_run(f):
     return call
 
 
+def instruments_placed(f):
+    def call(y, cos, sin, root2, width, out):
+        y2 = F(y)
+        n, chans = y2.shape
+        if out.dtype == np.float64 and out.flags.c_contiguous and out.shape == (n, 2):
+            W.instruments_placed(P(y2), n, chans, float(cos), float(sin), float(root2), float(width), P(out))
+            return
+        work = np.empty((n, 2))
+        W.instruments_placed(P(y2), n, chans, float(cos), float(sin), float(root2), float(width), P(work))
+        out[...] = work
+    return call
+
+
+def fx_sliding_min(f):
+    def call(x, before, after, reflect, out):
+        x = F(x)
+        cap = int(before) + int(after) + 2
+        qi, qv = np.empty(cap, dtype=np.int32), np.empty(cap)
+        return _into(out, x, lambda at: W.fx_sliding_min(P(x), len(x), int(before), int(after),
+                                                         1 if reflect else 0, P(qi), P(qv), at))
+    return call
+
+
+def fx_running_mean(f):
+    def call(x, size, out):
+        x = F(x)
+        ring = np.empty(int(size))
+        return _into(out, x, lambda at: W.fx_running_mean(P(x), len(x), int(size), P(ring), at))
+    return call
+
+
+def fx_follow(f):
+    def call(x, detect, rise, fall, floor_db, span_db):
+        x = F(x)
+        n, chans = x.shape
+        out = np.empty(n)
+        W.fx_follow(P(x), n, chans, float(detect), float(rise), float(fall), float(floor_db), float(span_db), P(out))
+        return out
+    return call
+
+
+def fx_saturate(f):
+    def call(x, k, bias, dc, y):
+        x = F(x)
+        n, chans = x.shape
+        return _into(y, x, lambda at: W.fx_saturate(P(x), n, chans, float(k), float(bias), float(dc), at))
+    return call
+
+
+def fx_hold(f):
+    def call(playing, track):
+        playing = np.ascontiguousarray(playing, dtype=np.bool_)
+        work = track if (track.dtype == np.float64 and track.flags.c_contiguous) else F(track)
+        W.fx_hold(P(playing), P(work), len(playing))
+        if work is not track:
+            track[...] = work
+    return call
+
+
+def fx_span(f):
+    def call(x, floor):
+        x = F(x)
+        out2 = np.empty(2, dtype=np.int32)
+        W.fx_span(P(x), x.shape[0], x.shape[1], float(floor), P(out2))
+        return int(out2[0]), int(out2[1])
+    return call
+
+
+def fx_ballistics(f):
+    def call(target, attack, release):
+        target = F(target)
+        out = np.empty_like(target)
+        W.fx_ballistics(P(target), len(target), float(attack), float(release), P(out))
+        return out
+    return call
+
+
+def master_windows(f):
+    def call(y, ch, points, reach):
+        y = F(y)
+        n, chans = y.shape
+        pts = np.ascontiguousarray(points, dtype=np.int32)
+        out = np.empty((len(pts), 2 * int(reach) + 1))
+        W.master_windows(P(y), n, chans, int(ch), P(pts), len(pts), int(reach), P(out))
+        return out
+    return call
+
+
+def master_mean_ahead(f):
+    def call(recovered, ahead, need, out):
+        recovered, need = F(recovered), F(need)
+        ring = np.empty(int(ahead) + 2)
+        return _into(out, recovered, lambda at: W.master_mean_ahead(P(recovered), len(recovered), int(ahead),
+                                                                    P(need), P(ring), at))
+    return call
+
+
+def master_abs_max(f):
+    def call(y):
+        y = F(y)
+        n, chans = y.shape
+        out = np.empty(n)
+        W.master_abs_max(P(y), n, chans, P(out))
+        return out
+    return call
+
+
+def master_over(f):
+    def call(x, a):
+        flat = F(x).reshape(-1)
+        out = np.empty(len(flat), dtype=np.bool_)
+        W.master_over(P(flat), len(flat), float(a), P(out))
+        return out
+    return call
+
+
+def reed_read(f):
+    def call(wave, increments, amplitude, out, offset, phase):
+        wave, increments, amplitude = F(wave), F(increments), F(amplitude)
+        work = out if (out.dtype == np.float64 and out.flags.c_contiguous) else F(out)
+        ph = W.reed_read(P(wave), len(wave), P(increments), P(amplitude), len(increments), P(work), int(offset),
+                         float(phase))
+        if work is not out:
+            out[...] = work
+        return float(ph)
+    return call
+
+
+def _i32(a) -> np.ndarray:
+    return np.ascontiguousarray(a, dtype=np.int32)
+
+
+def throat_to_bins(f):
+    def call(values, lo, hi, before, after, above, rolloff, log_power):
+        values, before, after, rolloff = F(values), F(before), F(after), F(rolloff)
+        lo32, hi32 = _i32(lo), _i32(hi)
+        ab = np.ascontiguousarray(above, dtype=np.bool_)
+        rows, cols = values.shape
+        nbins = len(lo32)
+        out_t = np.empty((nbins, rows))
+        W.throat_to_bins(P(values), rows, cols, P(lo32), P(hi32), P(before), P(after), P(ab), P(rolloff),
+                         nbins, 1 if log_power else 0, P(out_t))
+        return out_t
+    return call
+
+
+def throat_turn_phase(f):
+    def call(bins, hz, frac, period, spread, has_spread, scatter, has_scatter, lo, hi, before, after,
+             sr, fft, tx_spread, tx_scatter, scatter_from, scatter_span):
+        bins, hz, frac, period = F(bins), F(hz), F(frac), F(period)
+        spread, scatter = F(spread), F(scatter)
+        before, after = F(before), F(after)
+        lo32, hi32 = _i32(lo), _i32(hi)
+        rows, nbins = len(frac), len(bins)
+        scat_cols = scatter.shape[1] if scatter.ndim == 2 else 0
+        out = np.empty((rows, nbins))
+        W.throat_turn_phase(P(bins), P(hz), P(frac), P(period), rows, nbins, P(spread), 1 if has_spread else 0,
+                            P(scatter), scat_cols, 1 if has_scatter else 0, P(lo32), P(hi32), P(before), P(after),
+                            float(sr), float(fft), float(tx_spread), float(tx_scatter), float(scatter_from),
+                            float(scatter_span), P(out))
+        return out
+    return call
+
+
+def throat_noise_mask(f):
+    def call(noise, m):
+        work = noise if (noise.dtype == np.float64 and noise.flags.c_contiguous) else F(noise)
+        m32 = _i32(m)
+        W.throat_noise_mask(P(work), work.shape[0], work.shape[1], P(m32))
+        if work is not noise:
+            noise[...] = work
+    return call
+
+
+def throat_noise_sub_dc(f):
+    def call(noise, m, dc):
+        work = noise if (noise.dtype == np.float64 and noise.flags.c_contiguous) else F(noise)
+        m32, dc = _i32(m), F(dc)
+        W.throat_noise_sub_dc(P(work), work.shape[0], work.shape[1], P(m32), P(dc))
+        if work is not noise:
+            noise[...] = work
+    return call
+
+
+def throat_assemble(f):
+    def call(periodic, aperiodic, hann, lead):
+        periodic, aperiodic, hann = F(periodic), F(aperiodic), F(hann)
+        rows, fft = periodic.shape
+        out = np.empty((rows, fft + fft // 2))
+        W.throat_assemble(P(periodic), P(aperiodic), rows, fft, P(hann), int(lead), P(out))
+        return out
+    return call
+
+
+def throat_lay(f):
+    def call(y, at, response):
+        work = y if (y.dtype == np.float64 and y.flags.c_contiguous) else F(y)
+        at32, response = _i32(at), F(response)
+        W.throat_lay(P(work), P(at32), P(response), response.shape[0], response.shape[1])
+        if work is not y:
+            y[...] = work
+    return call
+
+
+def throat_assemble_lay(f):
+    def call(y, at, periodic, aperiodic, hann, lead):
+        work = y if (y.dtype == np.float64 and y.flags.c_contiguous) else F(y)
+        at32 = _i32(at)
+        periodic, aperiodic, hann = F(periodic), F(aperiodic), F(hann)
+        W.throat_assemble_lay(P(work), P(at32), P(periodic), P(aperiodic), periodic.shape[0], periodic.shape[1],
+                              P(hann), int(lead))
+        if work is not y:
+            y[...] = work
+    return call
+
+
+def throat_gelu_flat(f):
+    def call(x, out):
+        x2 = F(x)
+        if out.dtype == np.float64 and out.flags.c_contiguous and out.shape == x2.shape:
+            W.throat_gelu_flat(P(x2), len(x2), P(out))
+            return
+        work = np.empty(x2.shape)
+        W.throat_gelu_flat(P(x2), len(x2), P(work))
+        out[...] = work
+    return call
+
+
+def throat_polar_turn(f):
+    def call(spec_f, amp, turn):
+        work = spec_f if (spec_f.dtype == np.float64 and spec_f.flags.c_contiguous) else F(spec_f)
+        amp, turn = F(amp), F(turn)
+        W.throat_polar_turn(P(work), P(amp), P(turn), len(amp))
+        if work is not spec_f:
+            spec_f[...] = work
+    return call
+
+
+def throat_polar_mul(f):
+    def call(spec_f, amp, other_f):
+        work = spec_f if (spec_f.dtype == np.float64 and spec_f.flags.c_contiguous) else F(spec_f)
+        amp, other_f = F(amp), F(other_f)
+        W.throat_polar_mul(P(work), P(amp), P(other_f), len(amp))
+        if work is not spec_f:
+            spec_f[...] = work
+    return call
+
+
 PORTS = {
     "synth.pluck._loop": pluck_loop,
     "synth.pluck._bank": pluck_bank,
@@ -164,10 +412,34 @@ PORTS = {
     "synth.fx._apply": fx_apply,
     "synth.fx._products": fx_products,
     "synth.fx._block_power": lambda f: _blocks(W.fx_block_power, True),
+    "synth.fx._block_peaks": lambda f: _blocks(W.fx_block_peaks, False),
+    "synth.fx._sliding_min": fx_sliding_min,
+    "synth.fx._running_mean": fx_running_mean,
+    "synth.fx._follow": fx_follow,
+    "synth.fx._saturate": fx_saturate,
+    "synth.fx._hold": fx_hold,
+    "synth.fx._span": fx_span,
+    "synth.fx._ballistics": fx_ballistics,
+    "synth.instruments._placed": instruments_placed,
     "synth.master._weighted_hop_power": master_weighted_hop_power,
     "synth.master._recover": master_recover,
+    "synth.master._windows": master_windows,
+    "synth.master._mean_ahead": master_mean_ahead,
+    "synth.master._abs_max": master_abs_max,
+    "synth.master._over": master_over,
     "synth.bowed.run": bowed_run,
     "synth.pipe.run": pipe_run,
+    "synth.reed._read": reed_read,
+    "synth.throat._to_bins": throat_to_bins,
+    "synth.throat._turn_phase": throat_turn_phase,
+    "synth.throat._noise_mask": throat_noise_mask,
+    "synth.throat._noise_sub_dc": throat_noise_sub_dc,
+    "synth.throat._assemble": throat_assemble,
+    "synth.throat._lay": throat_lay,
+    "synth.throat._assemble_lay": throat_assemble_lay,
+    "synth.throat._gelu_flat": throat_gelu_flat,
+    "synth.throat._polar_turn": throat_polar_turn,
+    "synth.throat._polar_mul": throat_polar_mul,
 }
 
 

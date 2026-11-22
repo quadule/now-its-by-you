@@ -83,7 +83,7 @@ for key, (d, f, kw) in sorted(KERNELS.items()):
                 locs.setdefault(b, set()).add(str(t))
         sigs.append({"args": [str(a) for a in sig], "return": str(cres.signature.return_type),
                      "locals": {k: sorted(v) for k, v in sorted(locs.items())}})
-    out[key] = {"file": inspect.getsourcefile(f).split("songbird/", 1)[1], "line": f.__code__.co_firstlineno,
+    out[key] = {"file": inspect.getsourcefile(f).rsplit("songbird/", 1)[1], "line": f.__code__.co_firstlineno,
                 "fastmath": bool(kw.get("fastmath")), "params": list(inspect.signature(f).parameters),
                 "signatures": sigs}
 sys.path.insert(0, str(Path(__file__).resolve().parent))
