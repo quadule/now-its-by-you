@@ -1,8 +1,8 @@
 {
  "synth.accordion._arm": {
-  "fastmath": false,
   "file": "synth/accordion.py",
   "line": 315,
+  "fastmath": false,
   "params": [
    "x",
    "up",
@@ -15,6 +15,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -37,16 +38,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "6a85430bb29b1e76"
  },
  "synth.amp._dot": {
-  "fastmath": false,
   "file": "synth/amp.py",
   "line": 470,
+  "fastmath": false,
   "params": [
    "a",
    "b",
@@ -61,6 +61,7 @@
      "int64",
      "int64"
     ],
+    "return": "float64",
     "locals": {
      "a": [
       "array(float64, 1d, C)"
@@ -90,16 +91,15 @@
      "start": [
       "int64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "0724ff2827b6c3c2"
  },
  "synth.amp._run": {
-  "fastmath": false,
   "file": "synth/amp.py",
   "line": 490,
+  "fastmath": false,
   "params": [
    "x",
    "rev",
@@ -124,6 +124,7 @@
      "array(float64, 1d, C)",
      "array(float64, 2d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -364,16 +365,15 @@
      "zs": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "7bedec7f6a7312ec"
  },
  "synth.amp._shape": {
-  "fastmath": false,
   "file": "synth/amp.py",
   "line": 705,
+  "fastmath": false,
   "params": [
    "x",
    "up",
@@ -390,6 +390,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "down": [
       "array(float64, 1d, C)"
@@ -453,16 +454,15 @@
       "Literal[int](0)",
       "int64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "f9963fc7f8e78b9a"
  },
  "synth.amp._spring": {
-  "fastmath": false,
   "file": "synth/amp.py",
   "line": 268,
+  "fastmath": false,
   "params": [
    "n",
    "start",
@@ -489,6 +489,7 @@
      "float64",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "arrival": [
       "float64"
@@ -588,16 +589,15 @@
      "z1": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "795ee2193d3903e9"
  },
  "synth.analog._delays": {
-  "fastmath": false,
   "file": "synth/analog.py",
   "line": 554,
+  "fastmath": false,
   "params": [
    "x",
    "d1",
@@ -610,6 +610,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "c": [
       "int64"
@@ -662,16 +663,15 @@
      "xm": [
       "float64"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "43ab093f1d53c994"
  },
  "synth.analog._ladder": {
-  "fastmath": false,
   "file": "synth/analog.py",
   "line": 294,
+  "fastmath": false,
   "params": [
    "x",
    "G",
@@ -682,9 +682,9 @@
   "source": "5ea65db7c57a63e1"
  },
  "synth.analog._ladder_step": {
-  "fastmath": false,
   "file": "synth/analog.py",
   "line": 256,
+  "fastmath": false,
   "params": [
    "x",
    "G",
@@ -699,6 +699,7 @@
      "float64",
      "array(float64, 1d, C)"
     ],
+    "return": "float64",
     "locals": {
      "G": [
       "float64"
@@ -769,16 +770,15 @@
      "y4": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "b51b3a9c8b837850"
  },
  "synth.analog._sat": {
-  "fastmath": false,
   "file": "synth/analog.py",
   "line": 245,
+  "fastmath": false,
   "params": [
    "v"
   ],
@@ -787,6 +787,7 @@
     "args": [
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "v": [
       "float64"
@@ -794,16 +795,15 @@
      "v2": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "174f76a7233e45e5"
  },
  "synth.analog._sub": {
-  "fastmath": false,
   "file": "synth/analog.py",
   "line": 480,
+  "fastmath": false,
   "params": [
    "buf",
    "at",
@@ -848,6 +848,7 @@
      "float64",
      "float64"
     ],
+    "return": "int64",
     "locals": {
      "amp": [
       "array(float64, 1d, C)"
@@ -974,16 +975,15 @@
      "y": [
       "float64"
      ]
-    },
-    "return": "int64"
+    }
    }
   ],
   "source": "5b40a5c5b8f96f55"
  },
  "synth.analog._voice": {
-  "fastmath": false,
   "file": "synth/analog.py",
   "line": 335,
+  "fastmath": false,
   "params": [
    "buf",
    "at",
@@ -1048,6 +1048,7 @@
      "uint64",
      "float64"
     ],
+    "return": "int64",
     "locals": {
      "amp": [
       "array(float64, 1d, C)"
@@ -1282,16 +1283,15 @@
      "x_state": [
       "uint64"
      ]
-    },
-    "return": "int64"
+    }
    }
   ],
   "source": "4fafc6a01e7db003"
  },
  "synth.analog._wave": {
-  "fastmath": false,
   "file": "synth/analog.py",
   "line": 316,
+  "fastmath": false,
   "params": [
    "kind",
    "q",
@@ -1306,6 +1306,7 @@
      "float64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "d": [
       "float64"
@@ -1325,16 +1326,15 @@
      "y": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "3e88174958d3bfd3"
  },
  "synth.bowed._read": {
-  "fastmath": false,
   "file": "synth/bowed.py",
   "line": 29,
+  "fastmath": false,
   "params": [
    "buf",
    "pos",
@@ -1347,6 +1347,7 @@
      "int64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "a": [
       "float64"
@@ -1393,16 +1394,15 @@
      "x": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "5403f64c2025e331"
  },
  "synth.bowed._read_masked": {
-  "fastmath": false,
   "file": "synth/bowed.py",
   "line": 89,
+  "fastmath": false,
   "params": [
    "buf",
    "pos",
@@ -1415,6 +1415,7 @@
      "int64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "a": [
       "float64"
@@ -1461,16 +1462,15 @@
      "x": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "a1672b35a7144830"
  },
  "synth.bowed.run": {
-  "fastmath": false,
   "file": "synth/bowed.py",
   "line": 48,
+  "fastmath": false,
   "params": [
    "period",
    "bridge_len",
@@ -1491,6 +1491,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "arriving": [
       "float64"
@@ -1561,16 +1562,15 @@
      "v_string": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "155947e8244e2290"
  },
  "synth.bowed.run_primed": {
-  "fastmath": false,
   "file": "synth/bowed.py",
   "line": 107,
+  "fastmath": false,
   "params": [
    "period",
    "bridge_len",
@@ -1595,6 +1595,7 @@
      "array(int64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "arriving": [
       "float64"
@@ -1693,16 +1694,15 @@
      "x": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "2f46ac4339620a8d"
  },
  "synth.chip._lfsr": {
-  "fastmath": false,
   "file": "synth/chip.py",
   "line": 298,
+  "fastmath": false,
   "params": [
    "reg",
    "short"
@@ -1711,9 +1711,9 @@
   "source": "d8efd651f3efec72"
  },
  "synth.chip._mix_tnd": {
-  "fastmath": false,
   "file": "synth/chip.py",
   "line": 354,
+  "fastmath": false,
   "params": [
    "tt",
    "tv",
@@ -1732,6 +1732,7 @@
      "float64",
      "float64"
     ],
+    "return": "UniTuple(array(float64, 1d, C) x 2)",
     "locals": {
      "i": [
       "Literal[int](0)",
@@ -1781,16 +1782,15 @@
      "tv": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "UniTuple(array(float64, 1d, C) x 2)"
+    }
    }
   ],
   "source": "771b0bd280854992"
  },
  "synth.chip._noise_events": {
-  "fastmath": false,
   "file": "synth/chip.py",
   "line": 307,
+  "fastmath": false,
   "params": [
    "t0",
    "t1",
@@ -1803,9 +1803,9 @@
   "source": "659d1fdca08aa073"
  },
  "synth.chip._pulse_events": {
-  "fastmath": false,
   "file": "synth/chip.py",
   "line": 213,
+  "fastmath": false,
   "params": [
    "t0",
    "t1",
@@ -1828,6 +1828,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "UniTuple(array(float64, 1d, C) x 2)",
     "locals": {
      "a": [
       "float64"
@@ -1910,16 +1911,15 @@
      "vol": [
       "array(int64, 1d, C)"
      ]
-    },
-    "return": "UniTuple(array(float64, 1d, C) x 2)"
+    }
    }
   ],
   "source": "f3e0105df1f8265b"
  },
  "synth.chip._staircase": {
-  "fastmath": false,
   "file": "synth/chip.py",
   "line": 183,
+  "fastmath": false,
   "params": [
    "times",
    "levels",
@@ -1932,6 +1932,7 @@
      "array(float64, 1d, C)",
      "int64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "cur": [
       "float64"
@@ -1973,16 +1974,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "5ee3b48f79716e2f"
  },
  "synth.chip._triangle_events": {
-  "fastmath": false,
   "file": "synth/chip.py",
   "line": 264,
+  "fastmath": false,
   "params": [
    "t0",
    "t1",
@@ -1997,6 +1997,7 @@
      "array(float64, 1d, C)",
      "float64"
     ],
+    "return": "Tuple(array(float64, 1d, C), array(float64, 1d, C), float64)",
     "locals": {
      "cap": [
       "Literal[int](16)",
@@ -2051,16 +2052,15 @@
      "v": [
       "int64"
      ]
-    },
-    "return": "Tuple(array(float64, 1d, C), array(float64, 1d, C), float64)"
+    }
    }
   ],
   "source": "11acdc4e0d766151"
  },
  "synth.cymbals._fdn": {
-  "fastmath": false,
   "file": "synth/cymbals.py",
   "line": 194,
+  "fastmath": false,
   "params": [
    "x",
    "lines",
@@ -2085,6 +2085,7 @@
      "float64",
      "int64"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "a": [
       "float64"
@@ -2168,16 +2169,15 @@
      "x": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "8708628613a24753"
  },
  "synth.drum._ring": {
-  "fastmath": false,
   "file": "synth/drum.py",
   "line": 69,
+  "fastmath": false,
   "params": [
    "freqs",
    "amps",
@@ -2198,6 +2198,7 @@
      "int64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -2268,16 +2269,15 @@
      "y2": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "688511c8a5704ef7"
  },
  "synth.drummachine._bank": {
-  "fastmath": false,
   "file": "synth/drummachine.py",
   "line": 270,
+  "fastmath": false,
   "params": [
    "freqs",
    "duties",
@@ -2294,6 +2294,7 @@
      "int64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "count": [
       "int64"
@@ -2334,16 +2335,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "b5ca0593c986644a"
  },
  "synth.drummachine._hat808": {
-  "fastmath": false,
   "file": "synth/drummachine.py",
   "line": 290,
+  "fastmath": false,
   "params": [
    "freqs",
    "duties",
@@ -2378,6 +2378,7 @@
      "float64",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "alpha": [
       "float64"
@@ -2484,16 +2485,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "30b25884a9bd211d"
  },
  "synth.drummachine._ring": {
-  "fastmath": false,
   "file": "synth/drummachine.py",
   "line": 218,
+  "fastmath": false,
   "params": [
    "x",
    "sr",
@@ -2509,9 +2509,9 @@
   "source": "993b490707ccc826"
  },
  "synth.drummachine._square": {
-  "fastmath": false,
   "file": "synth/drummachine.py",
   "line": 252,
+  "fastmath": false,
   "params": [
    "p",
    "d",
@@ -2526,6 +2526,7 @@
      "float64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "d": [
       "float64"
@@ -2545,16 +2546,15 @@
      "v": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "06706a2b9f821b01"
  },
  "synth.epiano._electrostatic": {
-  "fastmath": false,
   "file": "synth/epiano.py",
   "line": 189,
+  "fastmath": false,
   "params": [
    "x",
    "limit",
@@ -2571,6 +2571,7 @@
      "array(float64, 1d, C)",
      "int64"
     ],
+    "return": "none",
     "locals": {
      "c": [
       "float64"
@@ -2608,16 +2609,15 @@
      "xi": [
       "float64"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "61d09c2d27c0edaf"
  },
  "synth.epiano._magnetic": {
-  "fastmath": false,
   "file": "synth/epiano.py",
   "line": 173,
+  "fastmath": false,
   "params": [
    "x",
    "u0",
@@ -2634,6 +2634,7 @@
      "array(float64, 1d, C)",
      "int64"
     ],
+    "return": "none",
     "locals": {
      "end": [
       "int64"
@@ -2668,16 +2669,15 @@
      "x": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "0d7cbe768c54ff99"
  },
  "synth.fretboard._combed": {
-  "fastmath": false,
   "file": "synth/fretboard.py",
   "line": 344,
+  "fastmath": false,
   "params": [
    "y",
    "delays",
@@ -2692,6 +2692,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "acc": [
       "float64"
@@ -2744,16 +2745,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "064ef5416c81fe61"
  },
  "synth.fretboard._two_planes": {
-  "fastmath": false,
   "file": "synth/fretboard.py",
   "line": 251,
+  "fastmath": false,
   "params": [
    "xa",
    "xb",
@@ -2784,6 +2784,7 @@
      "float64",
      "int64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "ad": [
       "float64"
@@ -2905,16 +2906,15 @@
      "yb1": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "17ab6c8de54eb19d"
  },
  "synth.fretwork._string": {
-  "fastmath": false,
   "file": "synth/fretwork.py",
   "line": 253,
+  "fastmath": false,
   "params": [
    "n",
    "ctrl",
@@ -2953,6 +2953,7 @@
      "int64",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "amount": [
       "array(float64, 1d, C)"
@@ -3147,16 +3148,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "e779813d8a77def4"
  },
  "synth.fx._apply": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 438,
+  "fastmath": false,
   "params": [
    "x",
    "lin",
@@ -3173,6 +3173,7 @@
      "array(float64, 2d, C)",
      "array(float64, 2d, C)"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "band": [
       "array(float64, 2d, C)"
@@ -3222,16 +3223,15 @@
      "y": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "36c8a379de7e0fb6"
  },
  "synth.fx._ballistics": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 424,
+  "fastmath": false,
   "params": [
    "target",
    "attack",
@@ -3244,6 +3244,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "attack": [
       "float64"
@@ -3269,16 +3270,15 @@
      "target": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "a43c94053907dd20"
  },
  "synth.fx._block_peaks": {
-  "fastmath": false,
   "file": "synth/fx.py",
-  "line": 609,
+  "line": 627,
+  "fastmath": false,
   "params": [
    "x",
    "block"
@@ -3289,6 +3289,7 @@
      "array(float64, 2d, C)",
      "int64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "b": [
       "int64"
@@ -3323,16 +3324,15 @@
      "x": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "fe30b6155a2cdb5a"
  },
  "synth.fx._block_power": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 372,
+  "fastmath": false,
   "params": [
    "x",
    "block"
@@ -3343,6 +3343,7 @@
      "array(float64, 2d, C)",
      "int64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "b": [
       "int64"
@@ -3374,16 +3375,15 @@
      "x": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "926629e949e93902"
  },
  "synth.fx._detect_every": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 404,
+  "fastmath": false,
   "params": [
    "key",
    "coef",
@@ -3396,6 +3396,7 @@
      "float64",
      "int64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "c": [
       "int64"
@@ -3430,16 +3431,15 @@
      "step": [
       "int64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "6fb83c25dd9cc338"
  },
  "synth.fx._extended": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 282,
+  "fastmath": false,
   "params": [
    "p",
    "n",
@@ -3452,6 +3452,7 @@
      "int64",
      "bool"
     ],
+    "return": "int64",
     "locals": {
      "n": [
       "int64"
@@ -3462,16 +3463,15 @@
      "reflect": [
       "bool"
      ]
-    },
-    "return": "int64"
+    }
    }
   ],
   "source": "3f3a1c2f0e97417f"
  },
  "synth.fx._follow": {
-  "fastmath": false,
   "file": "synth/fx.py",
-  "line": 577,
+  "line": 595,
+  "fastmath": false,
   "params": [
    "x",
    "detect",
@@ -3490,6 +3490,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -3539,16 +3540,15 @@
      "x": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "534d8f5d7b68dbe1"
  },
  "synth.fx._four": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 83,
+  "fastmath": false,
   "params": [
    "y",
    "p",
@@ -3565,6 +3565,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "c": [
       "int64"
@@ -3632,16 +3633,15 @@
      "z2": [
       "float64"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "ee4b159799a508f7"
  },
  "synth.fx._hold": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 341,
+  "fastmath": false,
   "params": [
    "playing",
    "track"
@@ -3652,6 +3652,7 @@
      "array(bool, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "i": [
       "int64"
@@ -3666,16 +3667,15 @@
      "track": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "7864ed53f577f9ea"
  },
  "synth.fx._one": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 124,
+  "fastmath": false,
   "params": [
    "y",
    "p"
@@ -3686,6 +3686,7 @@
      "array(float64, 2d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "c": [
       "int64"
@@ -3717,16 +3718,15 @@
      "z2": [
       "float64"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "d613a4db8f6063dd"
  },
  "synth.fx._products": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 215,
+  "fastmath": false,
   "params": [
    "x"
   ],
@@ -3735,6 +3735,7 @@
     "args": [
      "array(float64, 2d, C)"
     ],
+    "return": "UniTuple(float64 x 3)",
     "locals": {
      "i": [
       "int64"
@@ -3751,16 +3752,15 @@
      "x": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "UniTuple(float64 x 3)"
+    }
    }
   ],
   "source": "51fbb8c80c269ac5"
  },
  "synth.fx._running_mean": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 239,
+  "fastmath": false,
   "params": [
    "x",
    "size",
@@ -3773,6 +3773,7 @@
      "int64",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "fs": [
       "float64"
@@ -3813,16 +3814,15 @@
      "x": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "4cf787d234d992bd"
  },
  "synth.fx._saturate": {
-  "fastmath": false,
   "file": "synth/fx.py",
-  "line": 646,
+  "line": 664,
+  "fastmath": false,
   "params": [
    "x",
    "k",
@@ -3839,6 +3839,7 @@
      "float64",
      "array(float64, 2d, C)"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "bias": [
       "float64"
@@ -3891,16 +3892,15 @@
      "y": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "d7ca094d45220af7"
  },
  "synth.fx._sliding_min": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 293,
+  "fastmath": false,
   "params": [
    "x",
    "before",
@@ -3917,6 +3917,7 @@
      "bool",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "after": [
       "int64"
@@ -3962,16 +3963,15 @@
      "x": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "61fc57f131e2cf81"
  },
  "synth.fx._soft": {
-  "fastmath": false,
   "file": "synth/fx.py",
-  "line": 635,
+  "line": 653,
+  "fastmath": false,
   "params": [
    "v"
   ],
@@ -3980,6 +3980,7 @@
     "args": [
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "v": [
       "float64"
@@ -3987,16 +3988,15 @@
      "w": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "bfa091d7c3231c4e"
  },
  "synth.fx._span": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 186,
+  "fastmath": false,
   "params": [
    "x",
    "floor"
@@ -4007,6 +4007,7 @@
      "array(float64, 2d, C)",
      "float64"
     ],
+    "return": "UniTuple(int64 x 2)",
     "locals": {
      "c": [
       "int64"
@@ -4034,16 +4035,15 @@
      "x": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "UniTuple(int64 x 2)"
+    }
    }
   ],
   "source": "b3a1e0241449a824"
  },
  "synth.fx._two": {
-  "fastmath": false,
   "file": "synth/fx.py",
   "line": 108,
+  "fastmath": false,
   "params": [
    "y",
    "p",
@@ -4056,6 +4056,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "c": [
       "int64"
@@ -4099,16 +4100,15 @@
      "z2": [
       "float64"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "d7f39fbbaae1c4a3"
  },
  "synth.harmonica._hands": {
-  "fastmath": false,
   "file": "synth/harmonica.py",
   "line": 251,
+  "fastmath": false,
   "params": [
    "x",
    "opening",
@@ -4122,9 +4122,9 @@
   "source": "d3fe27e0b1d8fbad"
  },
  "synth.instruments._placed": {
-  "fastmath": false,
   "file": "synth/instruments.py",
   "line": 163,
+  "fastmath": false,
   "params": [
    "y",
    "cos",
@@ -4143,6 +4143,7 @@
      "float64",
      "array(float64, 2d, C)"
     ],
+    "return": "none",
     "locals": {
      "cos": [
       "float64"
@@ -4174,8 +4175,7 @@
      "y": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "none"
+    }
    },
    {
     "args": [
@@ -4186,6 +4186,7 @@
      "float64",
      "array(float64, 2d, C)"
     ],
+    "return": "none",
     "locals": {
      "cos": [
       "float64"
@@ -4217,8 +4218,7 @@
      "y": [
       "readonly array(float64, 2d, F)"
      ]
-    },
-    "return": "none"
+    }
    },
    {
     "args": [
@@ -4229,6 +4229,7 @@
      "float64",
      "array(float64, 2d, C)"
     ],
+    "return": "none",
     "locals": {
      "cos": [
       "float64"
@@ -4260,16 +4261,15 @@
      "y": [
       "array(float64, 2d, F)"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "2da4983ae00cf554"
  },
  "synth.kit._contacts": {
-  "fastmath": false,
   "file": "synth/kit.py",
   "line": 297,
+  "fastmath": false,
   "params": [
    "d",
    "sr",
@@ -4286,6 +4286,7 @@
      "array(float64, 1d, C)",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -4349,16 +4350,15 @@
      "zeta": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "7217b56d9ca2c3f7"
  },
  "synth.kit._grains": {
-  "fastmath": false,
   "file": "synth/kit.py",
   "line": 336,
+  "fastmath": false,
   "params": [
    "strengths",
    "noise",
@@ -4375,6 +4375,7 @@
      "int64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -4422,16 +4423,15 @@
      "tau": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "874700ba08655085"
  },
  "synth.master._abs_max": {
-  "fastmath": false,
   "file": "synth/master.py",
   "line": 192,
+  "fastmath": false,
   "params": [
    "y"
   ],
@@ -4440,6 +4440,7 @@
     "args": [
      "array(float64, 2d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "c": [
       "int64"
@@ -4462,16 +4463,15 @@
      "y": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "60632c430fdb1f14"
  },
  "synth.master._hop_power": {
-  "fastmath": false,
   "file": "synth/master.py",
   "line": 50,
+  "fastmath": false,
   "params": [
    "y",
    "hop"
@@ -4480,9 +4480,9 @@
   "source": "2809d5bf0c9a67ac"
  },
  "synth.master._mean_ahead": {
-  "fastmath": false,
   "file": "synth/master.py",
   "line": 228,
+  "fastmath": false,
   "params": [
    "recovered",
    "ahead",
@@ -4497,6 +4497,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "ahead": [
       "int64"
@@ -4540,16 +4541,15 @@
      "width": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "1eb25e425f79273a"
  },
  "synth.master._over": {
-  "fastmath": false,
   "file": "synth/master.py",
   "line": 218,
+  "fastmath": false,
   "params": [
    "x",
    "a"
@@ -4560,6 +4560,7 @@
      "array(float64, 2d, C)",
      "float64"
     ],
+    "return": "array(bool, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -4576,16 +4577,15 @@
      "x": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(bool, 1d, C)"
+    }
    }
   ],
   "source": "505beaa8f46dae01"
  },
  "synth.master._recover": {
-  "fastmath": false,
   "file": "synth/master.py",
   "line": 305,
+  "fastmath": false,
   "params": [
    "held",
    "coef",
@@ -4598,6 +4598,7 @@
      "float64",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "coef": [
       "float64"
@@ -4614,16 +4615,15 @@
      "out": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "c0c1df3e52e61e33"
  },
  "synth.master._weighted_hop_power": {
-  "fastmath": false,
   "file": "synth/master.py",
   "line": 65,
+  "fastmath": false,
   "params": [
    "x",
    "p",
@@ -4638,6 +4638,7 @@
      "array(float64, 1d, C)",
      "int64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "c": [
       "int64"
@@ -4720,16 +4721,15 @@
      "z2r": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "2832b342fda0749c"
  },
  "synth.master._windows": {
-  "fastmath": false,
   "file": "synth/master.py",
   "line": 205,
+  "fastmath": false,
   "params": [
    "y",
    "ch",
@@ -4744,6 +4744,7 @@
      "array(int64, 1d, C)",
      "int64"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "ch": [
       "int64"
@@ -4775,16 +4776,15 @@
      "y": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "593db61817e2062a"
  },
  "synth.modal.ring": {
-  "fastmath": false,
   "file": "synth/modal.py",
   "line": 31,
+  "fastmath": false,
   "params": [
    "out",
    "start",
@@ -4817,6 +4817,7 @@
      "float64",
      "float64"
     ],
+    "return": "int64",
     "locals": {
      "a": [
       "float64"
@@ -4957,16 +4958,15 @@
      "zr": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "int64"
+    }
    }
   ],
   "source": "766a21d8320cd9d2"
  },
  "synth.organ._expression": {
-  "fastmath": false,
   "file": "synth/organ.py",
   "line": 397,
+  "fastmath": false,
   "params": [
    "x",
    "sr",
@@ -4995,6 +4995,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -5069,16 +5070,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "f31a8a8762f31d9c"
  },
  "synth.organ._generator": {
-  "fastmath": false,
   "file": "synth/organ.py",
   "line": 247,
+  "fastmath": false,
   "params": [
    "n",
    "sr",
@@ -5111,6 +5111,7 @@
      "array(int64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "UniTuple(array(float64, 1d, C) x 2)",
     "locals": {
      "acc_m": [
       "float64"
@@ -5254,16 +5255,15 @@
      "wave": [
       "float64"
      ]
-    },
-    "return": "UniTuple(array(float64, 1d, C) x 2)"
+    }
    }
   ],
   "source": "322c357b904f6bfe"
  },
  "synth.organ._read": {
-  "fastmath": false,
   "file": "synth/organ.py",
   "line": 433,
+  "fastmath": false,
   "params": [
    "line",
    "size",
@@ -5278,6 +5278,7 @@
      "int64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "d": [
       "float64"
@@ -5309,16 +5310,15 @@
      "xm1": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
-  "source": "c1d4d8af0f62a3a1"
+  "source": "0477d7a12b72fa92"
  },
  "synth.organ._rotors": {
-  "fastmath": false,
   "file": "synth/organ.py",
   "line": 446,
+  "fastmath": false,
   "params": [
    "x",
    "sr",
@@ -5355,6 +5355,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "a": [
       "float64"
@@ -5540,16 +5541,15 @@
      "z": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "a54f93afb34c5d5d"
  },
  "synth.organ._scanner": {
-  "fastmath": false,
   "file": "synth/organ.py",
   "line": 334,
+  "fastmath": false,
   "params": [
    "x",
    "sr",
@@ -5572,6 +5572,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "base": [
       "float64"
@@ -5691,16 +5692,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "4a9801a0566ba413"
  },
  "synth.osc._blamp": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 78,
+  "fastmath": false,
   "params": [
    "t",
    "dt"
@@ -5709,9 +5709,9 @@
   "source": "36a23560de67577f"
  },
  "synth.osc._blep": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 29,
+  "fastmath": false,
   "params": [
    "t",
    "dt"
@@ -5720,9 +5720,9 @@
   "source": "ef16b19eaf9bc9dd"
  },
  "synth.osc._blep4": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 41,
+  "fastmath": false,
   "params": [
    "t"
   ],
@@ -5731,6 +5731,7 @@
     "args": [
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "s": [
       "float64"
@@ -5741,16 +5742,15 @@
      "u": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "f5f0a3d44a281719"
  },
  "synth.osc._edges": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 65,
+  "fastmath": false,
   "params": [
    "p",
    "dt"
@@ -5761,6 +5761,7 @@
      "float64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "after": [
       "float64"
@@ -5777,16 +5778,15 @@
      "r": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "67b6951750376b56"
  },
  "synth.osc.pulse": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 104,
+  "fastmath": false,
   "params": [
    "freq",
    "duty",
@@ -5797,9 +5797,9 @@
   "source": "7092bf85872ac7c9"
  },
  "synth.osc.saw": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 90,
+  "fastmath": false,
   "params": [
    "freq",
    "sr",
@@ -5809,9 +5809,9 @@
   "source": "2d204240dda979c3"
  },
  "synth.osc.stepped": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 144,
+  "fastmath": false,
   "params": [
    "freq",
    "table",
@@ -5822,9 +5822,9 @@
   "source": "b4c43396c4dfa508"
  },
  "synth.osc.triangle": {
-  "fastmath": false,
   "file": "synth/osc.py",
   "line": 125,
+  "fastmath": false,
   "params": [
    "freq",
    "sr",
@@ -5834,9 +5834,9 @@
   "source": "f2a825ad03c46a53"
  },
  "synth.piano._spectrum": {
-  "fastmath": false,
   "file": "synth/piano.py",
   "line": 262,
+  "fastmath": false,
   "params": [
    "force",
    "freqs",
@@ -5849,6 +5849,7 @@
      "array(float64, 1d, C)",
      "float64"
     ],
+    "return": "array(complex128, 1d, C)",
     "locals": {
      "acc_i": [
       "float64"
@@ -5889,16 +5890,15 @@
      "w": [
       "float64"
      ]
-    },
-    "return": "array(complex128, 1d, C)"
+    }
    }
   ],
   "source": "1078ee5ccf84330d"
  },
  "synth.piano.hammer_force": {
-  "fastmath": false,
   "file": "synth/piano.py",
   "line": 184,
+  "fastmath": false,
   "params": [
    "v0",
    "mass",
@@ -5925,6 +5925,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "_": [
       "int64"
@@ -6053,16 +6054,15 @@
      "z": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "754462db264b07a3"
  },
  "synth.pipe.run": {
-  "fastmath": false,
   "file": "synth/pipe.py",
   "line": 31,
+  "fastmath": false,
   "params": [
    "freq",
    "breath",
@@ -6087,6 +6087,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "aim": [
       "array(float64, 1d, C)"
@@ -6175,16 +6176,15 @@
      "y": [
       "float64"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "61c277eda546710a"
  },
  "synth.pluck._bank": {
-  "fastmath": false,
   "file": "synth/pluck.py",
-  "line": 224,
+  "line": 244,
+  "fastmath": false,
   "params": [
    "x",
    "wholes",
@@ -6201,6 +6201,7 @@
      "array(float64, 1d, C)",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "base": [
       "int64"
@@ -6267,16 +6268,15 @@
      "x": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "6d85530e31849d57"
  },
  "synth.pluck._loop": {
-  "fastmath": false,
   "file": "synth/pluck.py",
-  "line": 72,
+  "line": 80,
+  "fastmath": false,
   "params": [
    "x",
    "whole",
@@ -6299,6 +6299,7 @@
      "int64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "acc": [
       "float64"
@@ -6351,16 +6352,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "0719d74fac3af1ce"
  },
  "synth.rattle._collide": {
-  "fastmath": false,
   "file": "synth/rattle.py",
   "line": 155,
+  "fastmath": false,
   "params": [
    "energy",
    "hop",
@@ -6407,6 +6407,7 @@
      "uint64",
      "array(float64, 1d, C)"
     ],
+    "return": "uint64",
     "locals": {
      "a_lp": [
       "float64"
@@ -6573,16 +6574,15 @@
      "yb": [
       "float64"
      ]
-    },
-    "return": "uint64"
+    }
    }
   ],
   "source": "bf1e0f275ea803b7"
  },
  "synth.rattle._next": {
-  "fastmath": false,
   "file": "synth/rattle.py",
   "line": 133,
+  "fastmath": false,
   "params": [
    "state"
   ],
@@ -6591,6 +6591,7 @@
     "args": [
      "uint64"
     ],
+    "return": "Tuple(uint64, float64)",
     "locals": {
      "out": [
       "uint64"
@@ -6601,16 +6602,15 @@
      "x": [
       "uint64"
      ]
-    },
-    "return": "Tuple(uint64, float64)"
+    }
    }
   ],
   "source": "eeea19c7ebe207ce"
  },
  "synth.rattle._wires": {
-  "fastmath": false,
   "file": "synth/rattle.py",
   "line": 297,
+  "fastmath": false,
   "params": [
    "freqs",
    "decay",
@@ -6645,6 +6645,7 @@
      "array(float64, 1d, C)",
      "int64"
     ],
+    "return": "uint64",
     "locals": {
      "a": [
       "float64"
@@ -6790,16 +6791,15 @@
      "x": [
       "float64"
      ]
-    },
-    "return": "uint64"
+    }
    }
   ],
   "source": "eda9c2ba1b51d1f7"
  },
  "synth.rattle.comb": {
-  "fastmath": false,
   "file": "synth/rattle.py",
   "line": 409,
+  "fastmath": false,
   "params": [
    "x",
    "period",
@@ -6812,6 +6812,7 @@
      "int64",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "gain": [
       "float64"
@@ -6828,16 +6829,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "b4053ae9575194f5"
  },
  "synth.reed._read": {
-  "fastmath": false,
   "file": "synth/reed.py",
   "line": 83,
+  "fastmath": false,
   "params": [
    "wave",
    "increments",
@@ -6856,6 +6856,7 @@
      "int64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "amplitude": [
       "array(float64, 1d, C)"
@@ -6890,16 +6891,15 @@
      "x": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "c42464deab0cc168"
  },
  "synth.reed._read_mix": {
-  "fastmath": false,
   "file": "synth/reed.py",
   "line": 64,
+  "fastmath": false,
   "params": [
    "dark",
    "bright",
@@ -6922,6 +6922,7 @@
      "int64",
      "float64"
     ],
+    "return": "float64",
     "locals": {
      "a": [
       "float64"
@@ -6974,16 +6975,15 @@
      "x": [
       "float64"
      ]
-    },
-    "return": "float64"
+    }
    }
   ],
   "source": "a43ec03a11baddc8"
  },
  "synth.stringloop._run": {
-  "fastmath": false,
   "file": "synth/stringloop.py",
-  "line": 29,
+  "line": 28,
+  "fastmath": false,
   "params": [
    "x",
    "delay",
@@ -7002,6 +7002,7 @@
      "float64",
      "int64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "a": [
       "float64"
@@ -7072,16 +7073,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "841b18abd483230d"
  },
  "synth.struck._bank": {
-  "fastmath": false,
   "file": "synth/struck.py",
   "line": 38,
+  "fastmath": false,
   "params": [
    "freqs",
    "decay",
@@ -7112,6 +7112,7 @@
      "int64",
      "float64"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "a": [
       "float64"
@@ -7231,16 +7232,15 @@
      "zk": [
       "complex128"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "a565241774d4cc82"
  },
  "synth.struck._up2": {
-  "fastmath": false,
   "file": "synth/struck.py",
   "line": 112,
+  "fastmath": false,
   "params": [
    "x",
    "taps",
@@ -7253,6 +7253,7 @@
      "array(float64, 1d, C)",
      "float64"
     ],
+    "return": "array(float64, 1d, C)",
     "locals": {
      "acc": [
       "float64"
@@ -7287,16 +7288,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "array(float64, 1d, C)"
+    }
    }
   ],
   "source": "2e49de4498e5cfc9"
  },
  "synth.throat._assemble": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 327,
+  "fastmath": false,
   "params": [
    "periodic",
    "aperiodic",
@@ -7307,9 +7307,9 @@
   "source": "3ca0e102bb50347d"
  },
  "synth.throat._assemble_lay": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 360,
+  "fastmath": false,
   "params": [
    "y",
    "at",
@@ -7328,6 +7328,7 @@
      "array(float64, 1d, C)",
      "int64"
     ],
+    "return": "none",
     "locals": {
      "aperiodic": [
       "array(float64, 2d, C)"
@@ -7377,16 +7378,15 @@
      "y": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "69a6dc2f389ee3f1"
  },
  "synth.throat._gelu_flat": {
-  "fastmath": false,
   "file": "synth/throat.py",
-  "line": 781,
+  "line": 811,
+  "fastmath": false,
   "params": [
    "x",
    "out"
@@ -7397,6 +7397,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "i": [
       "int64"
@@ -7413,16 +7414,15 @@
      "x": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "e35cb00adcc6368f"
  },
  "synth.throat._lay": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 351,
+  "fastmath": false,
   "params": [
    "y",
    "at",
@@ -7432,9 +7432,9 @@
   "source": "86ec0ed50ad52103"
  },
  "synth.throat._noise_mask": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 306,
+  "fastmath": false,
   "params": [
    "noise",
    "m"
@@ -7445,6 +7445,7 @@
      "array(float64, 2d, C)",
      "array(int64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "c": [
       "int64"
@@ -7467,16 +7468,15 @@
      "rows": [
       "int64"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "7bb8fe419d0dcefd"
  },
  "synth.throat._noise_sub_dc": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 315,
+  "fastmath": false,
   "params": [
    "noise",
    "m",
@@ -7489,6 +7489,7 @@
      "array(int64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "c": [
       "int64"
@@ -7517,16 +7518,15 @@
      "rows": [
       "int64"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "18c0bc796d6c4aa7"
  },
  "synth.throat._polar_mul": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 139,
+  "fastmath": false,
   "params": [
    "spec_f",
    "amp",
@@ -7539,6 +7539,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "a": [
       "float64"
@@ -7570,16 +7571,15 @@
      "spec_f": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "769d0d2f772276fa"
  },
  "synth.throat._polar_turn": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 129,
+  "fastmath": false,
   "params": [
    "spec_f",
    "amp",
@@ -7592,6 +7592,7 @@
      "array(float64, 1d, C)",
      "array(float64, 1d, C)"
     ],
+    "return": "none",
     "locals": {
      "a": [
       "float64"
@@ -7611,16 +7612,15 @@
      "turn": [
       "array(float64, 1d, C)"
      ]
-    },
-    "return": "none"
+    }
    }
   ],
   "source": "3e6500923d0cea26"
  },
  "synth.throat._to_bins": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 83,
+  "fastmath": false,
   "params": [
    "values",
    "lo",
@@ -7643,6 +7643,7 @@
      "readonly array(float64, 1d, C)",
      "bool"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "a": [
       "float64"
@@ -7704,16 +7705,15 @@
      "values": [
       "array(float64, 2d, C)"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "cd639cc020878a8d"
  },
  "synth.throat._turn_phase": {
-  "fastmath": false,
   "file": "synth/throat.py",
   "line": 272,
+  "fastmath": false,
   "params": [
    "bins",
    "hz",
@@ -7756,6 +7756,7 @@
      "float64",
      "float64"
     ],
+    "return": "array(float64, 2d, C)",
     "locals": {
      "after": [
       "readonly array(float64, 1d, C)"
@@ -7847,16 +7848,15 @@
      "tx_spread": [
       "float64"
      ]
-    },
-    "return": "array(float64, 2d, C)"
+    }
    }
   ],
   "source": "724941dedd58db8b"
  },
  "synth.tube._scatter": {
-  "fastmath": false,
   "file": "synth/tube.py",
   "line": 93,
+  "fastmath": false,
   "params": [
    "right",
    "left",
@@ -7870,9 +7870,9 @@
   "source": "b47517c1149fdd3e"
  },
  "synth.tube.run": {
-  "fastmath": false,
   "file": "synth/tube.py",
   "line": 108,
+  "fastmath": false,
   "params": [
    "source",
    "noise",

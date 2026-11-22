@@ -2019,7 +2019,7 @@ export function k_synth$fx$_apply(x, lin, step, band, y) {
   return y;
 }
 
-// songbird/synth/fx.py:578
+// songbird/synth/fx.py:596
 export function k_synth$fx$_follow(x, detect, rise, fall, floor_db, span_db) {
   let a, c, chans, coef, i, n, out, p, s, t, $t1, $t2, $t3, $t4, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2045,7 +2045,7 @@ export function k_synth$fx$_follow(x, detect, rise, fall, floor_db, span_db) {
   return out;
 }
 
-// songbird/synth/fx.py:610
+// songbird/synth/fx.py:628
 export function k_synth$fx$_block_peaks(x, block) {
   let b, c, chans, i, k, m, n, out, v, $t1, $t2, $t3, $t4, $t5, $t6, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2071,7 +2071,7 @@ export function k_synth$fx$_block_peaks(x, block) {
   return out;
 }
 
-// songbird/synth/fx.py:636
+// songbird/synth/fx.py:654
 export function k_synth$fx$_soft(v) {
   let w;
   if (((v >= 3.0))) {
@@ -2084,7 +2084,7 @@ export function k_synth$fx$_soft(v) {
   return ((v * (27.0 + w)) / (27.0 + (9.0 * w)));
 }
 
-// songbird/synth/fx.py:647
+// songbird/synth/fx.py:665
 export function k_synth$fx$_saturate(x, k, bias, dc, y) {
   let c, chans, i, n, norm, out, prev_in, prev_out, slope, th, v, w, $t1, $t2, $t3, $t4, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -3227,7 +3227,7 @@ export function k_synth$pipe$run(freq, breath, chiff, drive, aim, noise, feedbac
   return out;
 }
 
-// songbird/synth/pluck.py:73
+// songbird/synth/pluck.py:81
 export function k_synth$pluck$_loop(x, whole, taps, gain, release_at, release_gain, length, smooth) {
   let acc, base, fb, g, k, n, n_taps, pad, y, $t1, $t2, $t3, $t4, taps_d, taps_n0, taps_n1, taps_s0, taps_s1, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -3256,7 +3256,7 @@ export function k_synth$pluck$_loop(x, whole, taps, gain, release_at, release_ga
   return rt.slice1(y, pad, y_n0);
 }
 
-// songbird/synth/pluck.py:237
+// songbird/synth/pluck.py:245
 export function k_synth$pluck$_bank(x, wholes, taps, gains, coupling) {
   let base, drive, fb, k, length, lines, mask, n, n_strings, n_taps, out, pad, ring, s, total, v, $t1, $t2, $t3, $t4, $t5, $t6, $t7, $t8, gains_d, gains_n0, gains_n1, gains_s0, gains_s1, lines_d, lines_n0, lines_n1, lines_s0, lines_s1, out_d, out_n0, out_n1, out_s0, out_s1, taps_d, taps_n0, taps_n1, taps_s0, taps_s1, wholes_d, wholes_n0, wholes_n1, wholes_s0, wholes_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -3617,7 +3617,7 @@ export function k_synth$reed$_read(wave, increments, amplitude, out, offset, pha
   return phase;
 }
 
-// songbird/synth/stringloop.py:30
+// songbird/synth/stringloop.py:29
 export function k_synth$stringloop$_run(x, delay, gain, loss, pole, size) {
   let a, b, buf, c, d, f, i, lp, mask, n, out, pos, prev, r, t, v, y, $t1, $t2, buf_d, buf_n0, buf_n1, buf_s0, buf_s1, delay_d, delay_n0, delay_n1, delay_s0, delay_s1, gain_d, gain_n0, gain_n1, gain_s0, gain_s1, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
