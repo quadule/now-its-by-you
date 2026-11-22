@@ -7,7 +7,7 @@ sharply and reaches higher partials. The hammer is simulated while it
 touches the string (a millisecond or less at the top, three to five in the
 bass) as a mass on that spring against the string's impedance, with the
 waves it launches coming back from the agraffe and the bridge, which is
-what throws the hammer off in the treble. With p from 3.2 in the bass to 4
+what throws the hammer off in the treble. With p from 3.2 in the bass to 3.6
 at the top (measured hammers run from about 2.2 to 3.5 and more), a C4's
 contact lasts 3 ms at pp and 2 at ff (measured, about 4 and 2) and its
 force at 3-4 kHz rises some 45 dB between them. The force drives the
@@ -158,7 +158,7 @@ def stretch_cents(m: float, inharmonicity=None) -> float:
     """How far the tuner stretches a key from equal temperament, from the piano's own inharmonicity:
     nothing from C3 to C6; above, each octave tuned beatless to the stretched second partial of the
     one below (2:1); below, each tuned so its fourth partial meets the second of the octave above
-    (4:2). Railsback's curve falls out: C7 about +12 cents, C8 about +38, A0 some -7 (more on a
+    (4:2). Railsback's curve falls out: C7 about +7 cents, C8 about +28, A0 some -7 (more on a
     small piano's stiffer bass)."""
     b = inharmonicity or (lambda k: _log_interp(k, B_TABLE))
     cents = 0.0

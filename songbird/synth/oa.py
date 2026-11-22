@@ -10,9 +10,9 @@ What keeps it the same: every step works along a row alone (the FFTs, the produc
 the FFT library transforms rows two (or four, or eight: its vector width) at a time from the first row of
 a call, with a leftover row done alone. So every call here starts on a row whose index is a multiple of
 GROUP (a multiple of any vector width) and the last call takes every row that is left: each row is
-transformed alongside the same neighbour as in oaconvolve's single call. tests/test_oa.py holds this
-against scipy's own on the lengths and responses a render uses. Only one FFT worker (the default): with
-more, scipy divides the rows among its threads differently.
+transformed alongside the same neighbour as in oaconvolve's single call. tests/test_lean_render.py and
+tests/test_lean_parts.py hold this against scipy's own on the lengths and responses a render uses. With
+more than one FFT worker, scipy divides the rows among its threads; `workers` divides them the same way.
 """
 
 from __future__ import annotations

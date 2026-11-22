@@ -379,7 +379,7 @@ def _scanner(x, sr, seg_t, seg_depth, seg_wet, seg_dry, phase0, lp):
             d = base + depth * tri
             i = int(d)
             f = d - i
-            # four-point Lagrange read, d samples back
+            # four-point cubic Hermite (Catmull-Rom) read, d samples back
             xm1 = line[(t - i + 1) % size]
             x0 = line[(t - i) % size]
             x1 = line[(t - i - 1) % size]
@@ -432,7 +432,7 @@ def expression(y: np.ndarray, sr: int, swell) -> np.ndarray:
 
 @njit(cache=True, nogil=True)
 def _read(line, size, t, d):
-    """Four-point Lagrange read from a circular line, d (>= 1) samples before sample t."""
+    """Four-point cubic Hermite (Catmull-Rom) read from a circular line, d (>= 1) samples before sample t."""
     i = int(d)
     f = d - i
     xm1 = line[(t - i + 1) % size]

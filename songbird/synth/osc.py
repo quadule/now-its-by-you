@@ -176,12 +176,14 @@ def stepped(freq, table, sr, phase=0.0):
 
 @functools.cache
 def _halfband() -> np.ndarray:  # made when first needed, not on import (the studio's own worker never plays)
+    # 21 kHz at 88.2 kHz is a cutoff at 0.238 of the rate the taps run at: they keep only that fraction
     return firwin(95, 21000.0, fs=88200.0, window=("kaiser", 9.0))
 
 
 def decimate2(x: np.ndarray) -> np.ndarray:
-    """A signal at twice the sample rate brought down to it: flat to about 18 kHz,
-    everything that would fold below 20 kHz at least 85 dB down."""
+    """A signal at twice the sample rate brought down to it: flat to about 0.41 of the rate it comes down to,
+    everything that would fold below 0.45 of it at least 85 dB down (at 44.1 kHz, flat to about 18 kHz and
+    clean below 20 kHz). The filter is a fraction of the rate, so it is the same at any rate."""
     return resample_poly(x, 1, 2, window=_halfband(), axis=0)
 
 
