@@ -381,3 +381,29 @@ def test_skipping_the_hushed_silences_changes_no_sample(monkeypatch):
         assert len(skipped) == len(whole)
         assert np.max(np.abs(skipped - whole)) < 1e-9
         assert np.array_equal(pcm(skipped), pcm(whole))
+
+
+@pytest.mark.skipif(not T.MODEL.exists(), reason="no trained throat shipped yet")
+def test_carried_d_releases_stay_gentle_without_noise_burst_spikes():
+    """Carried /d/ codas ('scrolled on and on') stay subtle relative to the vowel instead of spitting broadband noise."""
+    from scipy.signal import butter, sosfiltfilt
+    from songbird.score import Note
+    from songbird.synth.voice import VoiceParams
+
+    sr = 44100
+    notes = [
+        Note("voice", 0.3, 0.55, 66.0, 0.8, syllable="scrolled", word="scrolled"),
+        Note("voice", 0.88, 0.3, 64.0, 0.7, syllable="on", word="on"),
+        Note("voice", 1.20, 0.3, 61.0, 0.7, syllable="and", word="and"),
+        Note("voice", 1.53, 0.7, 59.0, 0.8, syllable="on", word="on", line_end=True),
+    ]
+    y = T.sing(notes, sr, VoiceParams(), seed=1)
+    # Peak 25 ms energy in 2-8 kHz across the two /d/ boundaries ("scrolled|on" ~0.85s, "and|on" ~1.50s)
+    # stays at least 20 dB below the voiced body RMS of the vowels.
+    hi = sosfiltfilt(butter(4, [2000, 8000], btype="bandpass", fs=sr, output="sos"), y)
+    vowel_rms = np.sqrt(np.mean(y[int(1.6 * sr): int(2.0 * sr)] ** 2))
+    w = int(0.025 * sr)
+    peak_d = max(np.sqrt(np.mean(hi[i: i + w] ** 2))
+                 for t in (0.86, 1.51)
+                 for i in range(int((t - 0.08) * sr), int((t + 0.06) * sr), w // 2))
+    assert 20 * np.log10((peak_d + 1e-12) / (vowel_rms + 1e-12)) < -20.0
