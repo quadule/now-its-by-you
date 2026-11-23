@@ -5,13 +5,14 @@ artist's own words in the refrains and the screen verse, a breath before each re
 by the performance voice: the shipped throat retrained with Scylla's Band as its teacher (docs/THROAT.md), carrying
 the phrasing of ten singers.
 
+It is in A major, for the singers' ranges.
+
 - `genome.json`: the song's genome (`songs/h-now-its-by-you.json`, the same file).
-- `record-final-A.json`: the stage version in A major, for singing.
-- `record-live-A.json`: the same, mixed for singing over on a concert PA: −12 LUFS, a drier room (`space` 0.6) for a
-  real hall, a fuller, wider band (`forward` 6.5, `width` 1.3), the synthetic lead 1.2 dB back after the first verse
-  so live voices own the front while it stays a clear guide, the 808 back at −2 dB in the last refrain with the
-  guitar eased 2 dB, and the bowed bass of the tag trimmed a little.
-- `record-final.json`: the stage version in B major.
+- `record-final-A.json`: the stage version.
+- `record-live-A.json`: the stage version mixed for singing over on a concert PA, the one played on stage: −12 LUFS,
+  a drier room (`space` 0.6) for a real hall, a fuller, wider band (`forward` 6.5, `width` 1.3), the synthetic lead
+  1.2 dB back after the first verse so live voices own the front while it stays a clear guide, the 808 back at
+  −2 dB in the last refrain with the guitar eased 2 dB, and the bowed bass of the tag trimmed a little.
 
     uv run python -m songbird render performance/genome.json --replay performance/record-final-A.json --out final-A.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-live-A.json --out live-A.flac
