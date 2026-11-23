@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blends</title>
+<style>
+:root { --bg: #fbfaf7; --fg: #1d1c1a; --dim: #6f6b64; --line: #e3dfd6; --card: #fff; --accent: #2f6fd0; --bad: #c2412d; --good: #2e8b57; }
+@media (prefers-color-scheme: dark) { :root { --bg: #161513; --fg: #ecebe8; --dim: #9a958c; --line: #33312c; --card: #1f1e1b; --accent: #6ea3ff; --bad: #f07a63; --good: #5fc48d; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 -apple-system, system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+h1 { font-size: 20px; margin: 0 0 14px; }
+.bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+button { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+button.on { border-color: var(--accent); color: var(--accent); }
+#play { width: 44px; font-size: 18px; padding: 4px; }
+#time { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 92px; }
+#track { position: relative; height: 34px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; margin-bottom: 18px; overflow: hidden; }
+.sec { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 12%, transparent); border-left: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); font-size: 11px; color: var(--dim); padding: 2px 4px; white-space: nowrap; overflow: hidden; }
+.sec.loop { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+#head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--fg); pointer-events: none; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; color: var(--dim); font-size: 12px; padding: 4px 8px; }
+td { padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+tr.way { cursor: pointer; }
+tr.way:hover td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+tr.way.on td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+tr.way.on td:first-child { box-shadow: inset 3px 0 var(--accent); }
+.key { color: var(--dim); font-variant-numeric: tabular-nums; width: 24px; }
+.detail { color: var(--dim); font-size: 12px; }
+.num { font-variant-numeric: tabular-nums; text-align: right; width: 60px; }
+.meter { width: 120px; }
+.meter div { height: 6px; border-radius: 3px; background: var(--accent); }
+.best { color: var(--good); font-weight: 600; }
+.wait { color: var(--dim); font-size: 12px; }
+#words { margin-top: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-height: 90px; }
+#words .label { color: var(--dim); font-size: 12px; margin-bottom: 4px; }
+#words p { margin: 0 0 8px; }
+.miss { text-decoration: underline wavy var(--bad); text-underline-offset: 3px; }
+.heard { color: var(--bad); font-size: 12px; }
+.keys { color: var(--dim); font-size: 12px; margin-top: 14px; }
+kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font: 11px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Blends</h1>
+  <div class="bar">
+    <button id="play" title="Play (space)">▶</button>
+    <span id="time">0:00 / 0:00</span>
+    <button id="mix" class="on">Mix</button>
+    <button id="lead">Lead only</button>
+    <button id="loop" title="Loop this section (L)">Loop section</button>
+  </div>
+  <div id="track"><div id="head"></div></div>
+  <table>
+    <thead><tr><th></th><th>Blend</th><th class="num" colspan="2">Lead: sure</th><th class="num">missed</th><th class="num" colspan="2">Mix: sure</th><th class="num">missed</th></tr></thead>
+    <tbody id="ways"></tbody>
+  </table>
+  <div id="words"></div>
+  <div class="keys"><kbd>space</kbd> play · <kbd>1</kbd>–<kbd>9</kbd> <kbd>0</kbd> switch · <kbd>↑</kbd> <kbd>↓</kbd> previous / next · <kbd>←</kbd> <kbd>→</kbd> 5 s · <kbd>L</kbd> loop section · click the bar to seek · <span id="model"></span></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const ctx = new AudioContext();
+let S = null, cur = 0, kind = "mix", playing = false, startAt = 0, offset = 0, loop = null, duration = 1;
+const buffers = {};   // "mix:name" -> AudioBuffer (or a Promise while loading)
+const voices = [];    // playing {src, gain, i}
+const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+const url = (w, k) => k === "mix" ? w.file : w.file.replace(/\.flac$/, ".voice.wav");
+
+async function load(path, tries = 3) {
+  for (let n = 1; ; n++) {
+    try { const r = await fetch(path); if (!r.ok) throw new Error(r.status); return await ctx.decodeAudioData(await r.arrayBuffer()); }
+    catch (e) { if (n >= tries) throw e; await new Promise(ok => setTimeout(ok, 300 * n)); }
+  }
+}
+function buffer(i, k = kind) {
+  const w = S.ways[i], key = `${k}:${w.name}`;
+  if (!buffers[key]) buffers[key] = load(url(w, k)).then(b => (buffers[key] = b, render(), b))
+    .catch(e => { delete buffers[key]; throw e; });
+  return buffers[key];
+}
+async function preload(k) {  // one file at a time: a simple server drops some of many at once
+  for (let i = 0; i < S.ways.length && k === kind; i++) await buffer(i, k).catch(() => {});
+}
+const ready = (i, k = kind) => buffers[`${k}:${S.ways[i].name}`] instanceof AudioBuffer;
+const now = () => playing ? offset + ctx.currentTime - startAt : offset;
+
+function stop() { for (const v of voices) try { v.src.stop(); } catch {} voices.length = 0; }
+function start(at) {
+  stop();
+  offset = at; startAt = ctx.currentTime + 0.03;
+  S.ways.forEach((w, i) => { if (ready(i)) voice(i, startAt, at); });
+}
+function voice(i, when, at) {
+  const src = ctx.createBufferSource(), gain = ctx.createGain();
+  src.buffer = buffers[`${kind}:${S.ways[i].name}`];
+  gain.gain.value = i === cur ? 1 : 0;
+  src.connect(gain).connect(ctx.destination);
+  if (at < src.buffer.duration) src.start(when, at);
+  voices.push({ src, gain, i });
+}
+async function play() {
+  await ctx.resume();
+  if (playing) { offset = now(); playing = false; stop(); }
+  else { await buffer(cur); playing = true; start(offset); }
+  render();
+}
+function seek(t) {
+  t = Math.max(0, Math.min(duration - 0.05, t));
+  if (playing) start(t); else offset = t;
+  render();
+}
+async function pick(i) {
+  if (i < 0 || i >= S.ways.length) return;
+  cur = i;
+  if (!ready(i)) {
+    await buffer(i);
+    if (playing && !voices.some(v => v.i === i)) { const t = now(); voice(i, ctx.currentTime, t); }
+  }
+  const t = ctx.currentTime;
+  for (const v of voices) { v.gain.gain.cancelScheduledValues(t); v.gain.gain.setTargetAtTime(v.i === cur ? 1 : 0, t, 0.008); }
+  render();
+}
+async function setKind(k) {
+  if (k === kind) return;
+  const t = now(); kind = k;
+  await buffer(cur);
+  if (playing) start(t); else offset = t;
+  preload(k);
+  render();
+}
+
+function render() {
+  const t = now();
+  $("#play").textContent = playing ? "❚❚" : "▶";
+  $("#time").textContent = `${fmt(t)} / ${fmt(duration)}`;
+  $("#head").style.left = `${100 * t / duration}%`;
+  $("#mix").classList.toggle("on", kind === "mix");
+  $("#lead").classList.toggle("on", kind === "voice");
+  $("#loop").classList.toggle("on", !!loop);
+  document.querySelectorAll(".sec").forEach((el, j) => el.classList.toggle("loop", loop === S.sections[j]));
+  document.querySelectorAll("tr.way").forEach((el, i) => {
+    el.classList.toggle("on", i === cur);
+    el.querySelector(".wait").textContent = ready(i) ? "" : "loading";
+  });
+  words(t);
+}
+function words(t) {
+  const j = S.sections.findIndex(s => t >= s.from - 1 && t <= s.to + 2);
+  const key = `${kind}|${cur}|${j}`;
+  if (words.last === key) return;
+  words.last = key;
+  if (j < 0) { $("#words").innerHTML = `<div class="label">between sections</div>`; return; }
+  const sec = S.sections[j], h = S.ways[cur][kind].sections[j];
+  const missed = new Set(h.missed.map(m => m[0]).filter(Boolean));
+  // each word shaded by how unsure Whisper is of it; underlined where it wrote down another word
+  const sung = sec.words.split(" ").map((w, i) => { const p = h.sure ? h.sure[i] : 1;
+    return `<span class="${missed.has(w) ? "miss" : ""}" title="${Math.round(100 * p)}% sure"
+      style="color:color-mix(in srgb, var(--bad) ${Math.round(100 * Math.min(1, (1 - p) * 1.6))}%, var(--fg))">${w}</span>`; }).join(" ");
+  $("#words").innerHTML = `<div class="label">${sec.name} · ${h.edits} of ${sec.words.split(" ").length} words missed · the redder, the less sure</div>
+    <p>${sung}</p><div class="label">Whisper heard</div><p class="heard">${h.heard || "nothing"}</p>`;
+}
+function section() { const t = now(); return S.sections.find(s => t >= s.from - 1 && t <= s.to + 2) || null; }
+function tick() {
+  if (playing) {
+    const t = now();
+    if (loop && t > loop.to + 1) seek(loop.from - 0.5);
+    else if (t >= duration) { playing = false; stop(); offset = 0; }
+  }
+  render();
+}
+
+(async () => {
+  S = await (await fetch("scores.json")).json();
+  $("#model").textContent = `heard by Whisper ${S.model}: how sure it is of the sung words, and how many it wrote down wrong`;
+  duration = Math.max(...S.sections.map(s => s.to)) + 15;
+  const range = k => [Math.min(...S.ways.map(w => w[k].sure)), Math.max(...S.ways.map(w => w[k].sure))];
+  const fewest = k => Math.min(...S.ways.map(w => w[k].edits));
+  // the meter spans the blends' own range, so small differences show; the numbers say how small
+  const cell = (w, k) => { const [lo, hi] = range(k);
+    return `<td class="num ${w[k].sure === hi ? "best" : ""}">${(100 * w[k].sure).toFixed(1)}%</td>
+    <td class="meter"><div style="width:${8 + 92 * (w[k].sure - lo) / (hi - lo || 1)}%"></div></td>
+    <td class="num ${w[k].edits === fewest(k) ? "best" : ""}">${w[k].edits}</td>`; };
+  $("#ways").innerHTML = S.ways.map((w, i) => `<tr class="way"><td class="key">${i < 10 ? (i + 1) % 10 : ""}</td>
+    <td>${w.label} <span class="detail">${w.detail}</span> <span class="wait"></span></td>${cell(w, "voice")}${cell(w, "mix")}</tr>`).join("");
+  document.querySelectorAll("tr.way").forEach((el, i) => el.onclick = () => pick(i));
+  const track = $("#track");
+  S.sections.forEach(s => track.insertAdjacentHTML("beforeend",
+    `<div class="sec" style="left:${100 * s.from / duration}%;width:${100 * (s.to - s.from) / duration}%">${s.name}</div>`));
+  // the real length, once the first file is in
+  buffer(0).then(b => { duration = b.duration; document.querySelectorAll(".sec").forEach((el, j) => {
+    const s = S.sections[j]; el.style.left = `${100 * s.from / duration}%`; el.style.width = `${100 * (s.to - s.from) / duration}%`; }); });
+  track.onclick = e => { const r = track.getBoundingClientRect(); seek(duration * (e.clientX - r.left) / r.width); };
+  $("#play").onclick = play;
+  $("#mix").onclick = () => setKind("mix");
+  $("#lead").onclick = () => setKind("voice");
+  $("#loop").onclick = () => { loop = loop ? null : section(); render(); };
+  addEventListener("keydown", e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === " ") { e.preventDefault(); play(); }
+    else if (/^[0-9]$/.test(e.key)) pick((+e.key + 9) % 10);
+    else if (e.key === "ArrowDown") { e.preventDefault(); pick(cur + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); pick(cur - 1); }
+    else if (e.key === "ArrowRight") seek(now() + 5);
+    else if (e.key === "ArrowLeft") seek(now() - 5);
+    else if (e.key === "l" || e.key === "L") { loop = loop ? null : section(); render(); }
+  });
+  preload(kind);
+  setInterval(tick, 40);  // a timer, not animation frames: the loop keeps time with the page out of sight
+})();
+</script>
+</body>
+</html>
