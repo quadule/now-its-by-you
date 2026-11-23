@@ -296,3 +296,23 @@ def test_a_verse_held_before_the_bank_gave_it_swaps_keeps_its_place(h):
     assert [v["id"] for v in fitted["verses"]] == [v["id"] for v in words["verses"]]
     assert set(fitted["verses"][at]["slots"]) == {"kids", "yard"} and not A.held_problem(h, parent.form, fitted)
     assert any(e["change"] == "added" and e["where"] == f"verse {at + 1}" for e in log)
+
+
+@pytest.mark.parametrize("machine", ["fictional:ada", "fictional:bo", "fictional:cy"])
+def test_a_machine_singing_its_own_version_the_same_day_sings_it_the_same(machine):
+    """docs/EVOLUTION.md: a child on the machine that made its parent changes only what a clock has turned on
+    since. Its style, tempo, key, band and singer don't walk toward the machine's own a step a generation (the
+    choir grows: each earlier version's singer joins it)."""
+    g = G.load(LEAD)
+    v = H.machine_voice(machine)
+    t = D.parse("2026-11-22")
+    first = choose_params(g, None, v, D.drift(t, v.hash))
+    p = first
+    for i in range(1, 4):
+        p = choose_params(g, p, v, D.drift(t + 0.001 * i, v.hash))
+    def choices(params):
+        out = {k: x for k, x in params.to_dict().items() if k not in ("seed", "made", "generation", "composition", "choir")}
+        out["style"] = {k: x for k, x in out["style"].items() if k != "lineage"}
+        return out
+
+    assert choices(p) == choices(first)

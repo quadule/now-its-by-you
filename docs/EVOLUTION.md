@@ -173,10 +173,17 @@ options (its feel, intro and ending), as it does when the style isn't named.
 
 A hand-off between two machines moves the parent's value by the new machine's day once.
 
+A machine that knows itself (it reads the traits a choice leans on) pulled its own version toward its own
+values when it made it, so singing that version again takes only how far its day has moved since (the
+number, each weight of the mood, the band's balance), not the pull again: the same day sings the same, and
+later days move around the same place rather than a step further each time. Its style is taken again from
+the style before it in the lineage, so the same day gives the same style; a style a person chose stays
+until the drift has moved the ring past it. The style's options (its feel, intro and ending) stay as the
+version had them until the season's drift has turned them (`style.settled`). The words' leanings and the
+singer's blend, which no day moves, stay as they are.
+
 **Open.** A lineage passed only between quiet machines takes each one's day once, so over many hand-offs it
-can wander within each number's bounds. And for a machine that knows itself, a style's options (the ending, the
-intro) are coins keyed by the parent, so singing its own version again may change them; a clock, as the tune's
-and the words' have, would hold them.
+can wander within each number's bounds.
 
 ## What never changes
 

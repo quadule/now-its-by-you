@@ -15,7 +15,7 @@ own arrangement, exactly as it always played (the ballad band).
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import asdict, dataclass, field, fields, replace
 from functools import lru_cache
 import hashlib
 import json
@@ -1394,6 +1394,39 @@ def place(parent: Style, c, drift) -> str:
     return RING[int(k)]
 
 
+def place_again(parent: Style, c, drift, then) -> str:
+    """place() for a machine singing its own rendition again (then: its drift when it made the parent). The
+    parent's style already took this machine's step along the ring, so it is taken again from where the parent
+    stood before it (the style before it in the lineage), and the same day gives the parent's style again. A
+    style that step didn't give (a person chose it) stays until the drift has moved the ring past it."""
+    lineage = tuple(parent.lineage)
+    name = parent.name or "ballad"
+    if len(lineage) >= 2 and lineage[-1] == name:
+        before = replace(parent, name=lineage[-2])
+        if place(before, c, then) == name:
+            return place(before, c, drift)
+    own = home(c)
+    if own is None or drift is None:
+        return name
+    was = RING.index(on_ring(name))
+    base = was + PULL_STYLE * ring_delta(was, own)
+    if held_ring(drift, base, STYLE_SPAN) == held_ring(then, base, STYLE_SPAN):
+        return name
+    return place(parent, c, drift)
+
+
+ARRANGE_TURN = 0.15  # how far the season's "arrange" drift moves before a machine's own version draws its options again
+
+
+def settled(drift, then) -> bool:
+    """Whether a machine singing its own rendition again (then: its drift when it made it) keeps the version's
+    arrangement options: until the season's drift has turned them (coin), the same options, so a version sung
+    again a day later doesn't change its feel or its ending."""
+    if then is None or drift is None:
+        return False
+    return abs(drift.view("season").get("arrange", 0.0) - then.view("season").get("arrange", 0.0)) < ARRANGE_TURN
+
+
 def coin(material: str, what: str, drift=None) -> float:
     """A number in [0, 1) for one of the arrangement's choices: fixed by the machine and the parent, and
     turned slowly by the season's drift, so a rendition a minute later makes the same choice and one a
@@ -1542,8 +1575,9 @@ def _kept(knob, ctx) -> float:
     # Only on a machine's own version: a hand-off whose machine knows none of the knob's traits copies the
     # parent's lean whole too, but generation 0 has the seed as its parent and counts its "rit" ending as a
     # lean (a ritardando of 0.32 would become 0.2), so changing the share there would move generation-0 ids.
-    if getattr(ctx, "then", None) is not None and not any(u in ctx.c.known for u in knob.uses):
-        return 1.0
+    if getattr(ctx, "then", None) is not None:  # its own rendition sung again: copied with only the day's
+        # move (Knob.centre, or Knob.apply's own-made case), except a body, the machine's own outright
+        return 1.0 if knob.inherit or not any(u in ctx.c.known for u in knob.uses) else 0.0
     return 1.0 - PULL if knob.inherit else 0.0
 
 
@@ -1571,7 +1605,9 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     if forced is None and "identity" not in c.known:
         out["style"] = Style.from_dict({**parent.to_dict(), "lineage": (lineage + (parent.name or "ballad",))}).to_dict()
         return
-    name = renamed("name", forced) or place(parent, c, ctx.drift)
+    then = getattr(ctx, "then", None)
+    name = renamed("name", forced) or (place_again(parent, c, ctx.drift, then) if then is not None
+                                       else place(parent, c, ctx.drift))
     sdef, pdef = STYLES[name], of(parent)
     kept = name == (parent.name or "ballad")
     digest = ctx.parent.digest
@@ -1583,9 +1619,10 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     voices = int(out.get("choir", ctx.parent.choir))
     options = choose_options(ctx.genome, form, sdef, parent, kept, voices, material, ctx.drift, c,
                              out.get("mode", ctx.parent.mode))
-    if kept and (arrange or getattr(ctx, "then", None) is not None) and "identity" not in c.known:
-        # a person choosing one of the options with no machine to draw the rest, or the style named again on a
-        # machine's own version (variation.made_here), as it keeps them unnamed: the rest as the version had them
+    if kept and ((arrange or then is not None) and "identity" not in c.known or settled(ctx.drift, then)):
+        # a person choosing one of the options with no machine to draw the rest, the style named again on a
+        # machine's own version (variation.made_here), as it keeps them unnamed, or a machine's own version
+        # whose season hasn't turned since: the rest as the version had them
         options = {k: v for k, v in parent.to_dict().items() if k not in ("name", "lineage")}
     if name == "ballad" and getattr(ctx.genome, "quote", None) is not None and not options.get("motif"):
         # the quote's opening woven into the bridge by chance (about a third of renditions, and only where it fits
@@ -1608,9 +1645,15 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     r_own = r_parent
     if "pace" in c.known:
         r_own = 2 ** (0.18 * c.pace)
+    r_then = r_own
     if ctx.drift is not None:
         r_own *= 1.0 + span * ctx.drift.view("full").get("tempo", 0.0)
-    r = r_parent + PULL * (r_own - r_parent)
+    if "pace" in c.known and then is not None:  # its own rendition sung again: the parent took this pace's
+        # pull already, so only how far its day has moved since comes in (the same day: the same tempo)
+        r_then *= 1.0 + span * then.view("full").get("tempo", 0.0)
+        r = r_parent + PULL * (r_own - r_then)
+    else:
+        r = r_parent + PULL * (r_own - r_parent)
     out["tempo"] = round(max(lo * song, min(hi * song, r * centre * song)), 1)
 
     # the band: who plays, as loud as the style has them, each machine's balance its own way
@@ -1628,7 +1671,12 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
                 continue
             own = gain * 2 ** (0.3 * c.id(f"gain:{inst}")) * (1 + 0.25 * c.id(f"balance:{inst}") * drift.get("balance", 0.0))
             known = inst in was and (part not in sdef.optional or was[inst] > 0.02)  # (one that sat out comes anew)
-            g = was[inst] + PULL * (own - was[inst]) if known else own
+            if known and then is not None:  # its own rendition again: only the day's move since it made it
+                before = then.view("slow").get("balance", 0.0)
+                g = was[inst] + PULL * gain * 2 ** (0.3 * c.id(f"gain:{inst}")) * 0.25 * c.id(f"balance:{inst}") * (
+                    drift.get("balance", 0.0) - before)
+            else:
+                g = was[inst] + PULL * (own - was[inst]) if known else own
             lineup[inst] = round(max(0.5 * gain, min(1.5 * gain, g)), 2)
         band["lineup"] = lineup
     for field_name in ("density", "brightness", "wear", "ornament", "arc"):

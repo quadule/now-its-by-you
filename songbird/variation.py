@@ -352,15 +352,24 @@ class Knob:
             return
         x = read(ctx.song, self.path)
         was = read(ctx.parent, self.path)
+        then = None
         if any(u in ctx.c.known for u in self.uses):
             base, own = was, self.own(ctx.c, x)
+            if ctx.then is not None and self.inherit:  # its own rendition sung again: the parent already took
+                # this machine's pull, so only how far its day has moved since comes in (the same day: the same)
+                then = self.moved(own, ctx.then, ctx.c) if self.drift else own
         else:  # nothing of its own here: the parent's, as it stood before this machine's day moved it
             base = own = self.centre(was, ctx, x)
         machine = own
         if self.drift and ctx.drift is not None:
             own = self.moved(own, ctx.drift, ctx.c)
-        raw = base + PULL * (own - base) if self.inherit else own
+        if then is not None:
+            raw = was + PULL * (own - then)
+        else:
+            raw = base + PULL * (own - base) if self.inherit else own
         lo, hi = self.bounds(x) if callable(self.bounds) else self.bounds
+        if then is not None:  # a style's lean may have carried the parent's past the bounds: it stays there
+            lo, hi = min(lo, was), max(hi, was)
         value = round(float(round(clip(raw, lo, hi) / self.step) * self.step), 6)
         if ctx.trace is not None:  # how the value came to be: the parent's, the machine's own, moved by time
             shown, moved = machine, own
@@ -1078,6 +1087,19 @@ def choose_mood(out: dict, ctx: Context) -> None:
         return
     if screen is None and ctx.then is not None:  # its own rendition of the song's own: the song's own, today
         was = home
+    elif ctx.then is not None:  # its own rendition sung again, with a screen: the parent took its pull toward
+        # the screen already, so only how far the day (and the mode) has moved since comes in
+        def day(mood: str, tilt: float, mode) -> float:
+            minor = {"dark": 1.5, "tender": 1.2} if mode in MINOR else {}
+            return 2 ** (lean.get(mood, 0.0) * tilt) * minor.get(mood, 1.0)
+
+        before = ctx.at_then("slow", "mood")
+        if (tilt, mode) != (before, ctx.parent.mode):
+            moved = {m: w * ctx.pull(1.0, day(m, tilt, mode) / day(m, before, ctx.parent.mode)) for m, w in was.items()}
+            mean = sum(moved.values()) / len(moved)
+            was = {m: round(float(w / mean), 2) for m, w in moved.items()}
+        out.setdefault("leanings", {})["mood_weights"] = {m: round(float(w), 2) for m, w in was.items()}
+        return
     out.setdefault("leanings", {})["mood_weights"] = sung(was, tilt, mode)
 
 
@@ -1089,6 +1111,9 @@ def choose_vocabulary(out: dict, ctx: Context) -> None:
     if not ctx.c.themes:
         if was:
             out.setdefault("leanings", {})["vocabulary"] = was
+        return
+    if ctx.then is not None and was:  # its own rendition sung again: its words already took this machine's pull
+        out.setdefault("leanings", {})["vocabulary"] = was
         return
     words = song_words(ctx.genome)
     even = 1.0 / len(ctx.c.themes)
@@ -1170,8 +1195,12 @@ def choose_timbre(out: dict, ctx: Context) -> None:
     own = throat.parse_mix(throat.machine_mix(seed, pitch, model))
     was = throat.parse_mix(read(ctx.parent, "singer.timbre"))
     was = {n: w for n, w in (was or {}).items() if n in model.config["singers"]} or throat.default_mix(model, pitch)
-    names = set(own) | set(was)
-    blend = {n: was.get(n, 0.0) + PULL * (own.get(n, 0.0) - was.get(n, 0.0)) for n in names}
+    if ctx.then is not None and read(ctx.parent, "singer.timbre"):  # its own rendition sung again: the blend
+        # already took this machine's pull (nothing in it moves with the day)
+        blend = was
+    else:
+        names = set(own) | set(was)
+        blend = {n: was.get(n, 0.0) + PULL * (own.get(n, 0.0) - was.get(n, 0.0)) for n in names}
     out["singer"]["timbre"] = throat.blend_spec(throat.capped(blend))
 
 
