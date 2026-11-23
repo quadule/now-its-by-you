@@ -1334,10 +1334,12 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
             out["form"] = list(form)
         if decide is choose_style and form is None:  # the parts of the form a style always plays (the old 78's)
             style_shaped(genome, out)
-        if decide is choose_style:  # never longer than MOST_SECONDS as the program chooses it
-            held_to_length(genome, out, ctx)
         if pin is not None:
             pin(out)
+        if decide is choose_style and form is None:  # never longer than MOST_SECONDS as the program chooses it:
+            held_to_length(genome, out, ctx)  # the person's choices in place first, and put back after, so they stand
+            if pin is not None:
+                pin(out)
     if evolve or seed is not None:
         out["seed"] = Chance(voice, drift, parent, seed).seed
     return Params.from_dict(out)

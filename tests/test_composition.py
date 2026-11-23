@@ -168,7 +168,11 @@ def test_provenance_replays_edits_and_reset_releases_inherited_phrase():
     assert r.params.to_dict() == inherited
 
 
-def test_releasing_an_inherited_order_returns_to_the_parents_form_or_the_machines_not_the_seeds():
+def test_releasing_an_inherited_order_returns_to_the_parents_form_or_the_machines_not_the_seeds(monkeypatch):
+    from songbird import variation
+
+    # the forms compared as the machine chooses them, before a length limit trims one taken slower than the other
+    monkeypatch.setattr(variation, "MOST_SECONDS", float("inf"))
     base = choose_params(G, None, ADA, DAY)
     parent = E.resolve(G, None, ADA, DAY, {"form.order": rearranged(base.form)}).params
     assert parent.form != tuple(G.seed_params["form"])
