@@ -916,15 +916,24 @@ def written(genome) -> dict[tuple[str, int], int]:
             for pid, p in genome.phrases.items() for k, n in enumerate(p.sung)}
 
 
-_transposes: dict[str | None, int] = {}
+_transposes: dict[tuple[str, str | None], int] = {}
 
 
 def transposed(genome_path: Path, digest: str | None) -> int:
-    """How far the guide a take was sung to was moved from the song's own key (its score's transpose)."""
-    if digest not in _transposes:
+    """How far the guide a take was sung to was moved from the song's own key: its score's transpose, and,
+    where the guide is a rendition sung again (its score names the record), how far that rendition's key is
+    from the song's (the stage version is in A, the song in D)."""
+    key = (str(genome_path), digest)
+    if key not in _transposes:
         path = K.guide_score(genome_path.stem, digest) or ROOT / "renders" / "guide" / f"{genome_path.stem}.guide.score.json"
-        _transposes[digest] = int(json.loads(path.read_text()).get("transpose", 0)) if path.exists() else 0
-    return _transposes[digest]
+        score = json.loads(path.read_text()) if path.exists() else {}
+        shift = int(score.get("transpose", 0))
+        if score.get("record") and (ROOT / score["record"]).exists():
+            tonic = json.loads((ROOT / score["record"]).read_text()).get("params", {}).get("tonic")
+            if tonic is not None:
+                shift += int(tonic) - choose_params(G.load(genome_path)).tonic
+        _transposes[key] = shift
+    return _transposes[key]
 
 
 def components(groups: list[np.ndarray]) -> tuple[float, float]:

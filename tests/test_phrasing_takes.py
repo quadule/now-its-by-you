@@ -286,3 +286,18 @@ def test_a_note_the_tune_has_changed_since_a_take_keeps_its_timing_but_not_its_t
     assert np.isfinite(same.tune) and np.isnan(moved.tune)
     assert (moved.early, moved.hold, moved.scoop) == (same.early, same.hold, same.scoop)  # the rest is kept
     assert now[("v2", 5)] == 5 and now[("r2", 3)] == 5  # fa, where singers sang it: the tune as it is now
+
+
+def test_a_guide_sung_from_a_rendition_in_another_key_is_moved_by_that_key(tmp_path, monkeypatch):
+    """The stage version is a rendition in A of a song in D: a take sung to its guide is of the same tune, so
+    every note is as written, not changed, and the takes' tuning counts."""
+    monkeypatch.setattr(T, "ROOT", tmp_path)
+    monkeypatch.setattr(K, "GUIDES", tmp_path / "guides")
+    monkeypatch.setattr(T, "_transposes", {})
+    tonic = choose_params(G.load(H)).tonic
+    (tmp_path / "record.json").write_text(json.dumps({"params": {"tonic": tonic - 5}}))
+    plain, staged = tmp_path / "plain.score.json", tmp_path / "staged.score.json"
+    plain.write_text(json.dumps({"transpose": 2}))
+    staged.write_text(json.dumps({"transpose": 2, "record": "record.json"}))
+    assert T.transposed(H, K.keep_guide(H.stem, plain)) == 2
+    assert T.transposed(H, K.keep_guide(H.stem, staged)) == 2 - 5
