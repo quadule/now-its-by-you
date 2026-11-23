@@ -19,6 +19,7 @@ from .arrange import ArrangeError, Lyrics, arrange, hold, problem, sing, verse_p
 from .clips import stored as stored_clips
 from .composition import has_lines
 from .dates import local_day, us_date
+from .edits import version_name
 from .realize import Params, choose_params
 from .style import STYLES
 from .synth import master, threads
@@ -208,15 +209,15 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     if chosen_by_you:  # a person's choices, marked as theirs (never who they are)
         record["chosen_by_you"] = chosen_by_you
     if packet_genome is not None:  # one file: the record and the words travel inside it
-        sung = (lyrics.sheet(genome.title) if lyrics and not has_lines(params) and not stored_clips(params)
-                else pack_mod.words_as_sung(score.to_dict(), genome.title))
+        sung = (lyrics.sheet(name or genome.title) if lyrics and not has_lines(params) and not stored_clips(params)
+                else pack_mod.words_as_sung(score.to_dict(), name or genome.title))
         pack_mod.pack(out, record, packet_genome, lyrics=sung)
     else:
         out.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         out.with_suffix(".score.json").write_text(json.dumps(score.to_dict()) + "\n", encoding="utf-8")
         if lyrics or has_lines(params):  # (a person's clips: the words as the score sings them, songbird.clips)
-            sung = (lyrics.sheet(genome.title) if lyrics and not has_lines(params) and not stored_clips(params)
-                    else pack_mod.words_as_sung(score.to_dict(), genome.title))
+            sung = (lyrics.sheet(name or genome.title) if lyrics and not has_lines(params) and not stored_clips(params)
+                    else pack_mod.words_as_sung(score.to_dict(), name or genome.title))
             out.with_suffix(".txt").write_text(sung, encoding="utf-8")
 
     if stems:
@@ -419,7 +420,7 @@ def render_command(args: argparse.Namespace) -> int:
                parent=parent, packet_genome=args.genome if args.pack else None,
                changes=changes if sung_by_a_machine else None, chosen_by_you=chosen,
                # its own title: given here, else a person's (--edits), else its parent's, handed down
-               name=(edits_mod.version_name(args.name) if args.name else None)
+               name=(version_name(args.name) if args.name else None)
                or ((chosen or {}).get("name") or {}).get("value") or (parent or {}).get("name"))
     return 0
 

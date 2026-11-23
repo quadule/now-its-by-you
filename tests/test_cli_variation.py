@@ -163,3 +163,14 @@ def test_year_renders_a_day_a_week_a_month_and_a_year_on(tmp_path, monkeypatch):
     assert names == [f"h-now-its-by-you.ada.{d}.flac" for d in
                      ("2026-09-25", "2026-09-26", "2026-10-02", "2026-10-25", "2027-09-25")]
     assert [round(t - sung[0][1]) for _, t in sung] == [0, 1, 7, 30, 365]
+
+
+def test_a_named_version_titles_its_lyric_sheet(tmp_path):
+    """A version given its own title (render --name, the studio's Rename) says it at the top of its words."""
+    import zipfile
+
+    subprocess.run([sys.executable, "-m", "songbird", "render", str(LEAD), "--form", "refrain", "--machine",
+                    "fictional:bo", "--date", "2026-09-25", "--name", "The Last Keeper", "--pack",
+                    "--out", str(tmp_path / "a.flac")], check=True, cwd=ROOT, capture_output=True)
+    words = zipfile.ZipFile(tmp_path / "a.flac").read("lyrics.txt").decode()
+    assert words.splitlines()[0] == "The Last Keeper"

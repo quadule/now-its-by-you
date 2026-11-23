@@ -12,6 +12,7 @@ notes, if one does (line()).
 from __future__ import annotations
 
 import re
+from itertools import pairwise
 
 from . import phonetics
 
@@ -135,7 +136,7 @@ def _spelled(w: str, n: int) -> list[str]:
         groups[k:k + 1] = [(a, a + 1), (a + 1, b)]
     vowels = _vowels(w, len(groups))
     cuts = []
-    for k, ((a, end), (start, _)) in enumerate(zip(groups, groups[1:])):
+    for k, ((a, end), (start, _)) in enumerate(pairwise(groups)):
         cluster = w[end:start]
         short = end - a == 1 and k < len(vowels) and vowels[k] in SHORT and not (vowels[k] == "AA1" and w[a] == "a")
         if start == len(w) - (2 if w.endswith("les") else 1) and w.endswith(("le", "les")) and cluster:
@@ -160,7 +161,7 @@ def _compound(w: str, n: int) -> list[str] | None:
     """A word made of two the dictionary has (some-one, in-side, no-where), each split as it is alone: the
     second one of TAILS, or the first a word of two letters or more and the second a word of four."""
     d = phonetics._dictionary()
-    w = w[:-2] if w.endswith("'s") else w
+    w = w.removesuffix("'s")
     for k in range(2, len(w) - 1):
         a, b = w[:k], w[k:]
         head = len(a) >= 3 or a in ("no", "in", "up", "on")

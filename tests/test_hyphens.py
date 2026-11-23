@@ -3,7 +3,8 @@
 import json
 from pathlib import Path
 
-from songbird import composition, genome as G, hyphens
+from songbird import composition, hyphens
+from songbird import genome as G
 
 ROOT = Path(__file__).parent.parent
 LEAD = ROOT / "songs" / "h-now-its-by-you.json"
@@ -71,3 +72,30 @@ def test_the_page_asks_how_its_lines_split():
 
     with pytest.raises(ValueError):
         studio.syllable_counts([{"text": "x"}] * 65)
+
+
+def test_a_word_leaned_on_at_one_syllable_is_leaned_on_whole():
+    g = G.load(LEAD)
+    assert composition.check_lyric(g, "lyrics.verse:wire.0", "a hand on the rail while the harbor's a-*sleep*.") == \
+        "a hand on the rail while the har-bor's *a-sleep*."
+
+
+def test_a_line_past_the_songs_register_is_said_to_be(tmp_path, monkeypatch):
+    from songbird import studio as S
+
+    monkeypatch.setenv("SONGBIRD_HOME", str(tmp_path / "home"))
+    st = S.Studio(None, str(LEAD), "fictional:ada", out=tmp_path / "out")
+    bridge = lambda v: next(s for s in v["composition"]["sections"] if s["id"].startswith("bridge"))["phrases"][0]
+    p = bridge(st.song({}))
+    high = [{"degree": n["degree"] + 4, "onset": n["onset"], "duration": n["duration"]} for n in p["notes"]]
+    said = bridge(st.song({p["path"]: high}))["advice"]
+    assert any("above the song's highest note" in a for a in said), said
+
+
+def test_words_all_written_by_a_person_are_theirs():
+    from songbird import explain
+    from songbird.realize import Params
+
+    g = G.load(LEAD)
+    p = Params.from_dict(g.seed_params)
+    assert not explain.all_written(g, p, None)

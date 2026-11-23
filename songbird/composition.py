@@ -159,6 +159,7 @@ def check_lyric(genome, path: str, value, target: int | None = None) -> str | No
     target = len(genome.phrases[pid].sung) if target is None else target  # a line of its own: its notes' count
     if not target:
         raise ValueError("this line has no notes yet; write its words with its notes")
+    text = " ".join(_leaned_whole(word) for word in text.split())
     if len(syllables(text)) != target:  # words written whole: split into their syllables (songbird.hyphens)
         from . import hyphens
 
@@ -181,6 +182,19 @@ def check_lyric(genome, path: str, value, target: int | None = None) -> str | No
     if kind == "unknown":
         raise ValueError(f"the singer doesn't know how to pronounce {problem[1]!r}; try another spelling or word")
     raise ValueError(f"{problem[1]!r} needs {problem[3]} syllables; show them with hyphens")
+
+
+def _leaned_whole(word: str) -> str:
+    """A word leaned on with its stars around one of its syllables (a-*sleep*), as the whole word (*a-sleep*)."""
+    m = re.match(r"^([^\w*']*)(.*?)([^\w*'}]*)$", word)
+    if not m or "*" not in m.group(2) or "-" not in m.group(2):
+        return word
+    core = m.group(2)
+    if core.startswith("*") and core.endswith("*") and core.count("*") == 2:
+        return word
+    if core.count("*") != 2:
+        return word
+    return m.group(1) + "*" + core.replace("*", "") + "*" + m.group(3)
 
 
 def check_own(genome, path: str, value) -> dict | None:
@@ -429,15 +443,24 @@ def check_phrase(genome, pid: str, value, free: bool = False) -> list[dict] | No
 
 def advice(genome, params, phrase) -> list[str]:
     """What a line as a person changed it does that the song's own fences would have kept (said, not refused):
-    an ending off the line's home note."""
+    a reach past the song's own register, an ending off the line's home note."""
     if not phrase.sung:
         return []
     notes = flat_notes(phrase, params)
-    if not notes or tune_key(phrase) not in (params.composition.get("tune") or {}):
+    if not notes:
         return []
+    out = []
+    song = [n.degree for p in genome.phrases.values() for n in p.sung]
+    top, bottom = max(d for d, *_ in notes), min(d for d, *_ in notes)
+    if top > max(song) + 1:  # past the song's own register: said, as a singer would say it
+        out.append(f"This line goes {top - max(song)} scale steps above the song's highest note: high for the singer.")
+    if bottom < min(song) - 1:
+        out.append(f"This line goes {min(song) - bottom} scale steps below the song's lowest note: low for the singer.")
+    if tune_key(phrase) not in (params.composition.get("tune") or {}):
+        return out
     home, now = phrase.sung[-1].degree, notes[-1][0]
     if not (now - home) % 7:
-        return []
+        return out
     fold = lambda d: (d - 1) % 7 + 1  # noqa: E731
     bar = phrase.chords[-1]
     tones = {(params.tonic + t) % 12 for t in chord_tones(bar[-1], params.mode)}
@@ -445,7 +468,7 @@ def advice(genome, params, phrase) -> list[str]:
     mood = "it sounds open, like a question" if fold(home) == 1 else "it ends somewhere new"
     chord = "" if pitch in tones else (f"; the chord under it, {chord_name(bar[-1], params.tonic, params.mode)}, "
                                        "doesn't have it")
-    return [f"This line now ends on {fold(now)}, not on {fold(home)} as the song's does: {mood}{chord}."]
+    return out + [f"This line now ends on {fold(now)}, not on {fold(home)} as the song's does: {mood}{chord}."]
 
 
 def pack_phrase(genome, notes) -> list[list]:

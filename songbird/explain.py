@@ -1151,6 +1151,23 @@ def singer_card(v: Version, phrasings: list[dict]) -> dict:
                  phrasing=v.edits.get("phrasing", ""))
 
 
+def all_written(genome, params, lyrics) -> bool:
+    """Whether a person wrote every line the version sings (composition "lines", "own", or an older record's)."""
+    from . import composition
+
+    if not composition.has_lines(params):
+        return False
+    base = lyrics if lyrics is not None else composition._seed(genome, params)
+    sung = iter(base.sections)
+    for name, patch in zip(params.form, composition.authored(genome, params, base)):
+        if not genome.section(name).lyrics:
+            continue
+        section = next(sung, None)
+        if section is None or any(str(i) not in patch for i in range(len(section.lines))):
+            return False
+    return True
+
+
 def words_card(v: Version) -> dict:
     genome = v.context.genome
     lean = v.params.leanings or {}
@@ -1213,6 +1230,10 @@ def words_card(v: Version) -> dict:
     n = len([c for c in changes if c["kind"] != "rule"])
     value = f"{before}, handed down" + (f", with {number(n)} change{'s' if n != 1 else ''} this time" if n else " as they were")
     lineage = {"kind": "lineage", "text": "the rest handed down as they were: a song's words change a little at a time"}
+    if all_written(v.context.genome, v.params, v.lyrics):  # every line the person's: nothing of the machine's to say
+        return _card(v, "words", "The words", "your own words", "",
+                     [{"kind": "you", "text": "every line sung: written by you", "path": "lyrics."}],
+                     ["words.", "lyrics.", "line."])
     return _card(v, "words", "The words", value, f"your machine's picks lean {lean_words(lean).replace('a little ', '')}"
                  if lean_words(lean) != "no particular way" else "", mine + changes + [lineage] + _unique(taste),
                  ["words."])
