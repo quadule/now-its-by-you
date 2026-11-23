@@ -66,6 +66,8 @@ def test_the_device_studio_has_no_thread_and_makes_every_song_in_the_browser(dev
     ("/api/arrangement", {"edits": {"tempo": 92}}),
     ("/api/sound", {"edits": {}}),
     ("/api/players", {"edits": {}}),
+    ("/api/syllables", {"lines": [{"text": "My father kept watch on the light on the hill,", "want": 11}]}),
+    ("/api/song", {"edits": {"lyrics.verse:wire.0": "My father kept watch on the light on the hill,"}}),
 ])
 def test_the_page_s_questions_get_the_server_s_answers(device, server, path, body):
     out = ask(device, path, body)
