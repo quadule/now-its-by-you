@@ -40,7 +40,7 @@ import tempfile
 import threading
 import time
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 PACKET = Path(os.path.abspath(sys.argv[0]))
@@ -238,6 +238,21 @@ def program_hash(z: zipfile.ZipFile) -> str:
     return h.hexdigest()
 
 
+def sung_on(stamp: str) -> str:
+    """The day a version was sung, where it is read (as songbird.dates.local_day: a day kept as noon UTC is that
+    day; any other moment, the local day it was then)."""
+    try:
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return stamp[:10]
+    if moment.tzinfo is None:
+        return stamp[:10]
+    utc = moment.astimezone(timezone.utc)
+    if (utc.hour, utc.minute, utc.second, utc.microsecond) == (12, 0, 0, 0):
+        return utc.date().isoformat()
+    return moment.astimezone().date().isoformat()
+
+
 def about(z: zipfile.ZipFile, m: dict) -> None:
     generation = m.get("generation") if isinstance(m.get("generation"), int) else 0
     say(text(m, "name", 80) or text(m, "title") or "A song")  # its own title, if it was given one
@@ -246,7 +261,7 @@ def about(z: zipfile.ZipFile, m: dict) -> None:
     else:
         say(f"generation {generation}: {generation} version{'s' if generation != 1 else ''} before this one")
     if text(m, "rendered_at"):
-        say(f"sung {text(m, 'rendered_at', 10)}")
+        say(f"sung {sung_on(text(m, 'rendered_at'))}")
     say(f"id {text(m, 'id', 12) or '?'}; program {text(m, 'program_version') or '?'}, "
         f"{text(m, 'program_sha256', 16) or '?'}")
     say()

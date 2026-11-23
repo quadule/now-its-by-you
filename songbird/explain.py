@@ -38,7 +38,7 @@ from . import drift as drift_mod
 from . import edits as edits_mod
 from .heteronyms import bare  # a word's say, bass{fish}, is never shown
 from . import harvest, phrasing as phrasing_mod, variation
-from .dates import long_date
+from .dates import local_day, long_date
 from .arrange import options as word_choices, seed_lyrics
 from .band import INSTRUMENTS
 from .synth.mixing import MixParams
@@ -615,7 +615,7 @@ class Context:
             return "from the song as it began"
         if self.parent_title:  # a published edition, by the name the home page gives it
             return f"from the {self.parent_title[:1].lower()}{self.parent_title[1:]}"
-        made = (self.parent_record.get("rendered_at") or "")[:10]
+        made = local_day(self.parent_record.get("rendered_at"))
         generation = self.parent_record.get("generation")
         which = (f"the {ORDINALS[generation]} version" if isinstance(generation, int) and generation < len(ORDINALS)
                  else "a version before")
@@ -1764,7 +1764,7 @@ def published_view(ctx: Context, released_on: str | None = None, released_title:
     a released record keeps no date of its own), for the page's header and its offer of this machine's new version
     (studio.js, published()); and where its own file is, if the studio has it (released_audio), to play it from
     while nothing is changed rather than make it again."""
-    made = released_on or (ctx.parent_record.get("rendered_at") or "")[:10]
+    made = released_on or local_day(ctx.parent_record.get("rendered_at"))
     generation = ctx.parent_record.get("generation")
     if released_title:
         which = released_title[:1].lower() + released_title[1:]

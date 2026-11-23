@@ -69,6 +69,7 @@ import numpy as np
 
 from . import RECORD_FORMAT, artwork, drift as drift_mod, explain, genome as genome_mod, harvest, midi, pack, stage, synth
 from . import clips, public as public_mod, received, stems as stems_mod
+from .dates import local_day
 from .realize import Params
 from .synth import master
 from .synth.instruments import INSTRUMENTS
@@ -1402,7 +1403,7 @@ class Studio:
         other = theirs != self.program_digest
         newer = isinstance(r.get("record_format"), int) and r["record_format"] > RECORD_FORMAT
         return {"id": self.version_id, "url": f"/v/{self.version_id}", "generation": generation(r),
-                "made": (r.get("rendered_at") or "")[:10] or None, "rendition": r["id"][:12], "name": r.get("name"),
+                "made": local_day(r.get("rendered_at")) or None, "rendition": r["id"][:12], "name": r.get("name"),
                 "program": theirs[:12], "other_program": other,
                 "program_note": ("It was made by a newer version of the program than this studio's, which continues "
                                  "it with what it understands of it; the file's own studio understands all of it."

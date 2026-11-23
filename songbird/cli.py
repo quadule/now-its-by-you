@@ -18,7 +18,7 @@ from . import edits as edits_mod, evolve, stage, variants as variants_mod
 from .arrange import ArrangeError, Lyrics, arrange, hold, problem, sing, verse_problem
 from .clips import stored as stored_clips
 from .composition import has_lines
-from .dates import us_date
+from .dates import local_day, us_date
 from .realize import Params, choose_params
 from .style import STYLES
 from .synth import master, threads
@@ -161,7 +161,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     del mastered
     lineage = pack_mod.lineage(parent)
     tags = dict(
-        title=name or genome.title, artist=ARTIST, date=drift.to_dict()["at"][:10] if drift is not None else None,
+        title=name or genome.title, artist=ARTIST, date=local_day(drift.to_dict()["at"]) if drift is not None else None,
         comment=f"Generation {lineage['generation']}, id {master.pcm_sha256(pcm)[:12]}."
                 + (" This file is also the program that sang it: run it with python3, or unzip it."
                    if packet_genome is not None else ""))

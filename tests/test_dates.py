@@ -21,3 +21,20 @@ def test_no_page_asks_the_viewers_locale_for_a_date():
         text = path.read_text()
         assert not re.search(r"toLocale(Date)?String\((undefined)?\s*[,)]", text), path
         assert "en-GB" not in text, path
+
+
+def test_a_moment_is_read_as_the_day_it_was_where_it_is_read(monkeypatch):
+    """A version sung at 9 in the evening in California (05:08 UTC the next day) says the day it was sung there;
+    a day kept as a day (noon UTC: --date, the studio) is that day everywhere."""
+    import time
+
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
+    time.tzset()
+    try:
+        assert dates.local_day("2026-11-23T05:08:32+00:00") == "2026-11-22"
+        assert dates.local_day("2026-11-22T12:00:00+00:00") == "2026-11-22"
+        assert dates.local_day("2026-11-22") == "2026-11-22"
+        assert dates.long_date("2026-11-23T05:08:32+00:00") == "Sunday, November 22, 2026"
+    finally:
+        monkeypatch.delenv("TZ")
+        time.tzset()
