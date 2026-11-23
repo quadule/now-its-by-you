@@ -505,7 +505,17 @@
       if (count === p.syllable_count && (p.own || chromatic) && state.draft?.path !== p.own_path) {
         // drawn at once, as a tune line's change is, wherever the lyric line is sung, its words kept by syllable
         for (const s of sections()) for (const same of s.phrases || []) if (same.own_path === p.own_path) same.notes = sung(updated, same.notes, shape);
-        commit(p.own_path, { words: p.lyric_text, notes: serializeNotes(updated, true) }, label);
+        const value = { words: p.lyric_text, notes: serializeNotes(updated, true) };
+        if (!p.own) {
+          // the line's tune moves to its words: a change kept for this place alone is in the notes now, and would
+          // only sit under them; and where the person chose everywhere, say that this change can't go there
+          const scoped = scopedPath("tune", p), stale = where("tune", p) !== "line" && held("tune", p);
+          if (stale && bridge().setEdits) { stop(); bridge().setEdits({ [p.own_path]: value, [scoped]: null }, label); }
+          else commit(p.own_path, value, label);
+          const note = "A note between the scale's notes stays with these words: this line now changes only where they're sung.";
+          bridge().toast?.(note);
+          message = message ? `${message} ${note}` : note;
+        } else commit(p.own_path, value, label);
       } else {  // its words wait to be written for the new count (ownCard)
         state.draft = { ...state.draft, path: p.own_path, notes: updated, was: state.draft?.was || p.notes };
         p.notes = updated.map((n, index) => ({ ...n, index, edited: true }));

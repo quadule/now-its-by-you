@@ -833,6 +833,21 @@ test('writing words first fits their rhythm and chromatic edits use the existing
   assert.equal(m.commits.at(-1).path, 'line.verse:wire.0');
   assert.deepEqual(m.commits.at(-1).value.notes[1], { degree: 4, onset: 0, duration: 1, alter: 1 });
 });
+test("a half step moves a line's tune to its words: it says so, and a change kept for that place alone goes with it", () => {
+  const view = writableScore();
+  const p = view.composition.sections.flatMap((x) => x.phrases).find((x) => x.own_path === "line.verse:wire.0");
+  Object.assign(p, { place: "verse:0.0", tune_scope: { from: "place" } });
+  view.composition.edited_places = { tune: [p.place] };
+  const s = setup(view);
+  const patches = [];
+  s.window.StudioBridge.setEdits = (patch) => patches.push(clone(patch));
+  s.find('[data-note="1"]').emit("click");
+  s.find("#sbc-note-pitch").emit("change", { target: { value: "4♯" } });
+  assert.equal(patches.length, 1, "one edit: the line's words and notes, the place's own tune let go");
+  assert.deepEqual(Object.keys(patches[0]).sort(), ["line.verse:wire.0", `tune.${p.place}`].sort());
+  assert.equal(patches[0][`tune.${p.place}`], null);
+  assert.match(s.toasts.at(-1), /stays with these words/);
+});
 test("the roll's rows are semitones: a sung line's note moves by half steps, spelled as a musician would, and a tune line's by the scale", () => {
   const s = setup(writableScore());
   assert(s.find("#sbc-key-6").classList.contains("is-out"), "F♯ is between the scale's tones");

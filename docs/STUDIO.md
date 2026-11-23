@@ -214,7 +214,9 @@ leaps, and end on any scale degree. A sung line's note moves by semitones: a
 pitch between the scale's tones is stored as the neighbouring degree with a
 half step (`alter`), sharp when it was reached going up, else flat
 (`SongbirdModel.spell`), and goes with the line's words as a line of its own
-(only a line of its own holds a half step). The **Pitch** menu lists every
+(only a line of its own holds a half step). So the change then reaches only where
+those words are sung, whatever the scope chosen: the editor says so as it
+happens, and a change kept for that place alone goes into the line with it. The **Pitch** menu lists every
 semitone for it. A tune line without words of its own (an instrumental
 echo) and a melisma's notes keep to the scale's rows; a melisma still
 carries one syllable over up to four scale notes. The singer
