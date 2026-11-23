@@ -707,8 +707,16 @@
        6
       ],
       [
-       "refrain:0.1",
+       "breath:0",
        6
+      ],
+      [
+       "breath:0",
+       2
+      ],
+      [
+       "refrain:0.1",
+       2
       ],
       [
        "refrain:0.1",
