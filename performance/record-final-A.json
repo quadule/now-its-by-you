@@ -213,7 +213,7 @@
       },
       "lute": {
        "pattern": "quote",
-       "level": "hard"
+       "level": "plays"
       },
       "harp": {
        "pattern": "high",
@@ -221,7 +221,7 @@
       },
       "drum": {
        "pattern": "pulse",
-       "level": "plays"
+       "level": "soft"
       }
      }
     },
@@ -927,14 +927,6 @@
       [
        "turn:0",
        0
-      ],
-      [
-       "turn:0",
-       4
-      ],
-      [
-       "turn:0.end",
-       4
       ],
       [
        "turn:0.end",
