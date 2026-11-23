@@ -110,6 +110,19 @@ def test_a_machine_at_a_date_renders_the_same_every_time(tmp_path):
     assert c["id"] == a["id"]
 
 
+def test_a_child_replays_from_its_record(tmp_path):
+    """A version with a parent replays: its parent is known only by its place in the lineage, and the
+    replay keeps the record's evolution rather than asking the parent's choices for it."""
+    render(tmp_path / "a.flac", "fictional:bo", "1")
+    child = render(tmp_path / "b.flac", "fictional:ada", "1", "--parent", str(tmp_path / "a.json"))
+    assert child["generation"] == 1 and child["parent_id"]
+    done = subprocess.run([sys.executable, "-m", "songbird", "render", str(LEAD), "--replay", str(tmp_path / "b.json"),
+                           "--out", str(tmp_path / "c.flac")], cwd=ROOT, capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    replayed = json.loads((tmp_path / "c.json").read_text())
+    assert replayed["id"] == child["id"] and replayed.get("evolution") == child.get("evolution")
+
+
 def test_a_machine_sings_words_drawn_with_its_leanings():
     from dataclasses import replace
 

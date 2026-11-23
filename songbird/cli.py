@@ -131,7 +131,7 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
                choir_json=(), singer_overrides=(), stems: bool = False, mix_overrides=(), parent: dict | None = None,
                midi_file: bool = False,
                packet_genome: str | Path | None = None, changes=None, chosen_by_you=None, progress=None,
-               name: str | None = None, kept=None) -> dict:
+               name: str | None = None, kept=None, story: dict | None = None) -> dict:
     """Render one rendition to out (FLAC), with its record (.json), score (.score.json) and, if its words were
     drawn or held, its lyric sheet (.txt) beside it. With packet_genome (the genome file sung), the FLAC carries
     its packet: the program, the genome, the record and the words (songbird/pack.py). parent: the parent's
@@ -139,7 +139,8 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     evolution (docs/EVOLUTION.md); name: the version's own title, if it has one (edits.version_name: in its record,
     and what a player shows; the song's own title otherwise); chosen_by_you: which of its choices a person made, and what the program had
     chosen (songbird.edits.marks), kept in the record; progress: told each part's name as the render starts
-    on it (synth.render), then "master"; kept: handed each part's dry stem as it is made (synth.render)."""
+    on it (synth.render), then "master"; kept: handed each part's dry stem as it is made (synth.render); story: the
+    record's evolution as given (a replay's, whose parent is known only by its place in the lineage)."""
     phrasing = phrasing_mod.from_json(phrasing_json) if phrasing_json else None
     choir_json = list(choir_json)
     choir = [phrasing_mod.from_json(d) for d in choir_json]
@@ -199,7 +200,9 @@ def render_one(genome, params: Params, out: Path, *, voice=None, drift=None, lyr
     }
     if name:
         record["name"] = name
-    story = evolution(genome, params, _parent(parent, genome) if parent else None, lyrics, changes)
+    if story is None and not (isinstance(parent, dict) and "params" not in parent):  # (a replay's parent is
+        # known only by its place in the lineage: its record's evolution is the replay's)
+        story = evolution(genome, params, _parent(parent, genome) if parent else None, lyrics, changes)
     if story is not None:  # the tune's variants and what changed from the parent (docs/EVOLUTION.md)
         record["evolution"] = story
     if chosen_by_you:  # a person's choices, marked as theirs (never who they are)
@@ -326,7 +329,8 @@ def replay_command(args: argparse.Namespace, genome) -> int:
     made = render_one(genome, params, out, voice=voice, drift=drift, lyrics=lyrics, phrasing_json=phrasing_json,
                       choir_json=choir_json, singer_overrides=args.voice, stems=args.stems, midi_file=args.midi,
                       mix_overrides=args.mix, parent=parent, packet_genome=args.genome if args.pack else None,
-                      chosen_by_you=record.get("chosen_by_you"), name=record.get("name"))
+                      chosen_by_you=record.get("chosen_by_you"), name=record.get("name"),
+                      story=record.get("evolution"))
     said = replayed(record, made, out, recorded, beside)
     print(f"replay: {said}")
     return 1 if said.startswith("differs") else 0
