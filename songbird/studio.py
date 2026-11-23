@@ -1737,6 +1737,22 @@ def _who(body: dict) -> str:
     return who
 
 
+def syllable_counts(lines) -> list[dict]:
+    """Each line a person is writing, {"text", "want"}, as the singer would split its words written whole
+    (songbird.hyphens): {"text": hyphenated, "count": syllables}. At most 64 lines of 500 characters."""
+    from . import hyphens
+
+    if not isinstance(lines, list) or len(lines) > 64:
+        raise ValueError("lines: a list of at most 64")
+    out = []
+    for line in lines:
+        text = str((line or {}).get("text", ""))[:500] if isinstance(line, dict) else ""
+        want = line.get("want") if isinstance(line, dict) else None
+        split, count = hyphens.line(text, int(want) if isinstance(want, int) and 0 < want <= 64 else None)
+        out.append({"text": split, "count": count})
+    return out
+
+
 def answer(studio: Studio, path: str, body: dict, by: tuple[str, str] | None = None) -> dict | list:
     """A POST's answer: `body` the page's JSON (a map, its edits a map), `by` a public studio's visitor and address.
     Raises NotFound (404), ValueError, KeyError or TypeError (400), Busy (503), public.Limited (429) and
@@ -1748,6 +1764,8 @@ def answer(studio: Studio, path: str, body: dict, by: tuple[str, str] | None = N
         return studio.options(edits, str(body.get("block", "")), int(body.get("index", 0)))
     if path == "/api/keep-words":
         return studio.keep_words(edits)
+    if path == "/api/syllables":  # lines as the singer would split them, for the line editor's counts
+        return syllable_counts(body.get("lines"))
     if path == "/api/clips":  # an operation on the song's clips, as the edits it leaves (songbird.clips)
         return studio.clips(edits, body)
     if path == "/api/compare":

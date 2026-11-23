@@ -249,8 +249,11 @@
     state.note = i - 1;
     commitNotes(notes, "Merged into the syllable before: write the line's words for one fewer.", "Merge syllables");
   }
-  const sylls = (text) => window.SongbirdAuthor?.say?.syllables ? window.SongbirdAuthor.say.syllables(text)
+  // a line's syllables as the singer will split its words (author.js, songbird/hyphens.py); want: the count it needs
+  const say = () => window.SongbirdAuthor?.say;
+  const sylls = (text, want = null) => say()?.syllables ? say().syllables(text, want)
     : String(text || "").replace(/\{[^{}]*\}/g, "").trim().split(/[\s-]+/u).filter(Boolean).length;
+  const splitWords = (text, want = null) => say()?.split ? say().split(text, want) : text;
   function ownCard() {
     // the line's words for its new count: one edit with its notes (line.<key>.<i>)
     const p = phrase(), d = state.draft;
@@ -258,22 +261,27 @@
     const want = d.notes.filter((n) => !n.slur).length;
     const input = el("input", { type: "text", class: "sbc-own-words", value: d.words ?? p.lyric_text ?? "", "aria-label": want ? `The line's words, ${want} syllables` : "The line's words", id: "sbc-own-words" });
     const count = el("span", { class: "sbc-muted" }, "");
-    const shown = () => { const n = sylls(input.value); count.textContent = want ? `${n} / ${want} syllables` : `${n} syllables`; count.classList.toggle("is-valid", n === want); };
+    const shown = () => {
+      say()?.learn?.(input.value, want || null, () => { if (input.isConnected !== false) shown(); });
+      say()?.learn?.(input.value, null);
+      const n = sylls(input.value, want || null);
+      count.textContent = want ? `${n} / ${want} syllables` : `${n} syllables`; count.classList.toggle("is-valid", n === want);
+    };
     input.addEventListener("input", () => { d.words = input.value; shown(); });
     shown();
     return el("div", { class: "sbc-own" },
       el("strong", {}, "Write this line"),
-      el("p", { class: "sbc-muted" }, "One syllable a note; split longer words with hyphens (car-ry)."),
+      el("p", { class: "sbc-muted" }, "One syllable a note. A hyphen splits a word your own way (car-ry)."),
       input, count, d.error ? el("p", { role: "alert", class: "problem" }, d.error) : null,
       el("div", { class: "sbc-button-group" },
         want ? button("Use these words", () => {
-          if (sylls(input.value) !== want) { bridge().toast?.(`This line needs ${want} syllables; it has ${sylls(input.value)}.`); return; }
-          d.words = input.value.trim(); applyDraft(p, d);
+          if (sylls(input.value, want) !== want) { bridge().toast?.(`This line needs ${want} syllables; it has ${sylls(input.value, want)}.`); return; }
+          d.words = splitWords(input.value.trim(), want); applyDraft(p, d);
         }, { disabled: !!d.busy }) : null,
         button("Fit notes to words", () => {
           try {
-            d.words = input.value;
-            const notes = window.SongbirdModel.fitNotes({ ...p, notes: d.notes }, sylls(input.value), input.value);
+            d.words = splitWords(input.value);
+            const notes = window.SongbirdModel.fitNotes({ ...p, notes: d.notes }, sylls(input.value), d.words);
             d.notes = notes.map((n) => ({ ...n, pitch: (composition()?.tonic || 60) + scaleOffset(n.degree) + (n.alter || 0), edited: true }));
             p.notes = d.notes; state.note = null; d.error = null; paint(); told();
           } catch (error) { d.words = input.value; d.error = error.message; paint(); told(); }

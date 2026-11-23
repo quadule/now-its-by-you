@@ -48,7 +48,7 @@ from collections import Counter
 from dataclasses import replace
 
 from . import variants
-from .genome import sung_words
+from .genome import sung_words, syllables
 from .theory import MODES, SEVENTHS, chord_bass, chord_name, chord_tones, degree_semitones, parse_symbol, spelling
 
 GRID = 0.25  # a sixteenth note in a quarter-note beat
@@ -159,6 +159,12 @@ def check_lyric(genome, path: str, value, target: int | None = None) -> str | No
     target = len(genome.phrases[pid].sung) if target is None else target  # a line of its own: its notes' count
     if not target:
         raise ValueError("this line has no notes yet; write its words with its notes")
+    if len(syllables(text)) != target:  # words written whole: split into their syllables (songbird.hyphens)
+        from . import hyphens
+
+        split, count = hyphens.line(text, target)
+        if count == target:
+            text = split
     for word in text.split():
         why = heteronyms.problem(word, len([p for p in heteronyms.bare(word).split("-") if p]))
         if why:
@@ -171,8 +177,7 @@ def check_lyric(genome, path: str, value, target: int | None = None) -> str | No
         raise ValueError(f"mark the word to lean on with a star each side, like *heart*, "
                          f"punctuation outside; {problem[1]!r} isn't marked that way")
     if kind == "count":
-        raise ValueError(f"this line needs {target} syllables, one per note; it has {problem[1]}. "
-                         "Split longer words with hyphens, like car-ry")
+        raise ValueError(f"this line needs {target} syllables, one per note; it has {problem[1]}")
     if kind == "unknown":
         raise ValueError(f"the singer doesn't know how to pronounce {problem[1]!r}; try another spelling or word")
     raise ValueError(f"{problem[1]!r} needs {problem[3]} syllables; show them with hyphens")

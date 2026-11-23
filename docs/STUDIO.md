@@ -290,8 +290,11 @@ with why. Coupled words and refrain trades follow the bank's rules. Options
 load automatically, and a stale reply never replaces a newer choice.
 
 **Edit** on a sung section opens the line editor (author.js; *Write your own
-lines*). Each line shows its syllable target and a live count, as written:
-`car-ry` for syllables, `*heart*` for the word the line leans on (the singer
+lines*). Each line shows its syllable target and a live count: words written
+whole are split as the singer will sing them (songbird/hyphens.py, asked of the
+program as `POST /api/syllables`: the pronouncing dictionary's count, at the
+places the spelling suggests, fa-ther, eve-ning), and a line used shows how it
+was split. A hyphen splits a word a person's own way: `car-ry` for syllables, `*heart*` for the word the line leans on (the singer
 gives it a little more; docs/history/DELIVERY.md), `bass{base}` for how a word
 is said (below), with a legend of the three under the fields. **Use these
 lines** checks the count and the singer's pronunciation before changing the

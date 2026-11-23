@@ -13,7 +13,40 @@
   // A word's say in braces, bass{fish} (songbird/heteronyms.py): never a syllable, never shown.
   const SAY = /\{[^{}]*\}/g;
   const bare = (text) => String(text).replace(SAY, "");
-  const syllables = (text) => bare(text).trim().split(/[\s-]+/u).filter(Boolean).length;
+  const pieces = (text) => bare(text).trim().split(/[\s-]+/u).filter(Boolean).length;
+  // Words written whole, split into their syllables as the singer will (songbird/hyphens.py, POST /api/syllables):
+  // what the program says of a line is kept by its text and the count it wants, asked once, a moment after typing
+  // stops; until it answers, a word counts as one syllable. A word with a hyphen is split as it's written.
+  const known = new Map(), asking = new Map(), shown = new Set();
+  const keyOf = (text, want) => `${want ?? ""}\u0000${text}`;
+  const split = (text, want) => known.get(keyOf(text, want))?.text ?? text;
+  const syllables = (text, want) => known.get(keyOf(text, want))?.count ?? pieces(text);
+  let timer = null;
+  function learn(text, want, then = null) {
+    const key = keyOf(text, want);
+    if (typeof setTimeout !== "function" || !String(text).trim() || known.has(key)) return;
+    if (asking.has(key)) { if (then) asking.get(key).then.push(then); return; }
+    asking.set(key, {text, want: want ?? null, then: then ? [then] : []});
+    clearTimeout(timer);
+    timer = setTimeout(ask, 150);
+  }
+  async function ask() {
+    const batch = [...asking.entries()].filter(([, v]) => !v.sent).slice(0, 64);
+    if (!batch.length) return;
+    batch.forEach(([, v]) => { v.sent = true; });
+    try {
+      const response = await fetch("/api/syllables", {
+        method: "POST", headers: {"Content-Type": "application/json", "X-Studio": document.querySelector('meta[name="studio-token"]')?.content || ""},
+        body: JSON.stringify({lines: batch.map(([, v]) => ({text: v.text, want: v.want}))}),
+      });
+      const said = response.ok ? await response.json() : [];
+      batch.forEach(([key], i) => { if (said[i]) known.set(key, said[i]); });
+    } catch (error) { /* the count stays as written: words with hyphens */ }
+    batch.forEach(([key, v]) => { asking.delete(key); v.then.forEach((f) => f()); });
+    for (const row of shown) if (row.input.isConnected !== false) count(row); else shown.delete(row);
+    if (sheetState.open) preview();
+    if (asking.size) ask();
+  }
 
   // Words said two ways: the rules of songbird/heteronyms.py over the table the view sends (view.composition.say),
   // so a line shows its choices as it's typed. choose(), choices() and decide() are the Python's, line for line
@@ -147,8 +180,12 @@
   // a blank line (no notes yet): its words take notes fitted to them, as many as they have syllables
   const blank = (p) => !!p?.own_path && !(p.notes || []).length;
   const fits = (row, n) => (blank(row.phrase) ? n > 0 || !row.input.value.trim() : n === row.phrase.syllable_count);
+  const want = (row) => (blank(row.phrase) ? null : row.phrase.syllable_count);
+  const rowCount = (row) => syllables(row.input.value, want(row));
   function count(row) {
-    const n = syllables(row.input.value);
+    shown.add(row);
+    learn(row.input.value, want(row));
+    const n = rowCount(row);
     row.count.textContent = blank(row.phrase) ? `${n}` : `${n} / ${row.phrase.syllable_count}`;
     row.count.append(node("span", "unit", " syllables"));  // (the word goes where there's no room for it)
     row.count.classList.toggle("is-valid", fits(row, n) && n > 0);
@@ -192,6 +229,7 @@
         // Typing can continue while validation runs. Only the submitted text
         // becomes the base; newer typing must remain an unapplied draft.
         row.base = patch[row.phrase.own_path]?.words ?? patch[row.phrase.lyric_path] ?? submitted.get(row.phrase.lyric_path);
+        if (row.input.value === submitted.get(row.phrase.lyric_path)) { row.input.value = row.base; count(row); }  // as split
       }
       status.textContent = row ? "In your song." : "In your song. Hear the section to listen.";
       bridge().toast(row ? "Your line is in the song." : "Your words are in the song.");
@@ -203,7 +241,7 @@
     const details = node("details", "lyric-author");
     details.dataset.authorSection = s.id;
     const summary = node("summary", "", "Write your own lines");
-    const hint = node("p", "hint", "One syllable a note; split longer words with hyphens (car-ry).");
+    const hint = node("p", "hint", "One syllable a note. A hyphen splits a word your own way (car-ry).");
     hint.title = STARS;
     const lines = node("div", "author-lines");
     const status = node("p", "author-status");
@@ -212,9 +250,9 @@
     section.save = button("Use these lines", () => {
       const changed = [...section.rows.values()].filter((row) => row.input.value !== row.base);
       if (!changed.length) { status.textContent = "Already in your song."; return; }
-      const wrong = changed.filter((row) => !fits(row, syllables(row.input.value)));
+      const wrong = changed.filter((row) => !fits(row, rowCount(row)));
       if (wrong.length) {
-        status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many. Split a longer word with hyphens (num-bers) so each part gets a note.";
+        status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many.";
         wrong[0].input.focus();
         return;
       }
@@ -224,7 +262,7 @@
     const fit = button("Fit notes to words", () => {
       const changed = [...section.rows.values()].filter((row) => row.input.value !== row.base);
       if (!changed.length) { status.textContent = "Write your new words first."; return; }
-      try { apply(section, Object.assign({}, ...changed.map((row) => linePatch(row, syllables(row.input.value) !== row.phrase.syllable_count)))); }
+      try { apply(section, Object.assign({}, ...changed.map((row) => linePatch(row, rowCount(row) !== row.phrase.syllable_count)))); }
       catch (error) { status.textContent = error.message; }
     });
     fit.title = "Keep each line's melodic contour and fit a new rhythm to its words. Undo restores both.";
@@ -292,16 +330,17 @@
   // another line stays a draft there, and a refusal of this one refuses only this one)
   function linePatch(row, fit = false) {
     if (blank(row.phrase) && !row.input.value.trim()) return { [row.phrase.own_path]: null };  // (an empty line stays a rest)
-    return window.SongbirdModel?.lyricPatch ? window.SongbirdModel.lyricPatch(row.phrase, row.input.value, fit || blank(row.phrase))
-      : { [row.phrase.lyric_path]: row.input.value };
+    const text = split(row.input.value, want(row));  // its words split as the singer will sing them
+    return window.SongbirdModel?.lyricPatch ? window.SongbirdModel.lyricPatch(row.phrase, text, fit || blank(row.phrase))
+      : { [row.phrase.lyric_path]: text };
   }
   function lineActions(section, row, options) {
     if (!row.use) {
       row.use = button("Use this line", () => {
         const text = row.input.value;
         if (text === row.base) { row.status.textContent = "Already in your song."; return; }
-        if (!fits(row, syllables(text))) {
-          row.status.textContent = `This line needs ${row.phrase.syllable_count} syllables; it has ${syllables(text)}.`;
+        if (!fits(row, rowCount(row))) {
+          row.status.textContent = `This line needs ${row.phrase.syllable_count} syllables; it has ${rowCount(row)}.`;
           row.input.focus();
           return;
         }
@@ -316,7 +355,7 @@
         catch (error) { row.status.textContent = error.message; }
       });
       row.fit.title = "Fit the melody's contour to this line's syllables, as a new rhythm.";
-      row.fit.hidden = syllables(row.input.value) === row.phrase.syllable_count;
+      row.fit.hidden = rowCount(row) === row.phrase.syllable_count;
       row.actions.append(row.use, row.fit, discard);
       row.status = node("p", "author-status");
       row.status.setAttribute("role", "status");
@@ -382,15 +421,15 @@
   function finish(sectionId) {
     const section = sections.get(sectionId), changed = typed(section);
     if (!changed.length) return Promise.resolve(true);
-    const wrong = changed.filter((row) => !fits(row, syllables(row.input.value)));
+    const wrong = changed.filter((row) => !fits(row, rowCount(row)));
     if (wrong.length) {
-      section.status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many. Split a longer word with hyphens (num-bers) so each part gets a note.";
+      section.status.textContent = "Each line needs as many syllables as its tune has notes: the count beside it says how many.";
       wrong[0].input.focus();
       return Promise.resolve(false);
     }
     let used = false, patch;
     // a blank line's words take their notes with them (line.); any other's are the tune's words (lyrics.)
-    try { patch = Object.assign({}, ...changed.map((row) => (blank(row.phrase) ? linePatch(row) : { [row.phrase.lyric_path]: row.input.value }))); }
+    try { patch = Object.assign({}, ...changed.map((row) => (blank(row.phrase) ? linePatch(row) : { [row.phrase.lyric_path]: split(row.input.value, want(row)) }))); }
     catch (error) { section.status.textContent = error.message; return Promise.resolve(false); }
     return Promise.resolve(apply(section, patch, null, () => { used = true; }))
       .then(() => { if (used) section.status.textContent = ""; return used; });
@@ -477,8 +516,13 @@
     st.toggle.focus();
   }
   function sheetResult() {
-    const M = window.SongbirdModel, st = sheetState;
-    return M.lyricSheetPatch(st.targets, M.parseLyricSheet(st.text.value), syllables);
+    const M = window.SongbirdModel, st = sheetState, blocks = M.parseLyricSheet(st.text.value);
+    blocks.forEach((block, b) => block.lines.forEach((line, i) => {  // each line's words split as the singer will
+      const p = st.targets[b]?.phrases[i], wanted = p && !(p.own_path && !(p.notes || []).length) ? p.syllable_count : null;
+      learn(line.text, wanted);
+      if (line.text !== p?.lyric_text) line.text = split(line.text, wanted);
+    }));
+    return M.lyricSheetPatch(st.targets, blocks, pieces);
   }
   // what each line does, under the field: its count against its tune's, fitted where it differs, and why not
   function preview() {
@@ -523,5 +567,5 @@
       preview();
     } finally { st.use.disabled = false; }
   }
-  window.SongbirdAuthor = {capture, decorate, line, whole, finish, dirty, discard, sheet, say: {useTable, choices, decide, bare, syllables}};
+  window.SongbirdAuthor = {capture, decorate, line, whole, finish, dirty, discard, sheet, say: {useTable, choices, decide, bare, syllables, split, learn}};
 })();

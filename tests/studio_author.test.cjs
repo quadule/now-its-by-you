@@ -4,7 +4,7 @@ const {readFileSync} = require('node:fs');
 const {join} = require('node:path');
 const vm = require('node:vm');
 
-function setup() {
+function setup(opts = {}) {
   class Element {
     constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.listeners = {}; this.classList = {toggle() {}}; }
     append(...items) { for (const item of items) if (item && typeof item === 'object') item.parentNode = this; this.children.push(...items); }
@@ -23,7 +23,12 @@ function setup() {
     snapshot: () => ({revision, edits: JSON.parse(JSON.stringify(edits))}),
     replaceEdits: (next) => { edits = next; revision++; }, toast() {},
   }};
-  const context = vm.createContext({document: doc, window: win, fetch: () => {requests++; return new Promise((resolve) => { pending = resolve; }); }});
+  const fetch = (url, init) => {
+    if (url === '/api/syllables') return Promise.resolve({ok: true, json: async () => opts.syllables(JSON.parse(init.body).lines)});
+    requests++; return new Promise((resolve) => { pending = resolve; });
+  };
+  const timers = opts.syllables ? {setTimeout: (f) => setImmediate(f), clearTimeout: () => {}} : {};
+  const context = vm.createContext({document: doc, window: win, fetch, ...timers});
   vm.runInContext(readFileSync(join(__dirname, '../songbird/studio/author.js'), 'utf8'), context);
   const view = (text = 'I sing this song.', authored = false) => ({composition: {sections: [{id: 'verse:0', index: 1, label: 'Verse 1', phrases: [{lyric_path: 'lyrics.verse:0.0', lyric_text: text, syllable_count: 4, authored}]}]}});
   const render = (v = view()) => { win.SongbirdAuthor.capture(); parent.children = []; win.SongbirdAuthor.decorate(v, parent); };
@@ -234,4 +239,16 @@ test('the whole lyric at once: each paragraph onto the next section, a changed c
   await find((x) => x.textContent === 'Use these words').listeners.click();
   assert.equal(calls.length, 2);
   assert.equal(find((x) => x.className === 'lyric-sheet-panel').hidden, true, 'used: the field closes');
+});
+
+test('words written whole are counted and sent as the singer splits them (POST /api/syllables)', async () => {
+  const s = setup({syllables: (lines) => lines.map((l) => (l.text === 'My father sings.'
+    ? {text: 'My fa-ther sings.', count: 4} : {text: l.text, count: l.text.split(/[\s-]+/).filter(Boolean).length}))});
+  s.type('My father sings.');
+  for (let i = 0; i < 4; i++) await s.flush();
+  const tally = s.all().filter((x) => / \/ 4$/.test(String(x.textContent || ''))).map((x) => x.textContent);
+  assert.deepEqual(tally, ['4 / 4'], 'the count is the program\'s');
+  s.save(); s.answer(); await s.flush();
+  assert.equal(s.edits['lyrics.verse:0.0'], 'My fa-ther sings.');
+  assert.equal(s.input().value, 'My fa-ther sings.');  // the field shows how it was split
 });
