@@ -42,7 +42,7 @@
   ],
 
   "bridge": [
-    "*Car-ry* it o-ver the wa-ter and wire,",
+    "*Car-ry* it{Y.IH1.T} o-ver the wa-ter and wire,",
     "*hand* it a-long like a coal from the fire;",
     "it's no-bo-dy's mak-ing and ev-ery-one's *own*,",
     "it *dies* in the dark if you leave it a-lone."
@@ -104,7 +104,7 @@
     "mix": {"forward": 7.5, "space": 0.8, "width": 1.25, "intimacy": 0.65}
   },
 
-  "lexicon": {"oo": "UW1",
+  "lexicon": {"oo": "UW1", "so": "S OW1 W",
     "nobody": "N OW1 B AA0 D IY0", "nobody's": "N OW1 B AA0 D IY0 Z",
     "somebody": "S AH1 M B AA0 D IY0", "somebody's": "S AH1 M B AA0 D IY0 Z",
     "perfect": "P ER1 F IH0 K T", "record": "R EH1 K ER0 D", "ballgame": "B AO1 L G EY2 M",
@@ -1148,7 +1148,7 @@
           "where": ["dark", "cold"]
         },
         "lines": [
-          "*Car-ry* it o-ver the {place} and wire,",
+          "*Car-ry* it{Y.IH1.T} o-ver the {place} and wire,",
           "*hand* it a-long like a {ember} from the fire;",
           "it's no-bo-dy's mak-ing and ev-ery-one's *own*,",
           "it *dies* in the {where} if you leave it a-lone."
