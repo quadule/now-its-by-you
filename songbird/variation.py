@@ -1224,6 +1224,50 @@ def choose_style(out: dict, ctx: Context) -> None:
     choose(out, ctx, ctx.style, ctx.arrange)
 
 
+# How long and how slow a version the program chooses may be: a person may choose any tempo and any form
+# (songbird.edits, --form), and theirs stand (choose's pin); these hold only what the machine and the day choose.
+MOST_SECONDS = 270.0  # 4:30 (a version that can't be taken faster may run a little past it)
+TEMPO_FLOOR = 0.625  # of the song's own tempo: 60 a minute for H
+SHORTER = ("outro", "break", "turn")  # what a version too long leaves out first, the last of each first
+LENGTH_HURRY = 1.2  # how far past its style's quickest a version too long may then be taken
+
+
+def seconds(genome: Genome, out: dict) -> float:
+    """How long a version with these choices plays, by its own clock (realize.timeline)."""
+    from .realize import Params, timeline
+
+    clock = timeline(genome, Params.from_dict(out))
+    return float(clock.seconds(clock.end))
+
+
+def held_to_length(genome: Genome, out: dict, ctx: Context) -> None:
+    """A chosen version kept under MOST_SECONDS: it leaves out an outro, a break, a turn (the last first)
+    while its form still follows the song's rules, then takes the song faster, up to a fifth past its style's
+    quickest.
+    Not where a person has arranged the song (their order or their clips)."""
+    from .style import STYLES, Style
+
+    composition = out.get("composition") or {}
+    if composition.get("order") or composition.get("clips") or seconds(genome, out) <= MOST_SECONDS:
+        return
+    form = list(out.get("form") or ())
+    fitted = fits(genome, form)
+    for name in SHORTER:
+        while name in form and seconds(genome, out) > MOST_SECONDS:
+            at = len(form) - 1 - form[::-1].index(name)
+            shorter = form[:at] + form[at + 1:]
+            if fitted and not fits(genome, shorter):
+                break
+            form = shorter
+            out["form"] = list(form)
+    took = seconds(genome, out)
+    if took > MOST_SECONDS:
+        style = Style.from_dict(out.get("style") or {})
+        _, _, hi = STYLES.get(style.name or "ballad", STYLES["ballad"]).centre(style.feel or "straight")
+        tempo = float(out["tempo"])
+        out["tempo"] = round(min(LENGTH_HURRY * hi * ctx.song.tempo, max(tempo, tempo * took / MOST_SECONDS)), 1)
+
+
 # The words and the tune last: they read the form and the leanings chosen above (songbird.evolve).
 DECISIONS = (choose_mode, choose_form, choose_accomp, choose_pattern, choose_lead, choose_choir, choose_mood,
              choose_vocabulary, choose_inventory, choose_room, choose_timbre, choose_style, evolve.choose_words,
@@ -1290,6 +1334,8 @@ def choose(genome: Genome, parent=None, voice: Voice | None = None, drift: Drift
             out["form"] = list(form)
         if decide is choose_style and form is None:  # the parts of the form a style always plays (the old 78's)
             style_shaped(genome, out)
+        if decide is choose_style:  # never longer than MOST_SECONDS as the program chooses it
+            held_to_length(genome, out, ctx)
         if pin is not None:
             pin(out)
     if evolve or seed is not None:

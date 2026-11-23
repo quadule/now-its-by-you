@@ -196,13 +196,15 @@ def test_a_style_leans_the_singer_and_the_mix_without_compounding():
 
 def test_a_style_takes_the_song_at_its_own_tempo():
     from songbird import style as S
+    from songbird import variation
 
     g = G.load(H)
     song = Params.from_dict(g.seed_params).tempo
     for name, sdef in S.STYLES.items():
         p = choose_params(g, style=name)
         lo, _centre, hi = sdef.centre(p.style.feel)
-        assert lo * song - 0.1 <= p.tempo <= hi * song + 0.1, (name, p.tempo)
+        lo = max(lo, variation.TEMPO_FLOOR)  # never slower than 60 a minute as the program chooses it
+        assert lo * song - 0.1 <= p.tempo <= max(hi, lo) * song + 0.1, (name, p.tempo)
         assert p.style.name == name and p.style.lineage == ("ballad", name)
         assert (p.band.lineup == {}) == (name == "ballad")
 

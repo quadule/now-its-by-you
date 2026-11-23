@@ -1597,7 +1597,7 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
     """The rendition's style: where on the ring it is played (its parent's, or a neighbour's), and what that
     brings: the arrangement's options, the band's lineup and its lean, the tempo the style takes the song
     at, the singer's and the mix's lean. A machine that gave nothing keeps its parent's style."""
-    from .variation import PULL, _MIX_DEFAULTS, _VOICE_DEFAULTS
+    from .variation import PULL, TEMPO_FLOOR, _MIX_DEFAULTS, _VOICE_DEFAULTS
 
     parent: Style = ctx.parent.style
     c = ctx.c
@@ -1654,7 +1654,8 @@ def choose_style(out: dict, ctx, forced: str | None = None, arrange: dict | None
         r = r_parent + PULL * (r_own - r_then)
     else:
         r = r_parent + PULL * (r_own - r_parent)
-    out["tempo"] = round(max(lo * song, min(hi * song, r * centre * song)), 1)
+    lo = max(lo, TEMPO_FLOOR)  # never slower than the floor as the program chooses it (a person may)
+    out["tempo"] = round(max(lo * song, min(max(hi, lo) * song, r * centre * song)), 1)
 
     # the band: who plays, as loud as the style has them, each machine's balance its own way
     band = dict(out.get("band") or {})

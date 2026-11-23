@@ -552,3 +552,26 @@ def test_a_breath_before_the_refrains_is_a_part_of_the_form():
     assert edits.shape(genome, form)["breath"] is True and edits.form_problem(genome, form) is None
     assert edits.build(genome, dict(edits.shape(genome, form), breath=False)) == seed
     assert band._role("breath", genome.section("breath")) == "turn"
+
+
+def test_a_chosen_version_is_never_too_slow_or_too_long(h):
+    """What the machine and the day choose stays at 60 a minute or faster and about 4:30 or shorter, down a lineage
+    passed between machines (the lullaby's waltz once sang at 45 a minute for nearly seven minutes)."""
+    names = [f"m{i}" for i in range(16)]
+    for i in range(len(names)):
+        p = None
+        for k, day in enumerate(("2026-11-22", "2027-03-01", "2027-08-15")):
+            w = H.fictional(names[(i + 5 * k) % len(names)])
+            p = choose_params(h, p, w, D.drift(D.parse(day), w.hash))
+            assert p.tempo >= V.TEMPO_FLOOR * 96 - 0.05, (names[i], day, p.style.name, p.tempo)
+            assert V.seconds(h, p.to_dict()) <= 1.05 * V.MOST_SECONDS, (names[i], day, p.style.name, p.tempo)
+
+
+def test_a_persons_slow_tempo_and_long_form_stand(h):
+    """The limits are the program's: a person may take the song as slow and as long as they like."""
+    w = H.fictional("m3")
+    form = ("intro", "verse", "refrain", "turn", "verse", "refrain", "turn", "verse", "refrain", "break", "bridge",
+            "refrain", "tag", "outro")
+    p = choose_params(h, None, w, D.drift(D.parse("2026-11-22"), w.hash), overrides={"tempo": 45, "tempo.free": True}, form=form)
+    assert p.tempo == 45 and tuple(p.form) == form
+    assert V.seconds(h, p.to_dict()) > V.MOST_SECONDS

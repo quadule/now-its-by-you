@@ -182,6 +182,12 @@ until the drift has moved the ring past it. The style's options (its feel, intro
 version had them until the season's drift has turned them (`style.settled`). The words' leanings and the
 singer's blend, which no day moves, stay as they are.
 
+What the machine and the day choose is held to a length and a pace (`variation.MOST_SECONDS`,
+`TEMPO_FLOOR`): never slower than 60 a minute for H, and about 4:30 at most. A version longer than that leaves
+out its outro, then its break, then its last turn, while its form still follows the song's rules, then is taken
+faster, up to a fifth past its style's quickest. A person's own tempo (free of the style's range) and form stand,
+however slow or long.
+
 **Open.** A lineage passed only between quiet machines takes each one's day once, so over many hand-offs it
 can wander within each number's bounds.
 
