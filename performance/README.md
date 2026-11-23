@@ -33,6 +33,11 @@ its stops released as articulate makes them (tE's t).
   melody guide, the 808 `drummachine` returning at −2 dB in `refrain:2` with `guitar` eased −2 dB, and the
   closing `bowedbass` tag trimmed slightly to breathe out of the climax.
 
+The stage version's records (final, final-A, live-A) place it in the song's lineage: generation 2, the child of
+the awards draft (eb8fb05e…), itself from the first version (07ac74fb…). The awards draft's own released file says
+generation 0 and stays as it was released. The lineage changes no sample (the choir's earlier singers come only
+from `lineage_singers`, which stays empty), and a version sung from the stage version is generation 3.
+
     uv run python -m songbird render performance/genome.json --replay performance/record-final.json --out final.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-live-A.json --out live-A.flac
     uv run python -m songbird render performance/genome.json --replay performance/record-B.json --out performance-B.flac

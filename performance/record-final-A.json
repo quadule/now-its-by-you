@@ -1,9 +1,12 @@
 {
  "id": null,
  "title": "Now It's by You",
- "generation": 0,
- "parent_id": null,
- "ancestry": [],
+ "generation": 2,
+ "parent_id": "eb8fb05eb2bbbe2c5f4f7efca392bd4f77dc6ced7921bc4d0c117178ee560b07",
+ "ancestry": [
+  "07ac74fbd4eb24be53a8f001c71b32ff6db3b6599de4656110384848c01e2ac9",
+  "eb8fb05eb2bbbe2c5f4f7efca392bd4f77dc6ced7921bc4d0c117178ee560b07"
+ ],
  "rendered_at": null,
  "params": {
   "tonic": 57,
