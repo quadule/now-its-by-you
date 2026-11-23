@@ -168,7 +168,7 @@ ROLES: dict[str, Strip] = {
     # A plucked lute or cittern, doubling the tune under the words: boxiness and the voice's range cleared,
     # and it steps back while the voice sings the same notes.
     "lute": Strip(eq=(("hp", 90), ("peak", 320, -2.0, 1.0), ("peak", 2600, -3.0, 0.85), ("high", 7000, -1.5)),
-                  drive=0.1, duck=3.0),
+                  comp=(10.0, 2.0, 0.008, 0.18, 1.5, 3.0), drive=0.1, duck=3.0),
     # A banjo comping (rolls, clawhammer): nothing under its lowest string, 1 dB of its ring out where the voice's
     # consonants are (the band's own dip does the rest while the voice sings), a compressor slow to grab and
     # leaning only on what stands 5 dB out of its bar, so the picks keep their edge and a roll its accents;
@@ -179,18 +179,19 @@ ROLES: dict[str, Strip] = {
     # compressed gently and slowly (a tremolo evened, the chop untouched).
     "mandolin": Strip(eq=(("hp", 110),), comp=(10.0, 2.0, 0.02, 0.2, 1.5, 3.0), drive=0.05),
     # The main accompaniment: weight kept, boom and clang tamed, smooth top without exaggerating pick noise.
-    "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2600, -2.0, 0.8)),
-                    comp=(10.0, 2.0, 0.015, 0.2, 1.5, 3.0), drive=0.1, send=0.9),
+    "guitar": Strip(eq=(("hp", 75), ("peak", 200, -2.0, 1.1), ("peak", 2400, -3.0, 0.8), ("high", 5500, -2.5)),
+                    comp=(10.0, 2.2, 0.008, 0.18, 1.5, 2.5), drive=0.05, send=0.9),
     "harp": Strip(eq=(("hp", 70), ("peak", 2800, -1.5, 0.9)), send=1.2),
     # Round and even: sub-fundamental kept down to low D1/E1, mud out, no string noise, saturated so small speakers hear its pitch.
     "bass": Strip(eq=(("hp", 30, 2), ("low", 95, 2.5), ("peak", 380, -2.5, 0.8), ("lp", 3000)),
                   comp=(10.0, 3.0, 0.01, 0.15, 1.5, 3.0), drive=0.35, send=0.25),
     # Tame the violin body's +7 dB bridge hill (2.6 kHz) and bow glare so it sits warmly behind the voice.
-    "fiddle": Strip(eq=(("hp", 180), ("peak", 2600, -5.0, 0.85), ("high", 5500, -2.5)),
+    "fiddle": Strip(eq=(("hp", 180), ("peak", 1400, -2.0, 1.0), ("peak", 2600, -5.5, 0.85), ("high", 4500, -3.5)),
                     comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=3.0),
     "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
-    "drum": Strip(eq=(("hp", 35), ("low", 120, 1.5), ("peak", 420, -2.0, 1.0), ("high", 5500, -4.5)), trim=2.5,
-                  comp=(12.0, 2.5, 0.01, 0.14, 1.0, 4.0), send=0.55),
+    "drum": Strip(eq=(("hp", 35), ("low", 120, 2.0), ("peak", 420, -2.0, 1.0), ("peak", 1800, -3.5, 0.9),
+                      ("high", 3800, -5.5)), trim=1.0,
+                  comp=(12.0, 3.0, 0.005, 0.14, 1.0, 3.0), send=0.55),
     # A drum machine (808/909): deep kick kept down to 28 Hz, harsh 5.5 kHz hat/snare bite eased while keeping top air, slower attack so punch lands, less room.
     "drummachine": Strip(eq=(("hp", 28), ("peak", 380, -1.5, 1.0), ("peak", 5500, -2.0, 0.9)),
                          comp=(12.0, 2.5, 0.015, 0.15, 1.0, 4.0), drive=0.05, send=0.4),
@@ -292,7 +293,7 @@ AIR = -20.0
 # Compressors: (floor: dB under the part's loud passages, ratio, attack s, release s, ride s, above dB).
 # With a ride, the threshold is `above` dB over the level of the surrounding `ride` seconds (never under the
 # floor): a syllable is evened against its phrase, a strum against its bar, but a quiet verse stays quiet.
-VOICE_COMP = (10.0, 2.0, 0.015, 0.2, 3.0, 3.0)  # only the syllables that stand out of their phrase are leaned on
+VOICE_COMP = (10.0, 2.5, 0.008, 0.18, 3.0, 2.0)  # only the syllables that stand out of their phrase are leaned on
 CHOIR_EQ = (("hp", 120), ("low", 260, -2.0), ("peak", 2500, -3.0, 0.8), ("high", 7500, -2.5))
 CHOIR_COMP = (6.0, 2.0, 0.03, 0.3, 0.0, 0.0)
 PEAKS = 3.0  # dB over its loud peaks a choir's, drum's or the room's onset may reach before a peak stage rounds it off
@@ -331,7 +332,9 @@ VOICE_SOFTEN = (6.0, 0.6)
 # loud passages, by a ratio of 3 and never more than 6 dB (fx.unedge). A front vowel on a note whose harmonic
 # lands on its second formant ("sing", "tak-ing", "mak-ing" on E4 and F#4) stands 10 dB over the same band in
 # the words around it; those come down about 4 dB, a third of the singing a little, the rest not at all.
-VOICE_EDGE = (2300.0, 1.2, -14.0, 3.0, 6.0)
+VOICE_EDGE = (2100.0, 0.95, -14.5, 3.0, 6.5)
+STRUM_SOFTEN = (6.0, 0.55)  # round off sharp pick/strum spikes on guitar and lute before saturation
+DRUM_SOFTEN = (5.0, 0.55)  # round off stick-on-skin slap spikes on frame drum before peak stage
 # The singers rise and fall with the arrangement's energy (songbird.band: each section's, 0..1, arcing across
 # the song): LEAD_ARC[0] dB per unit of energy above ENERGY_REST, held between LEAD_ARC[1] and LEAD_ARC[2] dB and
 # smoothed over LEAD_ARC[3] s. Without it the lead comes out at REFERENCE in every sung section, whatever the band
@@ -558,6 +561,8 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         where = fx.span(choir, sr)
         if where.stop - where.start > sr // 2:
             group = fx.deess(fx.equalize(choir[where], fx.design(CHOIR_EQ, sr), inplace=owned), sr, inplace=True)[0]
+            if VOICE_EDGE:
+                group = fx.unedge(group, sr, *VOICE_EDGE, inplace=True)[0]
             group = _peaks(_compressed(group, sr, CHOIR_COMP, inplace=True), sr, inplace=True)
             group = fx.width(group, sr, min(CHOIR_WIDTH * p.width, 1.6), inplace=True)
             choir = np.zeros((length, 2))
@@ -575,10 +580,16 @@ def mix_made(parts: list, length: int, sr: int, seed: int = 0, params: MixParams
         if strip.comp:
             x = _compressed(x, sr, strip.comp, inplace=owned)
             owned = True
+        if role == "drum" and DRUM_SOFTEN:
+            x = fx.soften(x, sr, *DRUM_SOFTEN, inplace=owned)
+            owned = True
         if role in ("drum", "drummachine", "kit"):
             y = _peaks(x, sr, inplace=owned)
             owned = owned or y is not x
             x = y
+        if STRUM_SOFTEN and role in ("guitar", "lute"):
+            x = fx.soften(x, sr, *STRUM_SOFTEN, inplace=owned)
+            owned = True
         return fx.saturate(x, sr, strip.drive, inplace=owned)
 
     def strip_of(name: str, x):  # the channel strip's work on the stretch that sounds: (where, samples of its own)

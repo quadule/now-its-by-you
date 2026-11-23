@@ -531,7 +531,7 @@ def _both_ways(x2: np.ndarray, sos: np.ndarray) -> np.ndarray:
 
 
 def deess(x: np.ndarray, sr: int, split: float = 3500.0, excess: float = 1.0, ratio: float = 4.0,
-          most: float = 11.5, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
+          most: float = 13.5, lookahead: float = 0.005, inplace: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """Turn the highs down while they outweigh the voice's body: a split-band
     de-esser whose threshold is the voice's own balance, so it hears an "s"
     by its spectrum, not by how loud the singer is. It listens to the band
@@ -544,7 +544,9 @@ def deess(x: np.ndarray, sr: int, split: float = 3500.0, excess: float = 1.0, ra
     of the voice above it, so an "s" is turned down rather than tilted, and
     nothing is ever turned up.
     `excess`: how far (dB) the highs may rise over the body before they are
-    reduced, by `ratio`, never by more than `most` dB. Highs 40 dB under the
+    reduced, by `ratio`, never by more than `most` dB. `lookahead` (seconds)
+    holds the target ahead so the leading edge of a sharp sibilant burst
+    cannot slip past before gain reduction engages. Highs 40 dB under the
     voice's loud passages are left alone, whatever their balance (breath, the
     start of a sound). Where nothing is reduced the output is the input."""
     x2 = _stereo(x)
@@ -557,6 +559,9 @@ def deess(x: np.ndarray, sr: int, split: float = 3500.0, excess: float = 1.0, ra
     target = np.clip(-over * (1.0 - 1.0 / ratio), -most, 0.0)
     target[high < loud_level(x2, sr) - 40.0] = 0.0
     rate = sr / STEP
+    if lookahead > 0:
+        ahead = max(1, int(lookahead * rate))
+        target = sliding_min(target, ahead + 1, origin=-((ahead + 1) // 2), mode="reflect")
     gain = _ballistics(target, _coef(0.001, rate), _coef(0.06, rate))
     out = x2 if inplace and np.shares_memory(x2, x) else np.empty_like(x2)
     y = _apply(x2, 10.0 ** (gain / 20.0), STEP, highs, out)

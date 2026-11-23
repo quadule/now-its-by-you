@@ -2019,7 +2019,7 @@ export function k_synth$fx$_apply(x, lin, step, band, y) {
   return y;
 }
 
-// songbird/synth/fx.py:596
+// songbird/synth/fx.py:601
 export function k_synth$fx$_follow(x, detect, rise, fall, floor_db, span_db) {
   let a, c, chans, coef, i, n, out, p, s, t, $t1, $t2, $t3, $t4, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2045,7 +2045,7 @@ export function k_synth$fx$_follow(x, detect, rise, fall, floor_db, span_db) {
   return out;
 }
 
-// songbird/synth/fx.py:628
+// songbird/synth/fx.py:633
 export function k_synth$fx$_block_peaks(x, block) {
   let b, c, chans, i, k, m, n, out, v, $t1, $t2, $t3, $t4, $t5, $t6, out_d, out_n0, out_n1, out_s0, out_s1, x_d, x_n0, x_n1, x_s0, x_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
@@ -2071,7 +2071,7 @@ export function k_synth$fx$_block_peaks(x, block) {
   return out;
 }
 
-// songbird/synth/fx.py:654
+// songbird/synth/fx.py:659
 export function k_synth$fx$_soft(v) {
   let w;
   if (((v >= 3.0))) {
@@ -2084,7 +2084,7 @@ export function k_synth$fx$_soft(v) {
   return ((v * (27.0 + w)) / (27.0 + (9.0 * w)));
 }
 
-// songbird/synth/fx.py:665
+// songbird/synth/fx.py:670
 export function k_synth$fx$_saturate(x, k, bias, dc, y) {
   let c, chans, i, n, norm, out, prev_in, prev_out, slope, th, v, w, $t1, $t2, $t3, $t4, x_d, x_n0, x_n1, x_s0, x_s1, y_d, y_n0, y_n1, y_s0, y_s1;
   x_d = x.d; x_n0 = x.n0; x_n1 = x.n1; x_s0 = x.s0; x_s1 = x.s1;
