@@ -334,7 +334,10 @@
 
   async function openVersion({ worker, view }) {
     const kept = await recall("versions", version);
-    if (kept && kept.program === view.program && kept.machine === view.machine) {
+    // a link is read again where the machine has changed since; a file can't be, and needn't be: brought from the
+    // page on the published version, it was read as that machine, and this page sings as this browser's (NEW). The
+    // studio draws its timeline again for this machine (Studio.opened).
+    if (kept && kept.program === view.program && (kept.machine === view.machine || !linked)) {
       const r = await worker.ask({ cmd: "restore", version: kept });
       if (r.status === 200) {
         if (linked) stillShared();

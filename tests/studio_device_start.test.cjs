@@ -24,9 +24,33 @@ const ANSWERS = {
 };
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
+// the page's storage, as much of IndexedDB as device.js asks of it: "songbird-studio" holding `kept` (store -> Map)
+function fakeIndexedDB(kept) {
+  const db = {
+    transaction(name) {
+      const t = {};
+      const map = kept[name] || (kept[name] = new Map());
+      t.objectStore = () => ({
+        get: (k) => ({ result: map.get(k) }), put: (v, k) => { map.set(k, v); return { result: k }; },
+        delete: (k) => { map.delete(k); return {}; }, getAll: () => ({ result: [...map.values()] }),
+      });
+      setImmediate(() => t.oncomplete?.());
+      return t;
+    },
+  };
+  return {
+    open(name) {
+      const r = {};
+      setImmediate(() => { if (name === "songbird-studio") { r.result = db; r.onsuccess?.(); } else r.onerror?.(); });
+      return r;
+    },
+  };
+}
+
 function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to: "2999-12-31" }, decompress = true,
                 day = TODAY, file = Promise.resolve(), machine = "none", store = new Map(), search = "", opens,
-                navigator = { languages: ["en-GB", "fr"], hardwareConcurrency: 8, deviceMemory: 4 }, scheme = "dark" } = {}) {
+                navigator = { languages: ["en-GB", "fr"], hardwareConcurrency: 8, deviceMemory: 4 }, scheme = "dark", hash = "",
+                kept = null } = {}) {
   const fetched = [];
   const workers = [];
   const toasts = [];
@@ -39,6 +63,7 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
       const say = (d) => setImmediate(() => this.onmessage?.({ data: d }));
       if (m.cmd === "init") ready.then(() => say({ kind: "ready", seconds: 1 }));
       else if (m.cmd === "studio") say({ kind: "studio", program: "p", song: "s", machine: "none", day: m.config.day, title: "T" });
+      else if (m.cmd === "restore") say({ kind: "answer", id: m.id, status: 200, json: JSON.stringify({ restored: true }) });
       else if (m.cmd === "request") say({ kind: "answer", id: m.id, status: 200, json: JSON.stringify({ from: "the worker", path: m.path }) });
     }
     terminate() {}
@@ -50,14 +75,16 @@ function page({ pathname = "/", first = { folder: FOLDER, from: "2000-01-01", to
   const sandbox = {
     navigator, matchMedia: (q) => ({ matches: q === `(prefers-color-scheme: ${scheme})` }),
     document: { querySelector: (q) => meta[q] || null, getElementById: (id) => (id === "which" ? which : null),
-                readyState: "complete", addEventListener: (kind, f) => { (listeners[kind] ||= []).push(f); } },
-    location: { pathname, search, hash: "", href: `http://studio.test${pathname}${search}`, origin: "http://studio.test" },
+                readyState: "complete", addEventListener: (kind, f) => { (listeners[kind] ||= []).push(f); },
+                createElement: () => ({ append() {} }), head: { append() {} }, body: { replaceChildren() {} } },  // a notice
+    location: { pathname, search, hash, href: `http://studio.test${pathname}${search}${hash}`, origin: "http://studio.test" },
     localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
     Worker: FakeWorker, WebAssembly, URL, URLSearchParams, Response, Headers, Request, TextDecoder, TextEncoder, Blob,
     DecompressionStream: decompress ? DecompressionStream : undefined, structuredClone, clearTimeout,
     setTimeout: (f, ms) => { const t = setTimeout(f, ms); t.unref?.(); return t; },  // (a deadline never holds node open)
     setImmediate, console, crypto,
   };
+  if (kept) sandbox.indexedDB = fakeIndexedDB(kept);
   sandbox.window = sandbox;
   sandbox.songbirdStudio = { toast: (text) => toasts.push(text) };
   sandbox.StudioBridge = { snapshot: () => ({ start: bridge.start }) };
@@ -236,4 +263,30 @@ test("a build that opens on the published version: answered at once as it; ?new 
   const c = q.workers[0].posted.find((m) => m.cmd === "studio").config;
   assert.equal(c.machine, "browser");
   assert.match(c.browser.salt, /^[0-9a-f]{16}$/);
+});
+
+test("a file brought from the published version opens again on its own page, which sings as this browser", async () => {
+  // read on the page on the published version (machine "published"); its page, a version's, is this browser's (the
+  // fake worker's "none"): no link to read it again, so what was kept is given back to the studio as it was
+  const id = "b".repeat(32);
+  const version = { id, record: {}, genome: "{}", program: "p", machine: "published", shared: false };
+  const p = page({ hash: `#version=${id}`, opens: "published", kept: { versions: new Map([[id, version]]) } });
+  const start = p.ask("/api/start");
+  p.release();
+  assert.equal((await start).data.from, "the worker");
+  const restored = p.workers.flatMap((w) => w.posted.filter((m) => m.cmd === "restore"));
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].version.id, id);
+  assert.ok(!p.fetched.some((f) => f.startsWith("/api/versions")));
+});
+
+test("a shared link kept as another machine read it is fetched and read again, not given back as it was", async () => {
+  const id = "c".repeat(32);
+  const version = { id, record: {}, genome: "{}", program: "p", machine: "published", shared: true };
+  const p = page({ pathname: `/v/${id}`, opens: "published", kept: { versions: new Map([[id, version]]) } });
+  p.ask("/api/start").catch(() => {});
+  p.release();
+  for (let i = 0; i < 40 && !p.fetched.includes(`/api/versions/${id}`); i++) await tick();
+  assert.ok(p.fetched.includes(`/api/versions/${id}`));
+  assert.ok(!p.workers.some((w) => w.posted.some((m) => m.cmd === "restore")));
 });
