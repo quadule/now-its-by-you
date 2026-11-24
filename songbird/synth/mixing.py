@@ -189,9 +189,9 @@ ROLES: dict[str, Strip] = {
     "fiddle": Strip(eq=(("hp", 180), ("peak", 1400, -2.0, 1.0), ("peak", 2600, -5.5, 0.85), ("high", 4500, -3.5)),
                     comp=(10.0, 2.0, 0.02, 0.25, 2.0, 3.0), send=1.3, duck=3.0),
     "whistle": Strip(eq=(("hp", 250), ("peak", 3000, -2.0, 1.4), ("high", 9000, -1.0)), send=1.3, duck=2.0),
-    "drum": Strip(eq=(("hp", 35), ("low", 120, 2.0), ("peak", 420, -2.0, 1.0), ("peak", 1800, -3.5, 0.9),
+    "drum": Strip(eq=(("hp", 35), ("low", 120, 2.0), ("peak", 1800, -3.5, 0.9),
                       ("high", 3800, -5.5)), trim=1.0,
-                  comp=(12.0, 3.0, 0.005, 0.14, 1.0, 3.0), send=0.55),
+                  comp=(12.0, 3.0, 0.012, 0.14, 1.0, 3.0), drive=0.2, send=0.55),
     # A drum machine (808/909): deep kick kept down to 28 Hz, harsh 5.5 kHz hat/snare bite eased while keeping top air, slower attack so punch lands, less room.
     "drummachine": Strip(eq=(("hp", 28), ("peak", 380, -1.5, 1.0), ("peak", 5500, -2.0, 0.9)),
                          comp=(12.0, 2.5, 0.015, 0.15, 1.0, 4.0), drive=0.05, send=0.4),

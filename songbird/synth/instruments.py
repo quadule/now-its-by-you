@@ -301,8 +301,13 @@ def _model(kind: str, notes, sr: int, length: int, s: dict, rng: np.random.Gener
     if kind == "whistle":
         return pipe.blow(notes, sr, length, rng, brightness=bright, wear=wear, vibrato=ornament)
     if kind == "drum":
-        # a frame drum is tuned by warming the skin, not to the key: its maker's, somewhere near 80 Hz
-        skin = 80.0 * 2.0 ** make.uniform(-0.25, 0.25) / size
+        # a frame drum is tuned by warming the skin: its maker's, somewhere near 80 Hz, brought to the nearest
+        # tonic or fifth of the song's key, where its boom sits in the chords instead of between them
+        made = 80.0 * 2.0 ** make.uniform(-0.25, 0.25) / size
+        pcs = {int(s["tonic"]) % 12, (int(s["tonic"]) + 7) % 12}
+        near = 69.0 + 12.0 * np.log2(made / 440.0)
+        skin = 440.0 * 2.0 ** ((min((k for k in range(int(near) - 6, int(near) + 7) if k % 12 in pcs),
+                                    key=lambda k: abs(k - near)) - 69.0) / 12.0)
         return drum.play(notes, sr, length, rng, pitch=skin, brightness=bright, wear=wear)
     if kind == "drone":
         tone = reed.drone(notes, sr, length, rng, brightness=bright, wear=wear)

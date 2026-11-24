@@ -57,13 +57,19 @@ def _tables() -> tuple[np.ndarray, ...]:
 STROKES = {
     # radius (0 centre, 1 rim), pitch factor (the hand behind the skin), ring (seconds, the fundamental's T60),
     # contact (ms), click level
-    "bass": (0.22, 1.00, 0.35, 1.6, 0.25),
-    "tip": (0.72, 1.12, 0.22, 0.9, 0.45),
-    "mute": (0.45, 1.25, 0.08, 1.1, 0.35),
+    "bass": (0.22, 1.00, 0.9, 1.6, 0.2),
+    "tip": (0.72, 1.12, 0.3, 0.9, 0.35),
+    "mute": (0.45, 1.25, 0.12, 1.1, 0.35),
     "rim": (0.95, 1.15, 0.05, 0.5, 1.0),
-    # the back hand pressed high on the skin: the pitch up about a third, drier (a reel's accent: no style plays it)
-    "top": (0.6, 1.26, 0.1, 0.9, 0.4),
+    # the back hand pressed high on the skin: the pitch up a fifth, still singing, settling as the hand presses in
+    "top": (0.6, 1.5, 0.25, 0.9, 0.4),
 }
+# A stroke's pitch at the strike against where it settles, and how fast it settles (s): a hard hit's stretch of the
+# skin (by velocity) for most, the pressing hand's own slide for the top stroke
+GLIDES = {"top": (0.08, 0.08)}
+# How far a stroke stops what still rings (the hand on the skin): what is left of the earlier strokes' ring, and the
+# time constant (s) it falls to that in. An open stroke stops nothing.
+CHOKES = {"mute": (0.0, 0.006), "top": (0.08, 0.008), "tip": (0.35, 0.015), "rim": (0.6, 0.01)}
 
 
 @njit(cache=True, nogil=True)
@@ -128,20 +134,21 @@ def hit(stroke: str, vel: float, sr: int, rng: np.random.Generator, *, pitch: fl
     amps = shape * np.cos(m * theta) * radiate * spectrum * rng.uniform(0.8, 1.2, len(modes))
     t60s = ring * np.power(f0 / freqs, seven_tenths) * (1.0 + 0.3 * wear)
     length = int((max(t60s) + 0.05) * sr)
-    y = _ring(freqs, amps, t60s, 0.06 * vel ** 2, 0.03, length, float(sr))
+    glide, glide_time = GLIDES.get(stroke, (0.06 * vel ** 2, 0.03))
+    y = _ring(freqs, amps, t60s, glide, glide_time, length, float(sr))
     level = np.max(np.abs(y[: int(0.01 * sr)])) + 1e-9
+    # scaled by the loudness of its ring's first 30 ms (a dry stroke's noise would set the level otherwise), and a
+    # tipped stroke well under the open boom, as a player plays them
+    body = np.sqrt(np.mean(y[: int(0.03 * sr)] ** 2)) + 1e-12
     # above the modes listed the skin's modes crowd into a band of noise, the slap, gone in a few hundredths
     n = min(length, int(0.06 * sr))
-    slap = sosfilt(butter(2, [16.0 * f0, min(5000.0, 0.45 * sr)], btype="bandpass", fs=sr, output="sos"),
+    slap = sosfilt(butter(2, [6.0 * f0, min(2500.0, 0.45 * sr)], btype="bandpass", fs=sr, output="sos"),
                    rng.standard_normal(n + 64))[64:]
     y[:n] += slap * np.exp(-np.arange(n) / (ring * 0.035 * sr)) * (0.08 + 0.12 * brightness) * radius * level
     # the knock of the stick itself: a millisecond or two of bright noise
     n = int(0.004 * sr)
-    burst = sosfilt(butter(2, [900.0, 6000.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(n + 64))[64:]
+    burst = sosfilt(butter(2, [500.0, 3000.0], btype="bandpass", fs=sr, output="sos"), rng.standard_normal(n + 64))[64:]
     y[:n] += burst * np.exp(-np.arange(n) / (0.0008 * sr)) * click * (0.3 + 0.5 * brightness) * level
-    # scaled by the loudness of its first 30 ms, not its peak (a click would set the level), and a tipped
-    # stroke well under the open boom, as a player plays them
-    body = np.sqrt(np.mean(y[: int(0.03 * sr)] ** 2)) + 1e-12
     return y * vel * 0.25 / body * (0.35 + 0.65 * vel) * STROKE_GAIN.get(stroke, 0.6)
 
 
@@ -149,15 +156,20 @@ def play(notes, sr: int, length: int, rng: np.random.Generator, *, pitch: float 
          wear: float = 0.0) -> np.ndarray:
     """A drum part: every stroke laid onto one track, `length` samples long.
 
-    A frame drum has no back: at its lowest modes the air just sloshes round
-    the rim from one face to the other, so it radiates them as a dipole, 12 dB
-    an octave weaker below about 1.3 times its fundamental than a closed drum
-    would. Felt more than heard, as a bodhran's boom is."""
+    A frame drum has no back: at its lowest modes the air sloshes round the rim
+    from one face to the other, so far off it radiates them as a dipole. Near
+    the player and in a room the boom carries, falling away 6 dB an octave
+    only below about 0.7 times the fundamental."""
     out = np.zeros(length)
-    for note in notes:
-        y = hit(note.art or "tip", note.vel, sr, rng, pitch=pitch, brightness=brightness, wear=wear)
+    for note in sorted(notes, key=lambda n: n.start):
+        stroke = note.art or "tip"
+        y = hit(stroke, note.vel, sr, rng, pitch=pitch, brightness=brightness, wear=wear)
         i = int(round(note.start * sr))
+        if i >= length:
+            continue
+        if stroke in CHOKES:  # the hand stops the earlier strokes' ring where this one lands
+            left, tau = CHOKES[stroke]
+            out[i:] *= left + (1.0 - left) * np.exp(-np.arange(length - i) / (tau * sr))
         j = min(length, i + len(y))
-        if i < length:
-            out[i:j] += y[: j - i]
-    return sosfilt(butter(2, 1.3 * pitch, btype="highpass", fs=sr, output="sos"), out)
+        out[i:j] += y[: j - i]
+    return sosfilt(butter(1, 0.7 * pitch, btype="highpass", fs=sr, output="sos"), out)

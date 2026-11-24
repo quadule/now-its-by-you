@@ -367,6 +367,13 @@
       ],
       "port": 8842,
       "url": "http://127.0.0.1:8842"
+    },
+    {
+      "name": "video",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/promo/video/capture/serve.mjs"],
+      "port": 8860,
+      "url": "http://127.0.0.1:8860"
     }
   ]
 }
