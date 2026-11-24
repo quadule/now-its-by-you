@@ -549,7 +549,7 @@ def clean_params(data, genome) -> dict:
     if missing:
         raise Refused(f"Its record's form sings a section its song doesn't have ({missing[0][:30]}).")
     out["form"] = list(form)
-    numbers = {"humanize": (0.0, 0.05), "ritardando": (0.0, 1.0), "loudness": (-30.0, -6.0), "lay": (-1.0, 1.0)}
+    numbers = {"humanize": (0.0, 0.05), "ritardando": (0.0, 2.0), "loudness": (-30.0, -6.0), "lay": (-1.0, 1.0)}
     for k, v in data.items():
         if k in out or k not in known and k not in ("room", "swing"):
             continue

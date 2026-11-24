@@ -564,3 +564,14 @@ def test_a_section_sung_again_as_its_own_is_one_the_song_has(parent):
     for bad in ("bridge2x", "coda2"):
         with pytest.raises(R.Refused, match="doesn't have"):
             R.clean_params(dict(params, form=[*params["form"], bad]), genome)
+
+
+def test_the_stage_versions_drawn_out_ending_is_one_this_program_sings():
+    """The stage version's bowed-bass tag slows its last phrase by 1.5 (performance/record-live-A.json): its record
+    is read with that ritardando, while one past what the studio reads is still refused."""
+    params = json.loads((ROOT / "performance" / "record-live-A.json").read_text())["params"]
+    genome = load(LEAD)
+    assert params["ritardando"] == 1.5
+    assert R.clean_params(params, genome)["ritardando"] == 1.5
+    with pytest.raises(R.Refused, match="ritardando"):
+        R.clean_params(dict(params, ritardando=2.5), genome)
