@@ -1,0 +1,9 @@
+{
+  "name": "songbird-video-capture",
+  "private": true,
+  "type": "module",
+  "description": "Drives headless Chromium over the film and pipes frames to ffmpeg.",
+  "dependencies": {
+    "playwright-core": "^1.65.1"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "s01_writing": {
+    "tune": "THE TUNE, WRITTEN AND PLAYED",
+    "bank": "51 VERSES IN THE BANK"
+  },
+  "s02_voice": {
+    "throat": "200 LINES A SECOND",
+    "weights": "886,372 NUMBERS"
+  },
+  "s03_instruments": {
+    "harp": "HARP · A PLUCKED STRING",
+    "bass": "BASS",
+    "guitar": "GUITAR · THE STRUMMING HAND",
+    "drum": "FRAME DRUM · A STRUCK SKIN"
+  },
+  "s04_bow": {
+    "fiddle": "FIDDLE · A BOWED STRING"
+  },
+  "s04_drum": {
+    "drum": "FRAME DRUM · A STRUCK SKIN"
+  },
+  "s06_volunteers": {
+    "takes": "84 TAKES · EIGHT SINGERS",
+    "numbers": "NINE NUMBERS A NOTE",
+    "machine": "THE MACHINE ALONE",
+    "moved": "NOTES THE SINGERS MOVED"
+  },
+  "s07_gather": {
+    "file": "ONE FILE",
+    "whistle": "WHISTLE · A PIPE"
+  },
+  "s08_lineage": {
+    "file": "ONE FILE",
+    "song": "THE SONG",
+    "program": "THE PROGRAM THAT SINGS IT",
+    "generation": "GENERATION 2"
+  },
+  "s09_broadside": {
+    "verses": "51 VERSES"
+  },
+  "s10_cover": {
+    "title": "Now It’s by You",
+    "volunteers": "The Volunteers",
+    "site": "now.itsby.you"
+  },
+  "s02b_twins": {
+    "twins": "SYNTH LEAD · OSCILLATOR AND TINE"
+  },
+  "s03b_lute": {
+    "lute": "LUTE · A PLUCKED COURSE"
+  },
+  "s08b_harp": {
+    "harp": "HARP · A PLUCKED STRING"
+  },
+  "s09b_bass": {
+    "bass": "BOWED BASS · A BOWED STRING"
+  }
+}

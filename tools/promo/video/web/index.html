@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Now It's by You · film</title>
+<style>
+  @font-face { font-family: "Film Serif"; src: url(/fonts/Georgia.ttf); font-weight: 400; font-style: normal; }
+  :root { --stage: #1b1611; --ink: #efe6da; --dim: #a89985; --rule: #3d3429; --red: #e0664d; --sung: #f2b25c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0e0b08; color: var(--ink); font: 14px/1.4 "Film Serif", Georgia, serif; }
+  body { display: grid; grid-template-rows: 1fr auto; }
+  #stage { position: relative; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+  canvas { display: block; background: var(--stage); }
+  #chrome { padding: 10px 16px 12px; border-top: 1px solid var(--rule); display: grid; gap: 8px; }
+  #row1, #row2 { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #scrub { flex: 1; min-width: 200px; accent-color: var(--sung); }
+  button, select { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--rule); border-radius: 2px; padding: 3px 9px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--dim); }
+  button.on { border-color: var(--sung); color: var(--sung); }
+  #readout { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 330px; }
+  #err { color: var(--red); white-space: pre-wrap; }
+  #play { min-width: 64px; }
+  .capture #chrome { display: none; }
+  .capture, .capture body { background: #000; }
+  .capture #stage { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="film"></canvas></div>
+<div id="chrome">
+  <div id="row1">
+    <button id="play" title="Space">Play</button>
+    <input id="scrub" type="range" min="0" max="151.227" step="0.001" value="0" aria-label="Song time">
+    <span id="readout"></span>
+  </div>
+  <div id="row2">
+    <span id="sections"></span>
+    <select id="solo" aria-label="Scene"><option value="">All scenes</option></select>
+    <span id="err"></span>
+  </div>
+</div>
+<audio id="audio" src="/audio.flac" preload="auto"></audio>
+<script type="module">
+import { Film } from './core/film.js';
+import SCENES from './scenes/index.js';
+
+const q = new URLSearchParams(location.search);
+const capture = q.get('capture') === '1';
+const canvas = document.getElementById('film'), audio = document.getElementById('audio');
+const scrub = document.getElementById('scrub'), readout = document.getElementById('readout');
+const $err = document.getElementById('err');
+if (capture) document.documentElement.classList.add('capture');
+
+// the preview renders at the canvas's fitted size (or ?w=&h=); capture at ?w=&h= (1920x1080 by default)
+function fitted() {
+  if (q.get('w') && q.get('h')) return [Number(q.get('w')), Number(q.get('h'))];
+  if (capture) return [1920, 1080];
+  const box = document.getElementById('stage').getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.min(box.width, box.height * 16 / 9), h = w * 9 / 16;
+  return [Math.round(w * dpr / 2) * 2, Math.round(h * dpr / 2) * 2];
+}
+function place([w, h]) {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = (capture ? w : w / dpr) + 'px';
+  canvas.style.height = (capture ? h : h / dpr) + 'px';
+}
+
+let film, t = Number(q.get('t') || 0), dirty = true;
+const ready = (async () => {
+  const size = fitted();
+  place(size);
+  film = await Film.create(canvas, { w: size[0], h: size[1], solo: q.get('scene') || null, capture });
+  return true;
+})();
+
+window.film = {
+  ready,
+  get frames() { return film.frames; },
+  get fps() { return film.fps; },
+  get timeline() { return film.timeline; },
+  render: (i, o) => film.render(i, o),
+  capture: (i, o) => film.capture(i, o),
+  send: (a, b, url, o) => film.send(a, b, url, o),
+  size: (w, h) => { film.size(w, h); place([w, h]); },
+  draw: (s, o) => film.draw(s, o),
+  get film() { return film; },
+  info: () => {
+    const gl = film.g.gl, ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return { renderer: gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER), maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      floatTargets: film.g.floatOK, floatBlend: film.g.floatBlend, size: [film.w, film.h], fixture: film.timeline.fixture };
+  },
+};
+
+ready.then(() => {
+  if (capture) return;
+  const tl = film.timeline;
+  scrub.max = tl.duration;
+  scrub.value = t;
+  audio.currentTime = t;
+  const box = document.getElementById('sections');
+  for (const s of tl.sections) {
+    const b = document.createElement('button');
+    b.textContent = s.id;
+    b.onclick = () => seek(s.t0);
+    box.appendChild(b);
+  }
+  const solo = document.getElementById('solo');
+  for (const id of SCENES) {
+    const o = document.createElement('option');
+    o.value = o.textContent = id;
+    if (q.get('scene') === id) o.selected = true;
+    solo.appendChild(o);
+  }
+  solo.onchange = () => {
+    const u = new URL(location.href);
+    if (solo.value) u.searchParams.set('scene', solo.value); else u.searchParams.delete('scene');
+    u.searchParams.set('t', t.toFixed(3));
+    location.href = u.toString();
+  };
+  requestAnimationFrame(loop);
+}).catch((e) => {
+  $err.textContent = /WebGL2/.test(e.message) ? 'This browser has no WebGL2 here: open the preview in Chrome or Firefox.' : e.stack || String(e);
+  console.error(e);
+});
+
+function seek(s) {
+  if (!film) return;
+  t = Math.min(Math.max(s, 0), film.timeline.duration);
+  audio.currentTime = t;
+  scrub.value = t;
+  dirty = true;
+}
+scrub.addEventListener('input', () => seek(Number(scrub.value)));
+const toggle = () => {
+  if (audio.paused) { audio.currentTime = t; audio.play(); } else audio.pause();
+};
+document.getElementById('play').onclick = toggle;
+audio.addEventListener('play', () => { document.getElementById('play').textContent = 'Pause'; });
+audio.addEventListener('pause', () => { document.getElementById('play').textContent = 'Play'; dirty = true; });
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space') { e.preventDefault(); toggle(); }
+  if (e.code === 'ArrowRight') seek(t + (e.shiftKey ? film.timeline.barLength : 1 / film.fps));
+  if (e.code === 'ArrowLeft') seek(t - (e.shiftKey ? film.timeline.barLength : 1 / film.fps));
+});
+let resizeTimer = 0;
+addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (!film) return; const s = fitted(); film.size(...s); place(s); dirty = true; }, 120);
+});
+
+let drawing = false;
+async function loop() {
+  requestAnimationFrame(loop);
+  if (drawing) return;
+  if (!audio.paused) { t = audio.currentTime; scrub.value = t; dirty = true; }
+  if (!dirty) return;
+  dirty = false;
+  drawing = true;
+  try {
+    await film.draw(t);
+    const tl = film.timeline, s = tl.section(t), frame = Math.round(t * tl.fps);
+    readout.textContent = `${t.toFixed(3)} s · frame ${frame} · ${s.id} · bar ${tl.bar(t).i + 1} · paper ${tl.paper(t).toFixed(2)}` +
+      (tl.fixture ? ' · fixture data' : '');
+    $err.textContent = '';
+  } catch (e) {
+    $err.textContent = e.stack || String(e);
+    console.error(e);
+  }
+  drawing = false;
+}
+</script>
+</body>
+</html>

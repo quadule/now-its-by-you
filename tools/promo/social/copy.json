@@ -1,0 +1,23 @@
+{
+  "title": "Now It’s by You",
+  "site": "now.itsby.you",
+  "styles": {
+    "ballad": "ballad",
+    "jig": "jig",
+    "acappella": "a cappella",
+    "house": "house",
+    "old78": "old 78",
+    "stringband": "string band",
+    "shanty": "shanty",
+    "synthfolk": "synth folk",
+    "chamber": "chamber folk",
+    "songwriter": "singer-songwriter",
+    "lullaby": "lullaby",
+    "country": "country",
+    "hymn": "hymn",
+    "lofi": "lo-fi",
+    "jazz": "jazz trio",
+    "ambient": "ambient",
+    "indie": "indie folk"
+  }
+}
