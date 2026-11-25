@@ -55,11 +55,9 @@ commit and tag (`first-version` on 10dc1e0, `awards-draft` on ffe661b, pushed wi
 (no cookies), those two hosts and nothing else; web/sing/test/worker.test.mjs holds it to exactly those two. The
 studio's pages do the same (docs/WEB-STUDIO.md).
 
-**The contest.** A thin dark bar across the top of the page, above the title, in spaced capitals: "Now an AI Song
-Contest 2026 finalist — Vote by November 21", the contest's name linked to https://www.aisongcontest.com/ and the
-vote to https://www.aisongcontest.com/the-2026-finalists (page/seed.html, `.contest` in sing.css; on a phone the two
-halves stack). Public voting closes November 21; the winner is half the jury's and half the public's; the awards are
-in Bangkok on November 29, 2026. Take the bar down, or say how it ended, after that.
+**The contest.** A thin dark bar across the top of the page, above the title, in spaced capitals: "An AI Song
+Contest 2026 finalist", linked to https://www.aisongcontest.com/the-2026-finalists (page/seed.html, `.contest` in
+sing.css). The awards are in Bangkok on November 29, 2026; say how it ended, or take the bar down, after that.
 
 ## Editions
 
@@ -94,6 +92,7 @@ its entry first in the list (newest first: tools/released_record.py and the stud
 newest), make the studio's record and guide of it (`tools/released_record.py FILE`, `tools/released_guide.py FILE`),
 build and deploy. The home page moves to it and the history keeps every one before it.
 
-The site offers two editions. The newest, "Awards performance draft" (November 14, 2026), is the stage mix for the
-awards performance: performance/record-arc-morph.json rendered with `--pack` (the program and its record in the
-file), kept as renders/release/now-its-by-you-awards-draft.flac. The first version is in the history.
+The site offers three editions. The newest, "Awards performance" (November 25, 2026), is the stage version in A
+major: performance/record-final-A.json rendered with `--pack` at the `awards` tag, kept as
+renders/release/now-its-by-you-awards.flac. The "Awards performance draft" (November 14, 2026,
+renders/release/now-its-by-you-awards-draft.flac) and the first version are in the history.

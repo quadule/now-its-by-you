@@ -193,19 +193,16 @@ body.seed:not(.about) :is(.card > p, .card > ol, main > p, .ospanel ol, .ospanel
 pre, code { font-family: var(--mono); font-size: 13.5px; }
 pre { margin: 0 0 10px; padding: 10px 12px; overflow-x: auto; background: var(--paper); border-left: 2px solid var(--red-rule); line-height: 1.5; }
 
-/* the seed page's word that the song is an AI Song Contest finalist and the way to vote: a thin dark
+/* the seed page's word that the song is an AI Song Contest finalist: a thin dark
    bar across the top of the page, in the masthead's spaced capitals, set in the stage's colours */
 .contest { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 12px;
            padding: calc(.75em + env(safe-area-inset-top)) var(--gutter) .75em; background: var(--stage); color: var(--stage-ink);
            border-bottom: 1px solid var(--stage-panel); text-align: center;
            font: 600 14.5px/1.4 var(--serif); text-transform: uppercase; letter-spacing: .12em; }
 .contest a { color: inherit; text-decoration: underline 1px; text-decoration-color: var(--stage-dim); text-underline-offset: .3em; }
-.contest a.vote { color: var(--sung); text-decoration-color: currentColor; }
 .contest a:hover { color: var(--sung); text-decoration-color: currentColor; }
-.contest .sep { color: var(--stage-dim); }
-/* on a phone the two halves stack, without the dash between them */
-@media (max-width: 540px) { .contest { flex-direction: column; align-items: center; font-size: 13px; letter-spacing: .05em; }
-                            .contest .sep { display: none; } }
+/* on a phone, smaller and closer set */
+@media (max-width: 540px) { .contest { font-size: 13px; letter-spacing: .05em; } }
 
 /* the seed page's hero: the cover large at the left, the masthead and the pitch beside it, the player
    under both. On a phone, in the page's own order: the masthead, the cover whole, the player, then the pitch, so
