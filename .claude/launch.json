@@ -381,8 +381,7 @@
       "name": "lanterns",
       "runtimeExecutable": "python3",
       "runtimeArgs": [
-        "tools/performance/lights/serve.py",
-        "--small"
+        "tools/performance/lights/serve.py"
       ],
       "port": 8870,
       "url": "http://127.0.0.1:8870"

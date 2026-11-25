@@ -1,7 +1,7 @@
 // Renders the film through headless Chromium on the GPU into a lossless intermediate, then a master with the song.
 //
 //   node tools/promo/video/capture/render.mjs [--from 0] [--to 9074] [--w 1920 --h 1080] [--subframes 1]
-//        [--shards 3] [--out renders/promo/video/out/film.mp4] [--check] [--codec x265|x264] [--bits 10|8]
+//        [--shards 3] [--out renders/promo/video/out/film.mp4] [--check] [--codec x265|x264|hevc_nvenc|h264_nvenc] [--bits 10|8]
 //        [--flags vulkan] [--keep] [--crf N] [--preset slow] [--shutter 0.5] [--reencode]
 //
 // Frames [from, to) (to is exclusive), frame i at t = i / 60. Each shard is a page of the film drawing its own
@@ -10,6 +10,7 @@
 // the film's exact 8-bit or 10-bit pixels are kept) under renders/promo/video/frames/<name>/. The shards are
 // joined by stream copy, then the master is encoded with the FLAC's audio from the same time:
 //   x265 (the default): Main 10, CRF 16, yuv420p10le, BT.709    x264: High, CRF 14, yuv420p, BT.709 (8-bit)
+//   hevc_nvenc, h264_nvenc: the same on the GPU, a constant quantizer (--crf as -qp, 12 by default)
 // --reencode makes a new master (--out names the render) from the intermediate a render left.
 // --check stamps each frame's index in its top rows and reads every index back from the intermediate and
 // the master (check.mjs), so a dropped or doubled frame fails the render.
@@ -34,7 +35,7 @@ function args() {
     else o[k] = a[++i];
   }
   for (const k of ['from', 'to', 'w', 'h', 'subframes', 'shards', 'bits', 'crf', 'inflight', 'shutter']) if (o[k] !== null) o[k] = Number(o[k]);
-  o.bits = o.bits || (o.codec === 'x265' ? 10 : 8);
+  o.bits = o.bits || (o.codec === 'x265' || o.codec === 'hevc_nvenc' ? 10 : 8);
   return o;
 }
 
@@ -81,11 +82,18 @@ function intermediate(file, o, first) {
 // the master from the intermediate, with the song from frame `from` on; the audio is padded with silence
 // to the last frame (the file rings to 151.227 s, the 9,074th frame starts at 151.217 s)
 async function master(joined, out, o, from, total) {
-  const vf = `scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=${o.codec === 'x265' ? 'yuv420p10le' : 'yuv420p'}`;
-  const codec = o.codec === 'x265'
-    ? ['-c:v', 'libx265', '-preset', o.preset, '-crf', String(o.crf ?? 16), '-profile:v', 'main10', '-tag:v', 'hvc1',
-      '-x265-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709:range=limited:log-level=error']
-    : ['-c:v', 'libx264', '-preset', o.preset, '-crf', String(o.crf ?? 14), '-profile:v', 'high', '-tune', 'film'];
+  const format = { x265: 'yuv420p10le', hevc_nvenc: 'p010le' }[o.codec] ?? 'yuv420p';
+  const vf = `scale=out_color_matrix=bt709:out_range=tv:flags=accurate_rnd+full_chroma_int,format=${format}`;
+  // the NVENC encoders: the GPU's, a constant quantizer (--crf as -qp), many times x265's speed
+  const nvenc = ['-preset', 'p7', '-tune', 'hq', '-rc', 'constqp', '-qp', String(o.crf ?? 12), '-bf', '3'];
+  const codec = {
+    x265: ['-c:v', 'libx265', '-preset', o.preset, '-crf', String(o.crf ?? 16), '-profile:v', 'main10', '-tag:v', 'hvc1',
+      '-x265-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709:range=limited:log-level=error'],
+    x264: ['-c:v', 'libx264', '-preset', o.preset, '-crf', String(o.crf ?? 14), '-profile:v', 'high', '-tune', 'film'],
+    hevc_nvenc: ['-c:v', 'hevc_nvenc', ...nvenc, '-profile:v', 'main10', '-tag:v', 'hvc1'],
+    h264_nvenc: ['-c:v', 'h264_nvenc', ...nvenc, '-profile:v', 'high'],
+  }[o.codec];
+  if (!codec) throw new Error(`unknown codec ${o.codec}`);
   const seconds = (total / FPS).toFixed(6);
   await run('ffmpeg', ['-v', 'error', '-y', '-i', joined, '-ss', (from / FPS).toFixed(6), '-t', seconds, '-i', AUDIO,
     '-map', '0:v', '-map', '1:a', '-vf', vf, ...codec,

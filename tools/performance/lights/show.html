@@ -9,6 +9,9 @@
   html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
   main { max-width: 1100px; margin: 0 auto; padding: 16px; }
   video { width: 100%; max-height: 56vh; background: #000; display: block; }
+  #screen:fullscreen { background: #000; cursor: none; display: flex; align-items: center; justify-content: center; }
+  #screen:fullscreen video { width: 100%; height: 100%; max-height: none; object-fit: contain; }
+  select { background: #1c1c20; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
   #stage { display: flex; justify-content: space-around; align-items: flex-end; gap: 8px; margin: 18px 0 8px; }
   .lantern { display: flex; flex-direction: column; align-items: center; gap: 6px; }
   .lantern canvas { width: min(26vw, 230px); height: auto; }
@@ -25,14 +28,17 @@
 </head>
 <body>
 <main>
-  <video id="film" src="film.mp4" controls preload="auto"></video>
+  <div id="screen"><video id="film" controls controlslist="nofullscreen noremoteplayback" disablepictureinpicture preload="auto"></video></div>
   <div id="stage"></div>
   <div id="closeups"></div>
   <div id="bar">
     <span id="section">–</span>
     <span id="clock">0:00.0</span>
+    <select id="size"><option value="1080">1080p</option><option value="4k">4K</option></select>
+    <span id="codec"></span>
     <label>Screens ahead <input id="leadScreen" class="ms" inputmode="numeric"> ms</label>
     <label>Strips ahead <input id="leadStrip" class="ms" inputmode="numeric"> ms</label>
+    <button id="full" title="F">Full screen</button>
     <button id="connect">Connect lanterns</button>
     <span id="link"></span>
   </div>
@@ -246,6 +252,50 @@ document.getElementById('connect').onclick = () => {
   if (!('serial' in navigator)) { document.getElementById('link').textContent = 'this browser has no Web Serial: use Chrome'; return; }
   connect().catch((e) => document.getElementById('link').textContent = e.message);
 };
+
+// ---- the film: H.265 10-bit where the browser plays it (Chrome on a Mac), else H.264; 4K falls back to 1080p ----
+const FILMS = {
+  '4k': [['film-4k-hevc.mp4', 'hvc1.2.4.L153.B0', '4K H.265 10-bit'], ['film-4k.mp4', 'avc1.640034', '4K H.264']],
+  '1080': [['film-hevc.mp4', 'hvc1.2.4.L123.B0', 'H.265 10-bit'], ['film.mp4', 'avc1.640032', 'H.264']],
+};
+const size = document.getElementById('size');
+function loadFilm() {
+  const t = film.currentTime, playing = !film.paused;
+  const list = size.value === '4k' ? [...FILMS['4k'], ...FILMS['1080']] : FILMS['1080'];
+  film.replaceChildren(...list.map(([src, codecs]) => Object.assign(document.createElement('source'),
+    { src, type: `video/mp4; codecs="${codecs}"` })));
+  film.load();
+  film.addEventListener('loadedmetadata', () => {
+    const f = list.find(([src]) => film.currentSrc.endsWith('/' + src));
+    document.getElementById('codec').textContent = f ? f[2] : '';
+    if (t) film.currentTime = t;
+    if (playing) film.play();
+  }, { once: true });
+}
+try { size.value = localStorage.getItem('size') || '1080'; } catch (e) {}
+size.onchange = () => { try { localStorage.setItem('size', size.value); } catch (e) {} loadFilm(); };
+loadFilm();
+
+// ---- full screen: the film alone, without controls or cursor ----
+// On the other display when Chrome may place windows (it asks once, after the first full screen); otherwise on
+// this one, at once: a pending permission prompt would use up the key press that full screen needs.
+async function fullScreen() {
+  let state = 'denied', screen;
+  try { state = (await navigator.permissions.query({ name: 'window-management' })).state; } catch (e) {}
+  if (state === 'granted') {
+    const d = await window.getScreenDetails();
+    screen = d.screens.find((x) => x !== d.currentScreen);
+  }
+  await document.getElementById('screen').requestFullscreen(screen ? { screen } : {});
+  if (state === 'prompt' && 'getScreenDetails' in window) window.getScreenDetails().catch(() => {});
+}
+document.getElementById('full').onclick = () => fullScreen().catch((e) => document.getElementById('link').textContent = e.message);
+document.addEventListener('fullscreenchange', () => { film.controls = !document.fullscreenElement; });
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'f' || e.key === 'F') { e.preventDefault(); fullScreen().catch((e) => document.getElementById('link').textContent = e.message); }
+  else if (e.key === ' ') { e.preventDefault(); film.paused ? film.play() : film.pause(); }
+});
 
 // ---- the loop ----
 function fmt(t) { return `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`; }
