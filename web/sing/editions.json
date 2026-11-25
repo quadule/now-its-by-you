@@ -8,14 +8,14 @@
       "audio": "3162d5375613efb266470b820b315daf7cddb54fe6094c27e8e33604775d08ec",
       "file": {
         "path": "renders/release/now-its-by-you-awards.flac",
-        "sha256": "c5b6f1c2a6a33a133fd4a63fcc38e1e501854ac7224cbd2d0598281a96a56d2f",
-        "bytes": 17515441
+        "sha256": "1168aad4b72b3433ae102b4a37a8c497b5015cc23b26bb78b6dc5d83050455ce",
+        "bytes": 17516948
       },
       "render": {},
-      "program": "ecbb03a2e4fb8fb1ac0deda735da9e3d42e1c43f0d4e897c87ce6899b8d3fbb9",
+      "program": "bdb49dd8406a05721f3a307e8badecbd7e1ca22386cc2da7fa8f003c025ba3fe",
       "python": "3.12",
       "source": {
-        "commit": "636d1c94b856d733323b277c20857335dabb743e",
+        "commit": "286ab9630292a12b8ba7bd3ba0fbbee0c766a8a1",
         "tag": "awards"
       },
       "command": "uv run python -m songbird render performance/genome.json --replay performance/record-final-A.json --pack --out renders/release/now-its-by-you-awards.flac",
