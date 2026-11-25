@@ -9,7 +9,7 @@ const DEGREE = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 };
 export const PART = 'whistle~';
 
 // the grid: 17 cells (the pickup and two bars of eighths), the strand's line on it, digits set under the line
-export const GRID = { x0: 110, cell: 100, y: 700, digitBase: 842, digitSize: 92, lift: 27, floor: 67 };
+export const GRID = { x0: 110, cell: 100, y: 570, digitBase: 712, digitSize: 92, lift: 27, floor: 67 };
 
 // semitones of a written degree ("5", "6,", "1'") above the tonic
 function semis(deg) {

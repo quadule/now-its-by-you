@@ -3,7 +3,7 @@
 // stroke, a group to each sixteenth note; struck out left to right, and gone.
 import { clamp, smoothstep, mix, ease } from '../../core/math.js';
 
-export const TALLY = { x0: 150, x1: 1770, top: 150, height: 64, step: 15, width: 3.2 };
+export const TALLY = { x0: 150, x1: 1770, top: 186, height: 64, step: 15, width: 3.2 };
 
 // every stroke in drawing order: [x0, y0, x1, y1, group]
 export function tallyStrokes(count) {

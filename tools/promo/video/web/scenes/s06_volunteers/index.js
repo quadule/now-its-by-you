@@ -170,7 +170,7 @@ export default {
     // labels: in after t0, out before t1, so one ending where the next begins never overlaps it
     const cue = (key, t0, t1, opts = {}) => {
       const a = smoothstep(t0, t0 + 0.4, t) * (1 - smoothstep(t1 - 0.4, t1, t));
-      if (a > 0) label(ctx, t, target, key, { alpha: a, size: 24, y: 104, ...opts });
+      if (a > 0) label(ctx, t, target, key, { alpha: a, size: 24, ...opts });
     };
     cue('takes', L[0].t0 + B, L[0].t1 + 0.06);
     cue('numbers', L[1].t0, L[2].t0);

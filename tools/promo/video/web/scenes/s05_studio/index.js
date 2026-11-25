@@ -107,6 +107,9 @@ function strandState(ctx, t, cam) {
   return { y: mix(540, foot, settle), semitone: mix(9, 2.5, settle), width: 2.5 };
 }
 
+// the dark band behind the lyric: full to `from`, gone by `to` (design px)
+const SHADE = { from: 160, to: 300, band: 4, alpha: 1 };
+
 export default {
   id: 's05_studio',
   section: 'verse2',
@@ -160,6 +163,12 @@ export default {
     const st = strandState(ctx, t, cam);
     strand(ctx, t, target, { y: st.y, width: st.width, semitone: st.semitone });
 
+    // the room's dark over the screens' tops, where the sung line is set
+    const shade = [];
+    for (let y = 0; y < SHADE.to; y += SHADE.band) {
+      shade.push({ x: 0, y, w: ctx.size.w, h: SHADE.band, color: gnd, alpha: SHADE.alpha * (1 - smoothstep(SHADE.from, SHADE.to, y + SHADE.band / 2)) });
+    }
+    ctx.g.rects(target, shade);
     lyric(ctx, t, target);
   },
 };

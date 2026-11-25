@@ -2,7 +2,7 @@
 // file passing machine to machine as a tree of versions with the coal on its newest branch; the three choir voices
 // beside the lead's; the light going until one ember is left. The daisy comes up at the lower right on the
 // whistle's four notes.
-import { ground, lyric, label } from '../../core/draw.js';
+import { ground, lyric, label, LABEL_Y } from '../../core/draw.js';
 import { Camera } from '../../core/camera.js';
 import { clamp, smoothstep, mix, ease } from '../../core/math.js';
 import { FILE_ASSETS, model, drawFile } from './file.js';
@@ -165,7 +165,7 @@ export default {
     for (const L of LABELS) {
       const from = L.from(tl, ctx), to = L.to(tl, ctx);
       const a = smoothstep(from, from + 0.4, t) * (1 - smoothstep(to - 0.4, to, t));
-      if (a > 0) label(ctx, t, target, L.key, { alpha: a, y: 120 + L.slot * 40, k });
+      if (a > 0) label(ctx, t, target, L.key, { alpha: a, y: LABEL_Y + L.slot * 40, k });
     }
     lyric(ctx, t, target, { k });
   },

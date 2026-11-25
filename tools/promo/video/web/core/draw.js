@@ -11,9 +11,12 @@ export function ground(ctx, t, target, k = ctx.k(t)) {
   return c;
 }
 
+// The sung line in the frame's top half and the labels along its foot, clear of the people on stage in front of the screen
+export const LYRIC_Y = 96, LABEL_Y = 984;
+
 // the line sung at t, set at (x, y) (top of its first row), the sung syllables lit
 // focus: null | 'italic' | 'red' sets the line's leaned-on word apart (red: in the red ink)
-export function lyric(ctx, t, target, { x = ctx.size.w / 2, y = 860, size = 46, align = 'center', maxWidth = 1500,
+export function lyric(ctx, t, target, { x = ctx.size.w / 2, y = LYRIC_Y, size = 46, align = 'center', maxWidth = 1500,
   alpha = 1, k = ctx.k(t), focus = null } = {}) {
   const line = ctx.timeline.line(t);
   if (!line) return null;
@@ -41,7 +44,7 @@ function underline(ctx, t, target, lay, box, color, alpha) {
 }
 
 // a label from copy.json at (x, y) baseline: letterspaced small capitals
-export function label(ctx, t, target, key, { x = 96, y = 120, size = 28, align = 'left', alpha = 1, color,
+export function label(ctx, t, target, key, { x = 96, y = LABEL_Y, size = 28, align = 'left', alpha = 1, color,
   k = ctx.k(t) } = {}) {
   const text = ctx.label(key);
   const s = ctx.type.text(text, { role: 'label', size });

@@ -10,9 +10,9 @@ import { clamp, smoothstep, mix } from '../../core/math.js';
 import { GRID, gridX, gridHeight, traceOf } from './tune.js';
 
 const RATE = 44100, COLS_PER_S = 120, ROWS = 96;
-const FLOOR = { top: 948, bottom: 1070, bands: 24 };
-const BASS = { y: 930, step: 4.5, low: 26 };
-const ARP = { y: 700, step: 14.5, low: 37 };
+const FLOOR = { top: 818, bottom: 940, bands: 24 };
+const BASS = { y: 800, step: 4.5, low: 26 };
+const ARP = { y: 570, step: 14.5, low: 37 };
 
 async function wav(ctx, name, t1) {
   const buf = await ctx.data.bytes(name);

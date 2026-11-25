@@ -20,7 +20,7 @@ function steps(names) {
 const degreeStep = (d) => Number(d.replace(/[,']/g, '')) + 7 * ((d.match(/'/g) || []).length - (d.match(/,/g) || []).length);
 
 // the page from just under the label to just over the sung line; each staff as tall as its phrase's compass
-export const PAGE = { x0: 130, x1: 1790, cols: 2, colGap: 110, top: 160, bottom: 772, bar: 10, words: 23, under: 36, gap: 34 };
+export const PAGE = { x0: 130, x1: 1790, cols: 2, colGap: 110, top: 196, bottom: 772, bar: 10, words: 23, under: 36, gap: 34 };
 
 export function movedSetup(ctx, text) {
   const voice = ctx.score.notes('voice');

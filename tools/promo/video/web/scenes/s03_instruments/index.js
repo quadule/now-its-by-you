@@ -6,7 +6,7 @@
 //   line 4  the four as one plate standing on the bass string, the sung "now it's by you" underlined
 // One picture a line; the pictures dissolve into each other over the beat that spans each line change.
 // World units are the frame's design units at depth 0 (the camera stands at the focal distance).
-import { ground, lyric, label, strandPoints } from '../../core/draw.js';
+import { ground, lyric, label, strandPoints, LABEL_Y } from '../../core/draw.js';
 import { smoothstep, mix, clamp } from '../../core/math.js';
 import { Camera } from '../../core/camera.js';
 import { Plucks, strobeSample } from './pluck.js';
@@ -34,7 +34,7 @@ const P2 = {
   // string 0 (low E) from its bridge end (near, left) to its far end; each next string `step` lower
   guitar: { a: [-120, 350, 120], b: [2080, 390, -420], step: [0, 72, 0], pick: 0.33, scale: 1.2 },
 };
-export const P3 = { drum: { c: [960, 385, 0], R: 545, tilt: 0.98, scale: 1.45 } };
+export const P3 = { drum: { c: [960, 470, 0], R: 545, tilt: 0.98, scale: 1.45 } };
 const P4 = {
   // each on its own ground, left to right, none crossing another: harp, guitar, drum; the bass under them all
   harp: { xLong: 130, xShort: 500, foot: 740, height: 470, scale: 0.7 },
@@ -293,7 +293,7 @@ export default {
     // labels with their pictures, never two crossing
     const la = (i) => smoothstep(0.6, 1, w[i]);
     label(ctx, t, target, 'harp', { alpha: la(0) * smoothstep(t0, t0 + beat, t) });
-    label(ctx, t, target, 'bass', { y: 158, alpha: la(0) * smoothstep(t0 + beat, t0 + 2 * beat, t) });
+    label(ctx, t, target, 'bass', { y: LABEL_Y + 38, alpha: la(0) * smoothstep(t0 + beat, t0 + 2 * beat, t) });
     label(ctx, t, target, 'guitar', { alpha: la(1) });
     label(ctx, t, target, 'drum', { alpha: la(2) });
     lyric(ctx, t, target, { focus: 'italic' });

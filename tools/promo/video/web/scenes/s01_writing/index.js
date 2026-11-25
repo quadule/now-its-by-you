@@ -10,7 +10,8 @@ import { buildLayers, drawLayers } from './layers.js';
 import { GRID, PART, setPhrase, cellX, liftY, lifted, gridX, gridHeight, traceOf, restPitch } from './tune.js';
 
 const S = {};
-const STEP = 1 / 60;   // the core strand's sampling of song time
+const STEP = 1 / 60;
+const FOOT = { from: 880, to: 960, band: 4 };   // the dark at the frame's foot under the bank's label: none at `from`, full by `to`   // the core strand's sampling of song time
 
 // The strand at frame time t as points over song time s. The rest pose is the core's strandPoints exactly
 // (extended by whole steps either side with the same rule); the grid places s in its eighth-note cell and
@@ -202,14 +203,23 @@ export default {
     ground(ctx, t, target);
     const ink = ctx.palette.inks(ctx.k(t));
     drawBank(ctx, t, target, ink, S.bank, S.bankT);
+    // the bank's floor fades into the dark at the frame's foot, under its label
+    const { T0, T2, T4, beat } = S;
+    const bankLabel = smoothstep(T2, T2 + beat / 2, t) * (1 - smoothstep(T4 - beat / 2, T4, t));
+    if (bankLabel > 0) {
+      const shade = [];
+      for (let y = FOOT.from; y < ctx.size.h; y += FOOT.band) {
+        shade.push({ x: 0, y, w: ctx.size.w, h: FOOT.band, color: ctx.g.ground, alpha: bankLabel * smoothstep(FOOT.from, FOOT.to, y + FOOT.band / 2) });
+      }
+      ctx.g.rects(target, shade);
+    }
     drawLayers(ctx, t, target, ink, S, S.layers, smoothstep(0.8, 1, S.gridAt(t)) * (1 - S.flatAt(t)));
     drawTune(ctx, t, target, ink);
     drawStrand(ctx, t, target, ink);
     drawRegister(ctx, t, target, ink, S.reg, { x0: 960 - 7.5 * 28, alpha: 1 - smoothstep(S.bankT.out0, S.bankT.out1, t) });
-    const { T0, T2, T4, beat } = S;
     // one label at a time, each up for its two bars
     label(ctx, t, target, 'tune', { alpha: smoothstep(T0 - beat / 2, T0, t) * (1 - smoothstep(T2 - beat / 2, T2, t)) });
-    label(ctx, t, target, 'bank', { alpha: smoothstep(T2, T2 + beat / 2, t) * (1 - smoothstep(T4 - beat / 2, T4, t)) });
+    label(ctx, t, target, 'bank', { alpha: bankLabel });
     lyric(ctx, t, target);
   },
   anchor(ctx, t) {

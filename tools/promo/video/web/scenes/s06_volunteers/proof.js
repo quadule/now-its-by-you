@@ -6,7 +6,7 @@
 // sounding line where each begins, the one sounding now in ink, with the playhead through it.
 import { clamp, smoothstep, mix, ease } from '../../core/math.js';
 
-export const PROOF = { x0: 60, x1: 1860, top: 186, bottom: 744, pad: 0.04, floor: 806 };
+export const PROOF = { x0: 60, x1: 1860, top: 216, bottom: 744, pad: 0.04, floor: 806 };
 
 const midi = (lf0) => 69 + 12 * Math.log2(Math.exp(lf0) / 440);
 
