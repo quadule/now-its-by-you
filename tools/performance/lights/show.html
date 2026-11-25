@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lanterns</title>
+<style>
+  :root { --bg: #0b0b0d; --fg: #d9d6cf; --dim: #77736b; --line: #2a2a2e; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  video { width: 100%; max-height: 56vh; background: #000; display: block; }
+  #stage { display: flex; justify-content: space-around; align-items: flex-end; gap: 8px; margin: 18px 0 8px; }
+  .lantern { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .lantern canvas { width: min(26vw, 230px); height: auto; }
+  .who { color: var(--dim); font-variant-numeric: tabular-nums; text-align: center; min-height: 2.8em; }
+  .who input { width: 2.5em; background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; text-align: center; }
+  #closeups { display: flex; justify-content: space-around; margin: 4px 0 14px; }
+  #closeups canvas { width: min(18vw, 150px); height: auto; border-radius: 4px; }
+  #bar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; color: var(--dim); font-variant-numeric: tabular-nums; }
+  #section { color: var(--fg); min-width: 7em; }
+  button { background: #1c1c20; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--dim); }
+  input.ms { width: 3.2em; background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 4px; text-align: right; font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <video id="film" src="film.mp4" controls preload="auto"></video>
+  <div id="stage"></div>
+  <div id="closeups"></div>
+  <div id="bar">
+    <span id="section">–</span>
+    <span id="clock">0:00.0</span>
+    <label>Screens ahead <input id="leadScreen" class="ms" inputmode="numeric"> ms</label>
+    <label>Strips ahead <input id="leadStrip" class="ms" inputmode="numeric"> ms</label>
+    <button id="connect">Connect lanterns</button>
+    <span id="link"></span>
+  </div>
+</main>
+<script>
+// Everything here is a function of the film's time: the cue for frame round(t * 60) of cues.bin (cues.py writes
+// it), drawn as the boards draw it (firmware/src/scenes.h) and, once connected, sent to them through the host
+// board over Web Serial (the packets of firmware/src/main.cpp).
+
+const film = document.getElementById('film');
+const W = 135, H = 240;
+let meta, cues, stride;
+const lanterns = [];
+
+// ---- the screen: firmware/src/scenes.h, pixel for pixel ----
+const clamp01 = (x) => x < 0 ? 0 : x > 1 ? 1 : x;
+const smooth = (e0, e1, x) => { const t = clamp01((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+function archDistance(x, y) {
+  const half = W / 2, dx = Math.abs(x - 67);
+  if (y < half) return Math.hypot(dx, y - half) - half;
+  return Math.max(dx - half, y - (H - 1));
+}
+function mouth(s, x, y) {
+  // a superellipse: a its height, b its width, c how square, d how high, e its tilt, f the lips, g the inside
+  const [, , , , , , , a, b, c, d, e, f, g] = s;
+  const hh = 3 + a / 255 * 110, hw = 20 + b / 255 * 47, n = 2 + c / 255 * 4;
+  const tilt = (e - 128) / 128 * 0.5, cos = Math.cos(tilt), sin = Math.sin(tilt);
+  const px = x - 67, py = y - (119.5 + (d - 128));
+  const rx = Math.abs(px * cos + py * sin) / hw, ry = Math.abs(-px * sin + py * cos) / hh;
+  const sum = rx ** n + ry ** n, F = sum ** (1 / n);
+  const grad = F ** (1 - n) * Math.hypot(rx ** (n - 1) / hw, ry ** (n - 1) / hh) || 1;
+  const sd = (F - 1) / grad;  // about a pixel's distance from the edge, inside negative
+  const lip = 1.5 + f / 20;
+  return Math.max(clamp01(lip / 2 + 0.5 - Math.abs(sd)), g / 255 * clamp01(0.5 - sd));
+}
+function eyes(s, x, y) {
+  // two ellipses above the mouth: h how open, i where they look, j their size, k how far apart
+  const [d, h, i, j, k] = [s[10], s[14], s[15], s[16], s[17]];
+  const r = 6 + j / 255 * 24, ry = Math.max(1.2, r * h / 255);
+  const gaze = (i - 128) / 128 * 22, apart = 18 + k / 255 * 30, ey = 70 + (d - 128) * 0.3;
+  let v = 0;
+  for (const side of [-1, 1]) {
+    const ex = 67 + side * apart + gaze;
+    if (Math.abs(x - ex) > r + 2 || Math.abs(y - ey) > ry + 2) continue;
+    const F = Math.hypot((x - ex) / r, (y - ey) / ry);
+    v = Math.max(v, clamp01(0.5 - (F - 1) * ry));
+  }
+  return v;
+}
+function dot(s, x, y) {
+  const [a, b, c, d, e] = [s[7], s[8], s[9], s[10], s[11]];
+  const cx = 67 + (e - 128) / 128 * 60, cy = d / 255 * (H - 1);
+  const r = 2 + a * 0.25, soft = 1 + b * 0.1, halo = c / 255;
+  const dist = Math.hypot(x - cx, y - cy), out = clamp01(1 - (dist - r) / (1.5 * r + 2));
+  return Math.max(smooth(r + soft, r - soft, dist), halo * 0.5 * out * out);
+}
+function level(s, x, y) {
+  const dx = x - 67, dy = y - 119.5, d = Math.hypot(dx, dy);
+  const [kind, , , , , , , a, b, c] = s;
+  switch (kind) {
+    case 8: return mouth(s, x, y);
+    case 9: { const e = eyes(s, x, y); return e > 0 ? e : mouth(s, x, y); }
+    case 10: return dot(s, x, y);
+    case 1: { const r = a * 0.6, soft = 1 + b * 0.5; return smooth(r + soft, r - soft, d); }
+    case 2: { const r = a * 0.6, half = (1 + b / 8) / 2; return clamp01(half + 0.5 - Math.abs(d - r)); }
+    case 3: { const w = 0.5 + 0.5 * Math.cos(2 * Math.PI * (d / (8 + b / 2) - c / 256)); return w ** 4 * clamp01(1 - d / 150); }
+    case 4: {
+      const n = Math.max(1, Math.floor(b / 10));
+      const w = 0.5 + 0.5 * Math.cos(n * (Math.atan2(dy, dx) - c / 256 * 2 * Math.PI));
+      return w ** 12 * smooth(a * 0.6 + 3, a * 0.6 - 3, d);
+    }
+    case 5: { const edge = H - a / 255 * H, soft = 1 + b * 0.5; return smooth(edge - soft, edge + soft, y); }
+    case 6: {
+      const sd = archDistance(x, y) + a / 4, half = (1 + b / 8) / 2;
+      return Math.max(clamp01(half + 0.5 - Math.abs(sd)), c / 255 * clamp01(0.5 - sd));
+    }
+    case 7: { const w = 0.5 + 0.5 * Math.cos(2 * Math.PI * (y / H * (1 + b / 16) + c / 256)); return w * w; }
+  }
+  return 0;
+}
+function drawScreen(ctx, img, s) {
+  const bl = s[meta.record - 1] / 255, leak = 5 * bl;  // an LCD's black glows a little with its backlight on
+  const p = img.data;
+  for (let y = 0, i = 0; y < H; y++)
+    for (let x = 0; x < W; x++, i += 4) {
+      const v = s[0] && bl ? level(s, x, y) : 0;
+      p[i] = (s[4] + (s[1] - s[4]) * v) * bl + leak;
+      p[i + 1] = (s[5] + (s[2] - s[5]) * v) * bl + leak;
+      p[i + 2] = (s[6] + (s[3] - s[6]) * v) * bl + leak;
+      p[i + 3] = 255;
+    }
+  ctx.putImageData(img, 0, 0);
+}
+
+// ---- the case: an arch on a flared base, the screen low on its front, the strip along the arch ----
+const CW = 230, CH = 420;               // the drawing's size
+const BW = 150, BX = (CW - BW) / 2;     // the body
+const BT = 40, BB = 330;                // its top and bottom
+const SW = 36, SH = 64;                 // the screen window: 135 x 240 at a quarter of the body's width
+function casePath(ctx, inset = 0) {
+  const r = BW / 2 - inset, cx = CW / 2, cy = BT + BW / 2;
+  ctx.beginPath();
+  ctx.moveTo(BX + inset, BB);
+  ctx.lineTo(BX + inset, cy);
+  ctx.arc(cx, cy, r, Math.PI, 0);
+  ctx.lineTo(BX + BW - inset, BB);
+  ctx.closePath();
+}
+function ledSpots(n) {
+  // from the left side halfway up, over the top, to the right side halfway up
+  const cx = CW / 2, cy = BT + BW / 2, r = BW / 2, straight = (BB - cy) * 0.5;
+  const arc = Math.PI * r, total = arc + 2 * straight, spots = [];
+  for (let k = 0; k < n; k++) {
+    const s = (k + 0.5) / n * total;
+    if (s < straight) spots.push([BX, cy + straight - s]);
+    else if (s < straight + arc) { const a = Math.PI + (s - straight) / r; spots.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); }
+    else spots.push([BX + BW, cy + (s - straight - arc)]);
+  }
+  return spots;
+}
+function drawLantern(L, s, leds) {
+  const ctx = L.ctx;
+  ctx.clearRect(0, 0, CW, CH);
+  // base
+  ctx.fillStyle = '#1a1a1d';
+  ctx.beginPath();
+  ctx.moveTo(BX - 4, BB); ctx.lineTo(BX + BW + 4, BB);
+  ctx.bezierCurveTo(BX + BW + 10, BB + 40, BX + BW + 40, BB + 60, BX + BW + 40, CH - 14);
+  ctx.lineTo(BX - 40, CH - 14);
+  ctx.bezierCurveTo(BX - 40, BB + 60, BX - 10, BB + 40, BX - 4, BB);
+  ctx.fill();
+  // body
+  casePath(ctx); ctx.fillStyle = '#151518'; ctx.fill();
+  ctx.strokeStyle = '#2c2c31'; ctx.lineWidth = 1.5; ctx.stroke();
+  // the strip, seen through the rim: a glow per LED, added up
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  L.spots.forEach(([x, y], k) => {
+    // the cues hold PWM values (through the LEDs' gamma): undo it to draw what an eye sees
+    const r = 255 * Math.sqrt(leds[k * 3] / 255), g = 255 * Math.sqrt(leds[k * 3 + 1] / 255), b = 255 * Math.sqrt(leds[k * 3 + 2] / 255);
+    if (r + g + b < 3) return;
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, 26);
+    glow.addColorStop(0, `rgba(${r},${g},${b},0.55)`);
+    glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = glow; ctx.fillRect(x - 26, y - 26, 52, 52);
+    ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 2 * Math.PI); ctx.fill();
+  });
+  ctx.restore();
+  // the screen
+  drawScreen(L.sctx, L.img, s);
+  const sx = (CW - SW) / 2, sy = BB - SH - 20;
+  ctx.fillStyle = '#000'; ctx.fillRect(sx - 3, sy - 3, SW + 6, SH + 6);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(L.screen, sx, sy, SW, SH);
+}
+
+// ---- the link: Web Serial to the host board ----
+let port = null, writer = null, busy = false, lastSend = 0;
+const status = {};
+function packet(kind, body) {
+  const p = new Uint8Array(6 + body.length);
+  p.set([83, 66, 1, kind, 0, 0]); p.set(body, 6);
+  const f = new Uint8Array(p.length + 3);
+  f[0] = 0xA5; f[1] = p.length; f.set(p, 2);
+  let x = 0; for (const b of p) x ^= b;
+  f[f.length - 1] = x;
+  return f;
+}
+// The boards show a frame some ms after it is sent (the radio, then drawing: about 40-70 ms for a screen,
+// 20-40 for a strip), so each is sent that far ahead of the film.
+async function send(screenFrame, stripFrame) {
+  if (!writer || busy) return;
+  const pixels = [], screens = [];
+  lanterns.forEach((L, k) => {
+    const id = +L.idInput.value;
+    if (!id) return;
+    const lantern = k * (meta.record + meta.leds * 3);
+    const at = screenFrame * stride + lantern, led = stripFrame * stride + lantern + meta.record;
+    screens.push(id, ...cues.subarray(at, at + meta.record));
+    pixels.push(id, 0, meta.leds, ...cues.subarray(led, led + meta.leds * 3));
+  });
+  if (!pixels.length) return;
+  busy = true;
+  try {
+    await writer.write(packet(1, pixels));
+    await writer.write(packet(4, screens));
+  } catch (e) { document.getElementById('link').textContent = 'link lost: ' + e.message; writer = null; }
+  busy = false;
+}
+async function connect() {
+  port = await navigator.serial.requestPort();
+  await port.open({ baudRate: 460800 });
+  await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+  writer = port.writable.getWriter();
+  document.getElementById('link').textContent = 'connected';
+  const reader = port.readable.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = '';
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += value;
+    let n;
+    while ((n = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, n).trim(); buf = buf.slice(n + 1);
+      const m = line.match(/^lantern id=(\d+) mv=(\d+) rx=(\d+) lost=(\d+)/);
+      if (m) status[m[1]] = { mv: +m[2], rx: +m[3], lost: +m[4], at: performance.now() };
+    }
+  }
+}
+document.getElementById('connect').onclick = () => {
+  if (!('serial' in navigator)) { document.getElementById('link').textContent = 'this browser has no Web Serial: use Chrome'; return; }
+  connect().catch((e) => document.getElementById('link').textContent = e.message);
+};
+
+// ---- the loop ----
+function fmt(t) { return `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`; }
+function tick(now) {
+  if (cues) {
+    const t = film.currentTime, frame = Math.max(0, Math.min(meta.frames - 1, Math.round(t * meta.fps)));
+    lanterns.forEach((L, k) => {
+      const at = frame * stride + k * (meta.record + meta.leds * 3);
+      drawLantern(L, cues.subarray(at, at + meta.record), cues.subarray(at + meta.record, at + meta.record + meta.leds * 3));
+      const st = status[L.idInput.value];
+      L.state.textContent = st && now - st.at < 3000 ? `${(st.mv / 1000).toFixed(2)} V · ${st.rx}/s` : '';
+    });
+    const sec = meta.sections.find((s) => t >= s.t0 && t < s.t1);
+    document.getElementById('section').textContent = sec ? sec.id : '–';
+    document.getElementById('clock').textContent = fmt(t);
+    const ahead = (input) => Math.max(0, Math.min(meta.frames - 1, Math.round((t + (+input.value || 0) / 1000) * meta.fps)));
+    if (!film.paused || now - lastSend >= 100) { lastSend = now; send(ahead(leadScreen), ahead(leadStrip)); }
+  }
+  requestAnimationFrame(tick);
+}
+
+const leadScreen = document.getElementById('leadScreen'), leadStrip = document.getElementById('leadStrip');
+for (const [input, key, fallback] of [[leadScreen, 'leadScreen', 60], [leadStrip, 'leadStrip', 30]]) {
+  let saved = null;
+  try { saved = localStorage.getItem(key); } catch (e) {}
+  input.value = saved ?? fallback;
+  input.onchange = () => { try { localStorage.setItem(key, input.value); } catch (e) {} };
+}
+
+async function start() {
+  meta = await (await fetch('cues.json')).json();
+  cues = new Uint8Array(await (await fetch('cues.bin')).arrayBuffer());
+  stride = 3 * (meta.record + meta.leds * 3);
+  const stage = document.getElementById('stage');
+  meta.roles.forEach((role, k) => {
+    const el = document.createElement('div'); el.className = 'lantern';
+    const canvas = document.createElement('canvas'); canvas.width = CW; canvas.height = CH;
+    const screen = document.createElement('canvas'); screen.width = W; screen.height = H;
+    const who = document.createElement('div'); who.className = 'who';
+    who.innerHTML = `${role} · id <input value="${k + 1}" inputmode="numeric"><br><span></span>`;
+    el.append(canvas, who); stage.append(el);
+    document.getElementById('closeups').append(screen);  // the screen itself, larger
+    const sctx = screen.getContext('2d');
+    lanterns.push({ ctx: canvas.getContext('2d'), screen, sctx, img: sctx.createImageData(W, H),
+      spots: ledSpots(meta.leds), idInput: who.querySelector('input'), state: who.querySelector('span') });
+  });
+  requestAnimationFrame(tick);
+}
+start();
+</script>
+</body>
+</html>

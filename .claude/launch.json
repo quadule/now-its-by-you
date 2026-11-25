@@ -371,9 +371,21 @@
     {
       "name": "video",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tools/promo/video/capture/serve.mjs"],
+      "runtimeArgs": [
+        "tools/promo/video/capture/serve.mjs"
+      ],
       "port": 8860,
       "url": "http://127.0.0.1:8860"
+    },
+    {
+      "name": "lanterns",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "tools/performance/lights/serve.py",
+        "--small"
+      ],
+      "port": 8870,
+      "url": "http://127.0.0.1:8870"
     }
   ]
 }
