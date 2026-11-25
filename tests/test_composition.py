@@ -606,3 +606,21 @@ def test_the_view_exposes_exact_saved_instrument_notes_including_a_rest():
     p = next(s for s in view["sections"] if s["id"] == "verse:0")["phrases"][0]
     assert p["part_notes"] == {"guitar": mine["part.guitar.verse:0.0"], "bass": []}
     assert view["part_seed_tonic"] == G.seed_params["tonic"]
+
+
+def test_a_stage_editions_arc_and_synth_twins_stay_with_it():
+    """A child keeps the rest of a person's arrangement, but not the lead's human amounts or the players' synth
+    twins (nor the exact data): it is sung by the voice as it is and played by its own band."""
+    today = E.resolve(G, None, ADA, DAY, {})
+    staged = replace(today.params, composition={
+        "arrange": {"verse:0": {"human": [0, 0, 0, 0.2], "players": {"harp": {"synth": "until:3", "level": "soft"},
+                                                                      "bass": {"synth": "all"}}},
+                    "refrain:0": {"human": 0.5},
+                    "tag:0": {"sung": False, "players": {"guitar": {"synth": "under"}}}},
+        "exact": {"twins": {"harp~": ["harp", "arp"]}}})
+    assert C.handed_down(G, staged).composition == {
+        "arrange": {"verse:0": {"players": {"harp": {"level": "soft"}}}, "tag:0": {"sung": False}}}
+    only = replace(today.params, composition={"arrange": {"refrain:0": {"human": 0.5}}})
+    assert C.handed_down(G, only).composition == {}
+    plain = replace(today.params, composition={"arrange": {"verse:0": {"players": {"harp": {"level": "soft"}}}}})
+    assert C.handed_down(G, plain) is plain

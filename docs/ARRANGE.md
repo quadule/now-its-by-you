@@ -486,7 +486,8 @@ performance/genome.json --replay performance/record-arc-morph.json` (with `--ste
 data say what an edition is.
 
 **The grid**, in the person's arrangement (`params.composition["arrange"]`, `songbird.takeover`), what the studio
-can show and what a child inherits, as the rest of the arrangement:
+can show. It stays with the edition: a child inherits the rest of the arrangement without these fields
+(`composition.handed_down`), so it is sung by the voice as it is and played by its own band:
 
 | Path | Value | What |
 |---|---|---|
@@ -496,8 +497,7 @@ can show and what a child inherits, as the rest of the arrangement:
 The arrangers never read these (`takeover.arranged` leaves them out), so a section with only these is, to them, a
 section nobody arranged. Absent, the render is the program's, to the sample.
 
-**The exact data**, `params.composition["exact"]`, the edition's and never inherited (`composition.handed_down`
-drops it):
+**The exact data**, `params.composition["exact"]`, the edition's and never inherited either:
 
 ```json
 {"twins": {"harp~": ["harp", "arp"], "harp#": ["harp", "chip"]},

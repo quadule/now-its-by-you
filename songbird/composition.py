@@ -281,11 +281,19 @@ def lyric_value(genome, params, lyrics, path):
 def handed_down(genome, params):
     """A rendition's parameters as its child inherits them: lines an older record keeps by place
     ("lyrics") kept by key instead, read from the words it sang (its held words, or the seed's own);
-    a line in a section it didn't sing is left behind. An edition's exact data (composition["exact"],
-    songbird.stage) stays with the edition: a child has its arrangement, never that. The same parameters when
-    there are none of either."""
-    if "exact" in params.composition:
-        params = replace(params, composition={k: v for k, v in params.composition.items() if k != "exact"})
+    a line in a section it didn't sing is left behind. A stage edition stays with the edition: its exact data
+    (composition["exact"]) and its grid's stage fields (the lead's human amounts, the players' synth twins:
+    takeover.STAGE_SECTION_FIELDS, STAGE_CELL_FIELDS), so a child has the rest of its arrangement, sung by the
+    voice as it is and played by its own band. The same parameters when there are none of these."""
+    from .takeover import arranged
+
+    held = params.composition.get("arrange")
+    plain = arranged(params) if held else None
+    if "exact" in params.composition or plain != held:
+        kept = {k: v for k, v in params.composition.items() if k not in ("exact", "arrange")}
+        if plain:
+            kept["arrange"] = plain
+        params = replace(params, composition=kept)
     placed = params.composition.get("lyrics")
     if placed is None:
         return params

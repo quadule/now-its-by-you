@@ -2,8 +2,8 @@
 
 A record says it in two layers.
 
-The grid, in a person's arrangement (params.composition["arrange"], songbird.takeover), handed down to a child
-as the arrangement is:
+The grid, in a person's arrangement (params.composition["arrange"], songbird.takeover), which the studio can
+show; it stays with the edition (composition.handed_down leaves these fields out of a child's arrangement):
 
     arrange.<section>:<n>.human            how much of people is in the lead there (amounts()), 0 to 1: one
                                            amount for the section, or a list of them, one a line
@@ -12,7 +12,7 @@ as the arrangement is:
                                            then the player itself; "under": the twin under the player, UNDER dB
 
 The edition's own exact data, params.composition["exact"], which the renderer honors and no child inherits
-(composition.handed_down drops it):
+either:
 
     {"human": {"verse:0": [0, 0, 0, 0.2]},                   amounts finer than the grid's, by section (optional)
      "twins": {"harp~": ["harp", "arp"], "harp#": ["harp", "chip"],
