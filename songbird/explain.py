@@ -1349,7 +1349,7 @@ def choir_card(v: Version) -> dict:
                   + (f"; stand-ins sing the other {number(n - own)}" if n > own else ""))
     else:
         detail = "stand-ins for now: the versions before haven't left their voices"
-    return _card(v, "choir", "Voices before", value[0].upper() + value[1:], detail,
+    return _card(v, "choir", "Voices before", value, detail,
                  [{"kind": "lineage", "text": "one more for every version before this one, up to six"}], [])
 
 

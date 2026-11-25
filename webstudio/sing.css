@@ -10,6 +10,7 @@
 .websing h3 { font-size: 15px; margin: 14px 0 6px; }
 .websing .sing-promises { margin: 4px 0 14px; padding-left: 20px; max-width: 46em; font-size: 16px; }
 .websing .sing-promises li { margin: 8px 0; }
+.websing .btn.primary:disabled { background: transparent; color: var(--ink-3); border-color: var(--rule-strong); opacity: .65; }
 .websing label.check { display: inline-flex; gap: 6px; align-items: center; }
 .websing .sing-choices { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 10px; }
 .websing .sing-choice { display: inline-flex; gap: 6px; align-items: center; }

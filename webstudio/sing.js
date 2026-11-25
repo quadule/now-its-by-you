@@ -57,8 +57,8 @@ const WORDS = {
     ["Your singing is recorded and measured on this device, then deleted. It is not sent anywhere.",
       "It is not saved, played to anyone or used to copy a voice. A take waits in this page's memory until you use it or record again."],
     ["What is kept, in this browser, is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it, and their averages over notes alike.",
-      "The averages sing the notes you didn't sing. They stay in this browser until you choose Forget my singing."],
-    ["A version you share contains those numbers and no recording of you. Forget my singing deletes them from this browser.",
+      "The averages sing the notes you didn't sing. They stay in this browser until you choose \u201CForget my singing\u201D."],
+    ["A version you share contains those numbers and no recording of you. \u201CForget my singing\u201D deletes them from this browser.",
       "It can't remove them from a version you already exported or shared."],
   ],
   local: [  // measured on the person's own computer, by the studio they run there (the offer's "local")
@@ -66,7 +66,7 @@ const WORDS = {
       "It is not saved, played to anyone or used to copy a voice."],
     ["What is kept is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it, and their averages over notes alike.",
       "The averages sing the notes you didn't sing. They are stored in this browser and on this computer. That copy is deleted {days} days after its last use."],
-    ["A version you export contains those numbers and no recording of you. Forget my singing deletes them.",
+    ["A version you export contains those numbers and no recording of you. \u201CForget my singing\u201D deletes them.",
       "From this browser and this computer. It can't remove them from a file you already exported."],
   ],
   server: [  // measured on the computer serving the studio (webstudio/singing.py CONSENT)
@@ -74,7 +74,7 @@ const WORDS = {
       "It is not saved, played to anyone or used to copy a voice."],
     ["What is kept is a set of numbers for each note: when you came in, how long you held it, how loud it was and how you slid into it, and their averages over notes alike.",
       "The averages sing the notes you didn't sing. They are stored in this browser and on the computer that runs this studio, with no name or address attached. That copy is deleted {days} days after its last use."],
-    ["A version you export contains those numbers and no recording of you. Forget my singing deletes them.",
+    ["A version you export contains those numbers and no recording of you. \u201CForget my singing\u201D deletes them.",
       "From this browser and from the computer that runs this studio. It can't remove them from a file you already exported."],
   ],
 };

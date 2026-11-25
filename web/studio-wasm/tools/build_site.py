@@ -158,8 +158,9 @@ def page(singing: bool) -> str:
         raise SystemExit("songbird/studio/index.html has no <title>: build_site.py doesn't know where to say what the "
                          "site is")
     html = re.sub(r"<title>[^<]*</title>", lambda _: SHARED_HEAD, html, count=1)
-    # what's kept, true from the first paint (studio.js says the same once it starts)
-    html = html.replace("Nothing on this page leaves this computer.", "Nothing leaves this device unless you share a version.", 1)
+    # what's kept, true from the first paint (studio.js says the same once it starts, in Help)
+    html = html.replace("Nothing on this page leaves this computer. Your changes stay in this browser.",
+                        "Nothing leaves this device unless you share a version.", 1)
     # the licences of what the site sends besides the project's own (Pyodide, numpy, scipy...): licenses.txt
     foot = re.search(r'<footer class="foot">.*?(</footer>)', html, re.DOTALL)
     if foot is None:

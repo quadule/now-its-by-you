@@ -521,7 +521,7 @@ def test_the_page_says_plainly_what_an_open_studio_keeps(opened):
     for said in ("What's kept: a random id in a cookie", "sent only to make the song", "its made-up machine's name",
                  "room its microphone heard, the leanings of its words", "carries its version's record",
                  "only numbers are kept; the audio is deleted once it's measured",
-                 "Your changes stay in this browser (Help says what's kept)"):
+                 "Your changes stay in this browser."):
         assert said in script, said
     assert "What's kept" in (S.PAGE / "score.js").read_text() and "helpKept" in (S.PAGE / "index.html").read_text()
 

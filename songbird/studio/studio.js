@@ -941,7 +941,7 @@ function editor(c) {
       if (phrasings.length) {
         const select = h("select", { "aria-label": "Whose way it is sung" },
           h("option", { value: "" }, "the song's way"),
-          phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
+          phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail.replace(/\b(\d+)\s+sung take\(s\)/g, (_, n) => `${n} sung ${n === "1" ? "take" : "takes"}`)})` : ""}`)));
         select.value = c.phrasing || "";
         select.addEventListener("change", () => setEdit("phrasing", select.value || null));
         box.append(h("div", { class: "control" }, h("label", {}, "Whose way it is sung"), select));
@@ -1511,7 +1511,6 @@ function applyPublic(s) {
   const p = s.public;
   if (!p) return;
   setOn("localBadge", "textContent", "Open studio");
-  setOn("whereNote", "textContent", "An open studio: songs are made one at a time. Your changes stay in this browser (Help says what's kept).");
   setOn("helpWhere", "textContent", `This studio is open to anyone. A small server makes the song, one at a time for everyone, so you may wait your turn; each person can have ${p.records} whole songs and ${p.previews} sections made an hour, and what's made already plays at once. What you export is yours to download (it waits ${p.download_hours} hours). Your changes stay in this browser.`);
   setOn("helpKept", "textContent", whatsKept(p, s.sing?.web));
   setOn("helpKept", "hidden", false);
@@ -1533,14 +1532,19 @@ function whatsKept(p, singing) {  // what an open studio keeps, said plainly (do
 
 function applyDevice(s) {
   if (!s.device) return;
-  setOn("whereNote", "textContent", "Your changes stay on this device unless you share a version. The site counts visits (Cloudflare Web Analytics, no cookies).");
   setOn("helpShows", "textContent", s.published ? "This studio opens on the song as it was published, and lets you:"
     : "This studio shows today's version of the song, and lets you:");
-  if (window.SongbirdDevice?.share) setOn("shareTool", "hidden", false);  // a link to your version, from Export
+  if (window.SongbirdDevice?.share) {
+    setOn("shareTool", "hidden", false);  // a link to your version, from Export
+    $("recordNow")?.setAttribute("title", "Export: song file, share link, MIDI, stems, piano page, draft");
+    const helpExport = $("helpExport");
+    if (helpExport) helpExport.innerHTML = "<b>Export.</b> One file to share: it plays in any music player, and anyone can make the next version from it, with yours as its parent. The same menu has a link to share, MIDI, stems, the piano page and drafts; <i>Tools</i> brings things in.";
+  }
   // the stems are kept as the song file is made here (renderer.js)
   document.querySelector("#exportStems + p")?.setAttribute("title",
     "Each voice and instrument alone and dry, zipped with the MIDI file, all from bar 1. At once after the song file.");
-  setOn("helpWhere", "hidden", true);  // the page's foot says it
+  setOn("helpWhere", "textContent", "Nothing leaves this device unless you share a version. The site counts visits (Cloudflare Web Analytics, no cookies).");
+  setOn("helpWhere", "hidden", false);
   // the file's record (its made-up machine's name, the room, the words' leanings) and what any site sees of what it
   // serves: docs/WEB-STUDIO.md, "On the device"
   setOn("helpKept", "textContent", "What's kept: your changes, in this browser. An export stays until you leave the page, so download it to keep it. A version you share is stored on this site, where anyone with its link can open it; it is deleted 30 days after it was last opened. Your name isn't in it.");
@@ -1708,7 +1712,6 @@ async function main() {
   for (const id of (hash.open || "").split(",").filter(Boolean)) state.open[id] = true;
   setOn("packetNote", "textContent", s.packet);
   if (s.shared) {  // served from someone else's computer for a preview: say so where "this computer" would
-    setOn("whereNote", "textContent", "Served from another computer for a short preview. Your changes stay in this browser; recordings are made there.");
     setOn("localBadge", "hidden", false);
     setOn("helpShows", "textContent", "This studio shows the version the computer serving it makes today, and lets you:");
     setOn("helpWhere", "textContent", "This studio is shared from someone else's computer for a short preview: that computer makes the song, and what you record is saved there too. Download it to keep it. Your changes stay in this browser.");

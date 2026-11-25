@@ -752,7 +752,7 @@
       (s.phrases || []).map(phraseButton));
   }
   function phraseButton(p, index) {
-    const words = p.notes.map((n) => displayWords(n.syllable)).filter(Boolean).join(" ") || (p.own_path && !p.notes.length ? "Empty" : "");
+    const words = (p.lyric_text ? displayWords(p.lyric_text).replace(/-/g, "") : "") || p.notes.map((n) => displayWords(n.syllable)).filter(Boolean).join(" ") || (p.own_path && !p.notes.length ? "Empty" : "");
     return el("button", { type: "button", id: `sbc-phrase-${index}`, class: `sbc-phrase${index === state.phrase ? " is-selected" : ""}`,
       "aria-pressed": index === state.phrase ? "true" : "false", onclick: () => selectedPhrase(index) },
     el("span", { class: "sbc-phrase-label" }, `Phrase ${index + 1}${drafts.has(p.own_path) ? " · draft" : ""}`, composition().edited_phrases?.includes(p.id) ? el("span", { class: "sbc-edited-dot", title: "Your melody" }, "•") : null),
@@ -1554,7 +1554,7 @@
         part ? el("span", { class: "hint" }, "This section only") : scopeSwitch("tune"),
         el("span", { class: "settings" }, select("Snap", state.snap, snaps(), (value) => { state.snap = Number(value); paint(); }, { id: "sbc-snap" }),
           select("Zoom", state.zoom, ZOOMS, (value) => { state.zoom = M().zoomOf(value); paint(); }, { id: "sbc-zoom" })),
-        button("Close", () => page()?.closeNotes?.(), { class: "sbc-button sbc-quiet", id: "sbc-close", title: "Close the notes (Esc)" }),
+        button("Close", () => page()?.closeNotes?.(), { class: "sbc-button", id: "sbc-close", title: "Close the notes (Esc)" }),
         !part && p?.notes?.length ? health() : null),
       (s.phrases || []).length ? phraseStrip() : null,
       // a percussion player's part is a step grid of its pieces over the section (drums.js), as the instrument's roll is

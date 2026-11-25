@@ -83,7 +83,7 @@
     <button class="tbtn" id="redoEdit" type="button" disabled aria-label="Redo" title="Redo (⌘/Ctrl Shift Z)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13 4.5 16.5 8 13 11.5"/><path d="M16.5 8h-8a4.25 4.25 0 0 0 0 8.5H12"/></svg></button>
   </div>
   <div class="right">
-    <button class="btn export" id="recordNow" type="button" aria-expanded="false" aria-controls="exportPop" title="Export: the song file, a link, MIDI, the parts, the piano page"><span class="wide">Export</span><span class="sr-only">Export it</span></button>
+    <button class="btn export" id="recordNow" type="button" aria-expanded="false" aria-controls="exportPop" title="Export: song file, MIDI, stems, piano page, draft"><span class="wide">Export</span><span class="sr-only">Export it</span></button>
     <button class="btn" id="toolsBtn" type="button" aria-expanded="false" aria-controls="finishPanel" title="Tools: bring a part or a draft in, sing, play a part, a new performance">Tools</button>
   </div>
   <div class="pop" id="howPop" hidden role="group" aria-label="How it plays">
@@ -179,7 +179,7 @@
   <main class="view arrange" id="view-arrange" role="tabpanel" aria-labelledby="tab-arrange" data-view="arrange" hidden>
     <div class="grid-scroll" id="gridScroll"><div class="grid" id="grid" role="grid" aria-label="The arrangement: who plays where"></div></div>
     <div class="arrange-foot">
-      <span class="legend"><i></i>the program's <i class="you"></i>yours <i class="chance"></i>drawn by chance <i class="locked"></i>locked by you</span>
+      <span class="legend"><span><i></i>the program's</span> <span><i class="you"></i>yours</span> <span><i class="chance"></i>drawn by chance</span> <span><i class="locked"></i>locked by you</span></span>
     </div>
     <section class="notes" id="notes" aria-label="The notes of the open section" hidden><div id="studio-composer" data-mode="notes"></div></section>
   </main>
@@ -191,7 +191,7 @@
   <aside class="inspector empty" id="inspector" role="complementary" aria-labelledby="inspectorTitle"></aside>
 </div>
 
-<footer class="foot"><span id="whereNote">Nothing on this page leaves this computer.</span></footer>
+<footer class="foot"><span id="whereNote" hidden></span></footer>
 
 <nav class="bottombar" id="bottombar" aria-label="Views">
   <button type="button" data-view="page" aria-pressed="true">Page</button>
@@ -228,7 +228,7 @@
       </section>
       <div class="tool">
         <button class="btn" type="button" id="openDraft">Draft</button>
-        <p title="Checked before it replaces what's here. Undo takes it back.">A saved <code>.songbird.json</code>.</p>
+        <p title="Checked before it replaces what's here. Undo takes it back.">A saved <code>.songbird.json</code> file.</p>
         <input type="file" id="draftFile" accept=".json,application/json" hidden aria-label="Open a Songbird draft">
       </div>
     </div>
@@ -271,9 +271,9 @@
     <li><b>Hear it.</b> ▶ in the bar at the top plays what is selected: the sketch at once, or sung, which takes a few seconds for a section and about a minute for the whole song.</li>
     <li><b>Change something.</b> The tempo and the key at the top; the words on the <i>Page</i>; who plays where, and the notes, in <i>Arrange</i>; the levels and the room in <i>Mix</i>. Select anything and the column beside it says what it is, why the program chose it, and how to change it. Undo takes anything back.</li>
     <li id="helpCompare"><b>Compare.</b> <i>Time</i> shows other days, other computers, and opens someone's version.</li>
-    <li><b>Export.</b> One file to share: it plays in any music player, and anyone can make the next version from it, with yours as its parent. The same menu has a link to share, the MIDI, the parts and the piano page; <i>Tools</i> brings things in.</li>
+    <li id="helpExport"><b>Export.</b> One file to share: it plays in any music player, and anyone can make the next version from it, with yours as its parent. The same menu has MIDI, stems, the piano page and drafts; <i>Tools</i> brings things in.</li>
   </ul>
-  <p id="helpWhere">Your changes stay in this browser. Nothing is sent anywhere.</p>
+  <p id="helpWhere">Nothing on this page leaves this computer. Your changes stay in this browser.</p>
   <p id="helpKept" hidden></p>
   <details class="keys"><summary>The keyboard</summary>
     <table>

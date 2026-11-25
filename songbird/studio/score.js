@@ -173,6 +173,7 @@
   };
   function showView(v, focus = false) {
     if (!["page", "arrange", "mix", "sing"].includes(v) || (v === "sing" && $("tab-sing")?.hidden !== false)) return;
+    const changed = S.view !== v;
     S.view = v;
     if ($("body")?.dataset) $("body").dataset.view = v;
     for (const t of document.querySelectorAll("#tabs [role=tab]")) {
@@ -184,6 +185,11 @@
     for (const m of document.querySelectorAll("main.view")) m.hidden = m.dataset.view !== v;
     $("viewAbout").textContent = ABOUT[v];
     if (v !== "arrange") C()?.stop?.();
+    if (changed && narrow()) {
+      S.songShown = false;
+      if (S.sel && v === "page" && !["section", "line"].includes(S.sel.kind)) S.sel = null;
+      renderInspector();
+    }
     if (typeof CustomEvent === "function") document.dispatchEvent?.(new CustomEvent("studio:view", { detail: { view: v } }));
   }
 
@@ -1507,8 +1513,9 @@
   function singerState() {
     const c = card("singer"), mix = card("mix"), b = state.start.bounds, m = mix?.mix || {};
     const phrasings = phrasingChoices(state.start.phrasings);
+    const cleanDetail = (d) => d ? d.replace(/\b(\d+)\s+sung take\(s\)/g, (_, n) => `${n} sung ${n === "1" ? "take" : "takes"}`) : "";
     const sel = h("select", { "aria-label": "Whose way it is sung", id: "singerWay" }, h("option", { value: "" }, "the song's way"),
-      phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${p.detail})` : ""}`)));
+      phrasings.map((p) => h("option", { value: p.id }, `${p.way || `${p.label}'s way`}${p.detail ? ` (${cleanDetail(p.detail)})` : ""}`)));
     sel.value = c?.phrasing || "";
     sel.addEventListener("change", (e) => setEdit("phrasing", e.target.value || null, "The singer's way"));
     const sung = S.grid?.sections.map((s) => h("i", { class: s.sung ? "on" : "", title: `${s.label}: ${s.sung ? "sung" : "played"}` })) || [];
@@ -1779,6 +1786,12 @@
     audio.addEventListener("timeupdate", wholeSongAt);
     for (const ev of ["timeupdate", "play", "pause", "ended", "seeked", "emptied"]) audio.addEventListener(ev, sungLineAt);
     new ResizeObserver(() => { if (S.playhead !== null) placeHead(S.playhead); }).observe($("gridScroll"));
+    const tr = $("transport");
+    if (tr && typeof ResizeObserver === "function") {
+      const syncTransportH = () => { if (tr.offsetHeight) $("app")?.style?.setProperty("--transport-h", `${Math.ceil(tr.offsetHeight)}px`); };
+      new ResizeObserver(syncTransportH).observe(tr);
+      syncTransportH();
+    }
     showView("page");
     setHow(M.defaultHow(null), false);  // nothing selected: the whole song, sung (decision 2)
     $("songBtn").addEventListener("click", () => { S.songShown = !S.songShown; select(null); });

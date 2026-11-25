@@ -5,6 +5,7 @@
 
 :root {
   --bar-h: 50px;  /* the views' bar on a phone, above the safe area; the inspector's sheet runs under it */
+  --transport-h: 49px;  /* kept in step with .transport's height (score.js) so sticky inspector & scroll-margin never clip */
   --parent: #7a4a2c; --chance: #6e6255; --note: #6b5846; --note-strong: #3f3226; --gold: #8f6a2a;
   --bar: color-mix(in srgb, var(--ink) 58%, var(--paper));  /* a cell's energy bar: 3:1 against the paper */
   --accent: var(--ink); --time: var(--ochre);  /* the names studio.js's timeline reads */
@@ -136,7 +137,7 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .position .bar > i { display: block; height: 100%; width: 0; background: var(--red); }
 .position .bar.making > i { background: var(--ochre); }
 .tempo { display: inline-flex; flex-wrap: wrap; align-content: center; justify-content: center; align-items: baseline; gap: 4px; border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--card); padding: 3px 8px; font-variant-numeric: tabular-nums; min-height: 30px; }
-.tempo input { width: 3.1em; border: 0; background: transparent; color: inherit; font: 600 15px var(--sans); font-variant-numeric: tabular-nums; text-align: right; padding: 0; appearance: textfield; -moz-appearance: textfield; }
+.tempo input { width: 2.2em; border: 0; background: transparent; color: inherit; font: 600 15px var(--sans); font-variant-numeric: tabular-nums; text-align: right; padding: 0; appearance: textfield; -moz-appearance: textfield; }
 .tempo input::-webkit-inner-spin-button, .tempo input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .tempo:focus-within { border-color: var(--ink); }
 .tempo small { font-size: 10px; color: var(--ink-3); }
@@ -169,7 +170,7 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 /* Page: the words as sung */
 .sheet-page { background: var(--card) linear-gradient(to right, transparent 30px, var(--red-rule) 30px, var(--red-rule) 31px, transparent 31px);
   border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px 26px 22px 50px; max-width: 760px; margin: 0 auto; }
-.sec { position: relative; padding: 12px 0 14px; border-top: 1px solid var(--rule); scroll-margin-top: 64px; }  /* clear of the sticky transport when scrolled to */
+.sec { position: relative; padding: 12px 0 14px; border-top: 1px solid var(--rule); scroll-margin-top: calc(var(--transport-h, 49px) + 16px); }  /* clear of the sticky transport when scrolled to */
 .sec:first-child { border-top: 0; padding-top: 4px; }
 .sec-head { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; margin-bottom: 4px; }
 .sec-head .rub { border: 0; background: none; padding: 0; text-align: left; min-height: 24px; }
@@ -332,8 +333,9 @@ input[type=number] { width: 72px; border: 1px solid var(--rule-strong); backgrou
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); pointer-events: none; z-index: 4; }
 .playhead::before { content: ""; position: absolute; top: 0; left: -3px; width: 8px; height: 8px; background: var(--red); transform: rotate(45deg); }
 .arrange-foot { display: flex; gap: 8px 14px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--ink-3); }
-.legend { display: inline-flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; }
-.legend i { display: inline-block; width: 14px; height: 7px; background: var(--bar); vertical-align: middle; margin-right: 3px; }
+.legend { display: inline-flex; gap: 6px 12px; align-items: center; flex-wrap: wrap; }
+.legend > span { display: inline-flex; align-items: center; white-space: nowrap; }
+.legend i { display: inline-block; width: 14px; height: 7px; background: var(--bar); vertical-align: middle; margin-right: 5px; }
 .legend i.you { background: var(--hand); }
 .legend i.chance { background: none; border: 1.5px dashed var(--ink-2); }
 .legend i.locked { outline: 2px solid var(--hand); outline-offset: 1px; margin: 0 5px 0 2px; }
@@ -435,7 +437,7 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .strip { flex: 0 0 86px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--card); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px 10px; }
 .strip.selected { border-color: var(--ink); box-shadow: inset 0 3px 0 var(--red); }
 .strip.muted { opacity: .7; }
-.strip .nm { font: 600 12px/1.2 var(--serif); text-align: center; min-height: 30px; display: grid; place-items: center; border: 0; background: none; padding: 0 2px; color: var(--ink); width: 100%; }
+.strip .nm { font: 600 12px/1.2 var(--serif); text-align: center; min-height: 34px; display: grid; place-items: center; border: 0; background: none; padding: 0 2px; color: var(--ink); width: 100%; }
 .strip .nm:hover { color: var(--hand); }
 .strip.bus { flex-basis: 110px; background: var(--wash); }
 .strip.bus .nm { color: var(--red); font-variant-caps: all-small-caps; letter-spacing: .06em; font-size: 14px; }
@@ -468,7 +470,7 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .strip .patch { font-size: 10px; border: 0; background: none; padding: 0; color: var(--ink-2); text-decoration: underline dotted; text-underline-offset: 2px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------------------------------------------------------------- the inspector */
-.inspector { --lab: 80px; --gap: 12px; border-left: 1px solid var(--rule); background: var(--card); padding: 16px 20px 28px; position: sticky; top: 47px; align-self: start; max-height: calc(100vh - 47px); overflow: auto; min-width: 0; }
+.inspector { --lab: 80px; --gap: 12px; border-left: 1px solid var(--rule); background: var(--card); padding: 16px 20px 28px; position: sticky; top: var(--transport-h, 49px); align-self: start; max-height: calc(100vh - var(--transport-h, 49px)); overflow: auto; min-width: 0; }
 .inspector .top { display: flex; align-items: baseline; gap: 2px; border-bottom: 1px solid var(--red-rule); padding-bottom: 6px; margin-bottom: var(--gap); }
 .inspector .top .rubric { font-size: 16px; flex: 1; min-width: 0; outline-offset: 2px; }
 .inspector .about { font: 13px/1.5 var(--serif); color: var(--ink-2); background: var(--paper); padding: 8px 10px; margin: 0 0 var(--gap); }
@@ -623,7 +625,7 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .notes-in-assign { display: block; margin: 4px 0; font-size: 13px; }
 .notes-in-yours { margin-top: 10px; font-size: 13px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
-.drawer { position: absolute; left: 0; right: 0; z-index: 32; background: var(--card); border-bottom: 3px double var(--ink-2); padding: 18px 24px 20px; max-height: 80vh; overflow: auto; }
+.drawer { position: absolute; left: 0; right: 0; z-index: 32; background: var(--card); border-bottom: 3px double var(--ink-2); padding: 18px 24px 20px; max-height: min(75vh, calc(100vh - 185px)); overflow: auto; }
 .drawer .two-cols { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; }
 .timeline-box { border: 1px solid var(--rule); background: var(--paper); min-height: 60px; }
 .timeline { width: 100%; display: block; }
@@ -655,7 +657,8 @@ button.sbc-chord.is-rub::after { content: "•"; color: var(--red); margin-left:
 .drop-veil p { font: 22px var(--serif); color: var(--hand); background: var(--card); padding: 12px 20px; border: 1px solid var(--rule); }
 
 /* ---------------------------------------------------------------- foot, help, tour, toast */
-footer.foot { padding: 20px 24px; font: italic 13px var(--serif); color: var(--ink-3); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+footer.foot { padding: 14px 24px; font: italic 13px var(--serif); color: var(--ink-3); display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+footer.foot:not(:has(> :not([hidden]))) { display: none; }
 .bottombar { display: none; }
 dialog.help { max-width: min(600px, calc(100vw - 32px)); padding: 24px 26px; font: 16px/1.55 var(--serif); }
 dialog.help h2 { font: 500 28px var(--serif); margin: 0 0 10px; }
@@ -677,7 +680,7 @@ dialog.help .keys td { padding: 3px 0; }
 
 .inspector .handle, .notes .readonly, .phone-only-inline { display: none; }
 @container app (max-width: 1180px) { .transport .sep { display: none; } }
-@container app (max-width: 1020px) { .body { grid-template-columns: minmax(0, 1fr) 290px; } .transport { flex-wrap: wrap; row-gap: 4px; } .position { order: 5; flex-basis: 100%; } }
+@container app (max-width: 1020px) { .app, :root { --transport-h: 78px; } .body { grid-template-columns: minmax(0, 1fr) 290px; } .transport { flex-wrap: wrap; row-gap: 4px; } .position { order: 5; flex-basis: 100%; } }
 
 /* ---------------------------------------------------------------- narrow: a phone, or a narrow window */
 @container app (max-width: 620px) {
@@ -752,7 +755,7 @@ dialog.help .keys td { padding: 3px 0; }
   .region { height: 52px; }
   .addcell > .add { height: 52px; }
   .region svg { display: none; }
-  .strip { flex-basis: 76px; }
+  .strip { flex-basis: 86px; }
   .tools { width: 100%; border-left: 0; padding: 18px 14px; }
   .tools .close { top: 12px; right: 8px; }
   .drawer .close { top: 6px; right: 8px; }

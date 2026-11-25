@@ -1440,7 +1440,7 @@ class Studio:
             with contextlib.suppress(OSError, ValueError):
                 detail = json.loads(path.read_text(encoding="utf-8")).get("source_detail", "")
             out.append({"id": who, "label": "everyone who has sung it" if who == "everyone" else singer_name(who),
-                        "detail": detail})
+                        **({"way": "everyone's way"} if who == "everyone" else {}), "detail": detail})
         return out
 
     def sing_available(self) -> dict:
