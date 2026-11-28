@@ -9,7 +9,7 @@
 //
 // In the last bar the bore closes back into the strand and every part gathers into one band, the file
 // (s08_lineage/gather.js, which the bridge draws through its dissolve in).
-import { ground, label, strand } from '../../core/draw.js';
+import { ground, label, lyric, strand } from '../../core/draw.js';
 import { clamp, smoothstep, mix, ease } from '../../core/math.js';
 import { GATHER_ASSETS, gather } from '../s08_lineage/gather.js';
 
@@ -181,5 +181,6 @@ export default {
 
     const la = smoothstep(T0 + 0.5 * beat, T0 + beat, t) * (1 - smoothstep(T0 + bar + 0.5 * beat, T0 + bar + 1.2 * beat, t));
     if (la > 0) label(ctx, t, target, 'whistle', { alpha: la, k });
+    lyric(ctx, t, target, { k });   // refrain 2's last line, held into the turn
   },
 };

@@ -7,8 +7,8 @@ import { model } from './file.js';
 import { clamp, mix } from '../../core/math.js';
 
 export const RULE = [800, 540];         // where the join sits on the page
-const WALL = { near: 785, far: 250, top: 40, bottom: 820, farTop: 315, farBottom: 545, cols: 32, rows: 22 };
-const PAGE = { x0: 830, x1: 1880, y0: 52, y1: 820 };
+const WALL = { near: 785, far: 250, top: 150, bottom: 930, farTop: 425, farBottom: 655, cols: 32, rows: 22 };
+const PAGE = { x0: 830, x1: 1880, y0: 162, y1: 930 };
 const FAMILY = '"Film Serif"';
 const segs = new Segs();
 let J = null;
@@ -83,8 +83,8 @@ export function drawJoin(ctx, target, ink, { s = 1, at = RULE, alpha = 1, k } = 
   // the page
   const p = [T(PAGE.x0, PAGE.y0), T(PAGE.x1, PAGE.y0), T(PAGE.x1, PAGE.y1), T(PAGE.x0, PAGE.y1)];
   ctx.g.mesh(target, j.page.tex, p, { tint: ink.ink, alpha });
-  // the rule, the full height but for the lyric's line
-  for (const [a, b] of [[-20, 834], [936, 1100]]) {
+  // the rule, from under the lyric to the foot
+  for (const [a, b] of [[168, 1100]]) {
     const [rx, ry0] = T(RULE[0] + 0.5, a), [, ry1] = T(RULE[0] + 0.5, b);
     ctx.g.stroke(target, [[rx, Math.max(ry0, -10)], [rx, Math.min(ry1, ctx.size.h + 10)]], { width: 2.2, color: ink.red, alpha });
   }

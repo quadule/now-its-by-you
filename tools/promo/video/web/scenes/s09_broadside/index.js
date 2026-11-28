@@ -71,7 +71,7 @@ export default {
     const { la, y } = this.lyricPlace(ctx, t);
     const mask = la > 0 ? this.halo.mask(ctx, t, target, { focus: 'italic', alpha: la, y }) : null;
     if (mask) drawFace(ctx, target, F, this.grid, { ...st, sky: 0 }, { ...look, mask });
-    if (la > 0) lyric(ctx, t, target, { focus: 'italic', size: LYRIC.size, y, maxWidth: LYRIC.maxWidth, alpha: la });
+    if (la > 0) lyric(ctx, t, target, { focus: 'italic', size: LYRIC.size, y, maxWidth: LYRIC.maxWidth, alpha: la, hold: 0.6 });
   },
   lyricPlace(ctx, t) {
     const line = ctx.timeline.line(t);

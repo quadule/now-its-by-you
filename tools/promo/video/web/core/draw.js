@@ -17,16 +17,35 @@ export const LYRIC_Y = 96, LABEL_Y = 984;
 // the line sung at t, set at (x, y) (top of its first row), the sung syllables lit
 // focus: null | 'italic' | 'red' sets the line's leaned-on word apart (red: in the red ink)
 export function lyric(ctx, t, target, { x = ctx.size.w / 2, y = LYRIC_Y, size = 46, align = 'center', maxWidth = 1500,
-  alpha = 1, k = ctx.k(t), focus = null } = {}) {
-  const line = ctx.timeline.line(t);
+  alpha = 1, k = ctx.k(t), focus = null, hold = LYRIC_HOLD } = {}) {
+  const { line, out, fade } = held(ctx.timeline, t, hold);
   if (!line) return null;
   const lay = ctx.type.lyric(line, { size, maxWidth, focus });
   const ink = ctx.palette.inks(k);
-  // in and out with the line: a short rise before its first syllable, a fall after its last
-  const a = alpha * smoothstep(line.t0 - 0.35, line.t0 - 0.1, t) * (1 - smoothstep(line.t1 + 0.25, line.t1 + 0.6, t));
+  // in with a short rise before its first syllable; out quickly as the next line comes in, or slowly `hold` seconds after its last
+  const a = alpha * smoothstep(line.t0 - 0.35, line.t0 - 0.1, t) * (1 - smoothstep(out - fade, out, t));
   const box = ctx.type.drawLyric(target, lay, t, x, y, { ink: ink.ink2, lit: ink.sung, focusInk: ink.red, alpha: a, align });
   if (line.section === TITLED.section && line.i === TITLED.i) underline(ctx, t, target, lay, box, ink.red, a);
   return { line, lay, box, alpha: a };
+}
+
+// How long a sung line stays up after its last syllable when the next line isn't coming in sooner (seconds), so the words are
+// easy to follow
+const LYRIC_HOLD = 2.5;
+
+// the line up at t, when it is gone and how long it takes to go: by the next line's rise (quickly), or `hold` (at least 0.6)
+// after its last syllable (slowly)
+function held(tl, t, hold) {
+  const lines = tl.lines;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    if (t < l.t0 - 0.35) continue;
+    const next = lines[i + 1];
+    const late = l.t1 + Math.max(hold, 0.6), swap = next ? next.t0 - 0.35 : Infinity;
+    const out = Math.min(late, swap), fade = swap < late ? 0.08 : 0.35;
+    return t < out ? { line: l, out, fade } : { line: null };
+  }
+  return { line: null };
 }
 
 // The song's title where it is first sung, refrain 1's last line ending "now it's by you": a red rule drawn under
